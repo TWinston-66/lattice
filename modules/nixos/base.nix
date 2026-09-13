@@ -28,7 +28,6 @@
   };
 
   ### BOOT ###
-  boot.kernelPackages = pkgs.linuxPackages_latest;
   boot.loader.systemd-boot.editor = false;
 
   ### NETWORKING ###

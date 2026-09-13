@@ -1,5 +1,13 @@
-{ config, ... }:
 {
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+{
+  ### KERNEL ###
+  boot.kernelPackages = pkgs.linuxPackages_latest;
+
   ### NETWORKING ###
   networking.useNetworkd = false;
   networking.networkmanager = {
@@ -35,6 +43,15 @@
     fwupd.enable = true;
   };
   systemd.sleep.settings.Sleep.HibernateDelaySec = "30min";
+
+  environment.etc."xdg/hypr/hypridle.conf".text = lib.mkIf config.services.hypridle.enable (
+    lib.mkAfter ''
+      listener {
+        timeout = 900
+        on-timeout = systemctl suspend-then-hibernate
+      }
+    ''
+  );
 
   assertions = [
     {
