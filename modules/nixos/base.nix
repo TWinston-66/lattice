@@ -1,0 +1,78 @@
+{
+  config,
+  inputs,
+  lib,
+  pkgs,
+  ...
+}:
+{
+  imports = [
+    inputs.sops-nix.nixosModules.sops
+  ];
+
+  ### NIX ###
+  nix = {
+    settings = {
+      experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
+    };
+    gc = {
+      automatic = true;
+      options = "--delete-older-than 14d";
+    };
+    optimise.automatic = true;
+
+    channel.enable = false;
+  };
+
+  ### KERNEL ###
+  boot.kernelPackages = pkgs.linuxPackages_latest;
+
+  ### NETWORKING ###
+  networking.useDHCP = false;
+  networking.useNetworkd = lib.mkDefault true;
+  systemd.network.networks."10-wired" = {
+    matchConfig = {
+      Type = "ether";
+      Kind = "!*";
+    };
+    networkConfig.DHCP = "yes";
+  };
+  services.resolved.enable = true;
+
+  ### SECRETS ###
+  sops = {
+    defaultSopsFile = ../../secrets/common.yaml;
+    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+    gnupg.sshKeyPaths = [ ];
+    secrets.winston-password.neededForUsers = true;
+  };
+
+  ### TIME/LOCALE
+  time.timeZone = "America/Denver";
+  i18n.defaultLocale = "en_US.UTF-8";
+
+  ### USERS ###
+  users.mutableUsers = false;
+  users.users."winston" = {
+    isNormalUser = true;
+    description = "winston";
+    extraGroups = [ "wheel" ];
+    hashedPasswordFile = config.sops.secrets.winston-password.path;
+  };
+
+  ### PACKAGES ###
+  nixpkgs.config.allowUnfree = true;
+
+  environment.systemPackages = with pkgs; [
+    vim
+    wget
+    exfatprogs
+  ];
+
+  environment.defaultPackages = [ ];
+  documentation.nixos.enable = false;
+
+}
