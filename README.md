@@ -1,0 +1,2 @@
+# lattice
+Nix config
