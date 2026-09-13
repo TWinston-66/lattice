@@ -5,6 +5,8 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source scripts/lib.sh
+use_dev_shell "$PWD/scripts/deploy.sh" "$@"
 
 host="${1:-dell}"
 
@@ -22,6 +24,10 @@ target="winston@$ip"
 # Pin the host key to the host name, not the IP, so an IP change can't
 # silently point a deploy at a different machine.
 export NIX_SSHOPTS="-o HostKeyAlias=$hostname"
+
+# shellcheck disable=SC2086 # NIX_SSHOPTS is a list of options
+pubkey="$(ssh $NIX_SSHOPTS "$target" cat /etc/ssh/ssh_host_ed25519_key.pub)"
+require_recipient "$host" "$pubkey"
 
 nix_pkg="$(dirname "$(dirname "$(readlink -f "$(command -v nix)")")")"
 nixos_rebuild="$(nix build --no-link --print-out-paths --impure \

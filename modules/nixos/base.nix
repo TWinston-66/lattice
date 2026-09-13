@@ -27,8 +27,9 @@
     channel.enable = false;
   };
 
-  ### KERNEL ###
+  ### BOOT ###
   boot.kernelPackages = pkgs.linuxPackages_latest;
+  boot.loader.systemd-boot.editor = false;
 
   ### NETWORKING ###
   networking.useDHCP = false;
@@ -43,6 +44,12 @@
   services.resolved.enable = true;
 
   ### SECRETS ###
+  services.openssh.hostKeys = [
+    {
+      type = "ed25519";
+      path = "/etc/ssh/ssh_host_ed25519_key";
+    }
+  ];
   sops = {
     defaultSopsFile = ../../secrets/common.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
@@ -50,7 +57,7 @@
     secrets.winston-password.neededForUsers = true;
   };
 
-  ### TIME/LOCALE
+  ### TIME/LOCALE ###
   time.timeZone = "America/Denver";
   i18n.defaultLocale = "en_US.UTF-8";
 
@@ -68,7 +75,10 @@
 
   environment.systemPackages = with pkgs; [
     vim
-    wget
+    git
+    file
+    pciutils
+    usbutils
     exfatprogs
   ];
 

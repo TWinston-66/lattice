@@ -1,4 +1,4 @@
-{ ... }: {
+_: {
   imports = [
     ./hardware-configuration.nix
     ../../modules/nixos/base.nix
@@ -26,6 +26,9 @@
       };
       "luks-7ae8c7b4-9729-468e-a0b6-833f8cce4abb".allowDiscards = true;
     };
+
+    # Hibernate to the encrypted swap partition, unlocked in the initrd above.
+    resumeDevice = "/dev/mapper/luks-6dbb1fe5-333b-4392-a81a-bd52ef847e3f";
   };
 
   ### BTRFS ###
@@ -44,17 +47,24 @@
     ];
   };
 
-  services.btrfs.autoScrub.enable = true;
+  systemd.tmpfiles.rules = [ "v /home/.snapshots 0750 root users -" ];
 
-  services.snapper.configs.home = {
-    SUBVOLUME = "/home";
-    ALLOW_USERS = [ "winston" ];
-    TIMELINE_CREATE = true;
-    TIMELINE_CLEANUP = true;
-    TIMELINE_LIMIT_HOURLY = 12;
-    TIMELINE_LIMIT_DAILY = 7;
-    TIMELINE_LIMIT_WEEKLY = 4;
-    TIMELINE_LIMIT_MONTHLY = 0;
-    TIMELINE_LIMIT_YEARLY = 0;
+  services = {
+    btrfs.autoScrub.enable = true;
+
+    snapper.configs.home = {
+      SUBVOLUME = "/home";
+      ALLOW_USERS = [ "winston" ];
+      TIMELINE_CREATE = true;
+      TIMELINE_CLEANUP = true;
+      TIMELINE_LIMIT_HOURLY = 12;
+      TIMELINE_LIMIT_DAILY = 7;
+      TIMELINE_LIMIT_WEEKLY = 4;
+      TIMELINE_LIMIT_MONTHLY = 0;
+      TIMELINE_LIMIT_YEARLY = 0;
+    };
+
+    ### POWER ###
+    thermald.enable = true;
   };
 }

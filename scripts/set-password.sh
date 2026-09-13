@@ -4,11 +4,9 @@
 # Usage: scripts/set-password.sh [user]
 set -euo pipefail
 
-if ! command -v sops >/dev/null || ! command -v mkpasswd >/dev/null; then
-    exec nix shell nixpkgs#sops nixpkgs#mkpasswd --command "$0" "$@"
-fi
-
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source scripts/lib.sh
+use_dev_shell "$PWD/scripts/set-password.sh" "$@"
 
 user="${1:-winston}"
 file="secrets/common.yaml"
@@ -30,7 +28,7 @@ if [[ -f "$file" ]]; then
     sops set "$file" "[\"$user-password\"]" "\"$hash\""
 else
     printf '%s-password: "%s"\n' "$user" "$hash" |
-        sops encrypt --filename-override "$file" --input-type yaml --output-type yaml /dev/stdin >"$file"
+        sops encrypt --filename-override "$file" --input-type yaml --output-type yaml --output "$file" /dev/stdin
 fi
 
 echo "stored $user-password in $file"
