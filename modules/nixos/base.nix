@@ -8,6 +8,7 @@
 {
   imports = [
     inputs.sops-nix.nixosModules.sops
+    ./branding.nix
   ];
 
   ### NIX ###

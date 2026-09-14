@@ -1,4 +1,54 @@
-_: {
+{ config, pkgs, ... }:
+let
+  toml = pkgs.formats.toml { };
+in
+{
+  ### SESSION ###
+  programs.hyprland = {
+    enable = true;
+    withUWSM = true;
+  };
+
+  ### LOGIN ###
+  services.greetd = {
+    enable = true;
+    useTextGreeter = true;
+    settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet";
+  };
+
+  environment.etc."tuigreet/config.toml".source = toml.generate "tuigreet.toml" {
+    display = {
+      greeting = "Welcome to lattice";
+      show_time = true;
+    };
+    session = {
+      command = "uwsm start -e -D Hyprland hyprland.desktop";
+      sessions_dirs = [ "${config.services.displayManager.sessionData.desktops}/share/wayland-sessions" ];
+    };
+    remember.username = true;
+    secret = {
+      mode = "characters";
+      characters = "*";
+    };
+    power = {
+      shutdown = "systemctl poweroff";
+      reboot = "systemctl reboot";
+    };
+
+    theme = {
+      container = "black";
+      border = "blue";
+      title = "blue";
+      greet = "white";
+      time = "white";
+      text = "gray";
+      prompt = "blue";
+      input = "gray";
+      action = "blue";
+      button = "magenta";
+    };
+  };
+
   ### IDLE/LOCK ###
   programs.hyprlock.enable = true;
 

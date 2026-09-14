@@ -18,6 +18,7 @@ else is layered on through modules and profiles.
 | --- | --- |
 | `hosts/<host>/` | Per-host config and its generated `hardware-configuration.nix` |
 | `modules/nixos/base.nix` | The core: Nix, users, secrets, locale. No remote access |
+| `modules/nixos/branding.nix` | lattice naming and logo in place of NixOS, and the console palette |
 | `modules/nixos/remote-managed.nix` | Key-only SSH, for hosts deployed remotely |
 | `modules/nixos/dotfiles.nix` | Packages and shell for my [dotfiles](https://github.com/TWinston-66/.dotfiles) |
 | `modules/nixos/profiles/` | `laptop`, `graphical` and `server` |
