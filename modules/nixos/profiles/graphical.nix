@@ -5,6 +5,20 @@ let
   wallpaper = pkgs.runCommand "lattice-wallpaper.png" { nativeBuildInputs = [ pkgs.librsvg ]; } ''
     rsvg-convert -w 3840 -h 2400 ${../../../.github/assets/wallpaper.svg} -o $out
   '';
+
+  # Catppuccin Mocha with the blue accent, matching ~/.dotfiles.
+  gtkTheme = "catppuccin-mocha-blue-standard";
+  iconTheme = "Papirus-Dark";
+  cursorTheme = "catppuccin-mocha-dark-cursors";
+
+  gtkSettings = ''
+    [Settings]
+    gtk-theme-name=${gtkTheme}
+    gtk-icon-theme-name=${iconTheme}
+    gtk-cursor-theme-name=${cursorTheme}
+    gtk-application-prefer-dark-theme=true
+    gtk-font-name=Noto Sans 11
+  '';
 in
 {
   ### SESSION ###
@@ -13,12 +27,98 @@ in
     withUWSM = true;
   };
 
-  environment.systemPackages = [ pkgs.ghostty ];
+  ### APPS ###
+  environment.systemPackages = with pkgs; [
+    ghostty
+    rofi
+    brightnessctl
+    playerctl
+    wl-clipboard
+    cliphist
+    grim
+    slurp
+    satty
+
+    (catppuccin-gtk.override {
+      variant = "mocha";
+      accents = [ "blue" ];
+    })
+    (catppuccin-papirus-folders.override {
+      flavor = "mocha";
+      accent = "blue";
+    })
+    catppuccin-cursors.mochaDark
+  ];
+
+  programs = {
+    firefox.enable = true;
+    thunar.enable = true;
+    waybar.enable = true;
+  };
+  services.gvfs.enable = true;
+
+  ### SESSION SERVICES ###
+  systemd.packages = with pkgs; [
+    hyprpaper
+    mako
+    hyprpolkitagent
+  ];
+
+  systemd.user.services = {
+    hyprpaper.wantedBy = [ "graphical-session.target" ];
+    mako.wantedBy = [ "graphical-session.target" ];
+    hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
+
+    cliphist = {
+      description = "Clipboard history";
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      serviceConfig = {
+        ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --watch ${pkgs.cliphist}/bin/cliphist store";
+        Restart = "on-failure";
+      };
+    };
+  };
+
+  ### THEME ###
+  xdg.icons.fallbackCursorThemes = [ cursorTheme ];
+
+  programs.dconf.profiles.user.databases = [
+    {
+      settings."org/gnome/desktop/interface" = {
+        color-scheme = "prefer-dark";
+        gtk-theme = gtkTheme;
+        icon-theme = iconTheme;
+        cursor-theme = cursorTheme;
+        font-name = "Noto Sans 11";
+        monospace-font-name = "JetBrains Mono 11";
+      };
+    }
+  ];
+
+  # Qt apps (hyprpolkitagent) take their palette from qt6ct, configured in ~/.dotfiles.
+  qt = {
+    enable = true;
+    platformTheme = "qt5ct";
+  };
+
+  fonts = {
+    packages = with pkgs; [
+      noto-fonts
+      jetbrains-mono
+      nerd-fonts.symbols-only
+    ];
+    fontconfig.defaultFonts = {
+      sansSerif = [ "Noto Sans" ];
+      monospace = [ "JetBrains Mono" ];
+    };
+  };
+
+  environment.etc."xdg/gtk-3.0/settings.ini".text = gtkSettings;
+  environment.etc."xdg/gtk-4.0/settings.ini".text = gtkSettings;
 
   ### WALLPAPER ###
-  systemd.packages = [ pkgs.hyprpaper ];
-  systemd.user.services.hyprpaper.wantedBy = [ "graphical-session.target" ];
-
   environment.etc."xdg/hypr/hyprpaper.conf".text = ''
     wallpaper {
       monitor =
@@ -93,26 +193,58 @@ in
     '';
 
     "xdg/hypr/hyprlock.conf".text = ''
-      background {
-        monitor =
-        color = rgb(0, 0, 0)
+      general {
+        hide_cursor = true
       }
 
-      input-field {
+      background {
         monitor =
-        size = 300, 50
-        position = 0, 0
+        path = ${wallpaper}
+        color = rgb(1e1e2e)
+      }
+
+      label {
+        monitor =
+        text = $TIME
+        color = rgb(cdd6f4)
+        font_size = 96
+        font_family = JetBrains Mono ExtraBold
+        position = 0, 360
         halign = center
         valign = center
       }
 
       label {
         monitor =
-        text = $TIME
-        font_size = 64
-        position = 0, 120
+        text = cmd[update:60000] date +"%A, %B %-d"
+        color = rgb(a6adc8)
+        font_size = 22
+        font_family = JetBrains Mono
+        position = 0, 260
         halign = center
         valign = center
+      }
+
+      input-field {
+        monitor =
+        size = 320, 56
+        position = 0, -320
+        halign = center
+        valign = center
+        rounding = 14
+        outline_thickness = 2
+        outer_color = rgb(89b4fa)
+        inner_color = rgb(181825)
+        font_color = rgb(cdd6f4)
+        font_family = JetBrains Mono
+        check_color = rgb(b4befe)
+        fail_color = rgb(f38ba8)
+        capslock_color = rgb(f9e2af)
+        placeholder_text = <span foreground="##6c7086">password</span>
+        fail_text = $FAIL
+        fade_on_empty = false
+        dots_size = 0.25
+        dots_spacing = 0.3
       }
     '';
   };
