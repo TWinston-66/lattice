@@ -1,6 +1,10 @@
 { config, pkgs, ... }:
 let
   toml = pkgs.formats.toml { };
+
+  wallpaper = pkgs.runCommand "lattice-wallpaper.png" { nativeBuildInputs = [ pkgs.librsvg ]; } ''
+    rsvg-convert -w 3840 -h 2400 ${../../../.github/assets/wallpaper.svg} -o $out
+  '';
 in
 {
   ### SESSION ###
@@ -8,6 +12,22 @@ in
     enable = true;
     withUWSM = true;
   };
+
+  environment.systemPackages = [ pkgs.ghostty ];
+
+  ### WALLPAPER ###
+  systemd.packages = [ pkgs.hyprpaper ];
+  systemd.user.services.hyprpaper.wantedBy = [ "graphical-session.target" ];
+
+  environment.etc."xdg/hypr/hyprpaper.conf".text = ''
+    wallpaper {
+      monitor =
+      path = ${wallpaper}
+      fit_mode = cover
+    }
+
+    splash = false
+  '';
 
   ### LOGIN ###
   services.greetd = {

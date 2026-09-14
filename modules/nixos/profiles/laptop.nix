@@ -10,10 +10,7 @@
 
   ### NETWORKING ###
   networking.useNetworkd = false;
-  networking.networkmanager = {
-    enable = true;
-    wifi.backend = "iwd";
-  };
+  networking.networkmanager.enable = true;
   users.users.winston.extraGroups = [ "networkmanager" ];
 
   ### MEMORY ###

@@ -32,6 +32,11 @@
     resumeDevice = "/dev/mapper/luks-6dbb1fe5-333b-4392-a81a-bd52ef847e3f";
   };
 
+  ### DISPLAY ###
+  programs.dconf.profiles.user.databases = [
+    { settings."org/gnome/desktop/interface".text-scaling-factor = 0.6; }
+  ];
+
   ### BTRFS ###
   fileSystems = lib.genAttrs [ "/" "/home" "/nix" ] (_: {
     options = [
