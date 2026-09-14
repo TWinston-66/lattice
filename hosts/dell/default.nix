@@ -32,6 +32,12 @@
     resumeDevice = "/dev/mapper/luks-6dbb1fe5-333b-4392-a81a-bd52ef847e3f";
   };
 
+  ### DISPLAY ###
+  programs.firefox = {
+    preferences."layout.css.devPixelsPerPx" = "1.2";
+    preferencesStatus = "default";
+  };
+
   ### BTRFS ###
   fileSystems = lib.genAttrs [ "/" "/home" "/nix" ] (_: {
     options = [
