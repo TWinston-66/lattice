@@ -1,4 +1,5 @@
-_: {
+{ lib, ... }:
+{
   imports = [
     ./hardware-configuration.nix
     ../../modules/nixos/base.nix
@@ -28,25 +29,16 @@ _: {
       "luks-7ae8c7b4-9729-468e-a0b6-833f8cce4abb".allowDiscards = true;
     };
 
-    # Hibernate to the encrypted swap partition, unlocked in the initrd above.
     resumeDevice = "/dev/mapper/luks-6dbb1fe5-333b-4392-a81a-bd52ef847e3f";
   };
 
   ### BTRFS ###
-  fileSystems = {
-    "/".options = [
+  fileSystems = lib.genAttrs [ "/" "/home" "/nix" ] (_: {
+    options = [
       "compress=zstd"
       "noatime"
     ];
-    "/home".options = [
-      "compress=zstd"
-      "noatime"
-    ];
-    "/nix".options = [
-      "compress=zstd"
-      "noatime"
-    ];
-  };
+  });
 
   systemd.tmpfiles.rules = [ "v /home/.snapshots 0750 root users -" ];
 

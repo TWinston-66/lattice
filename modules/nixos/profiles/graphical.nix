@@ -1,10 +1,4 @@
 _: {
-
-  services.xserver.xkb = {
-    layout = "us";
-    variant = "";
-  };
-
   ### IDLE/LOCK ###
   programs.hyprlock.enable = true;
 
@@ -52,5 +46,4 @@ _: {
       }
     '';
   };
-
 }

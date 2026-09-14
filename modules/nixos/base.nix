@@ -12,12 +12,10 @@
 
   ### NIX ###
   nix = {
-    settings = {
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
-    };
+    settings.experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
     gc = {
       automatic = true;
       options = "--delete-older-than 14d";
@@ -52,7 +50,6 @@
   sops = {
     defaultSopsFile = ../../secrets/common.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-    gnupg.sshKeyPaths = [ ];
     secrets.winston-password.neededForUsers = true;
   };
 
@@ -62,7 +59,7 @@
 
   ### USERS ###
   users.mutableUsers = false;
-  users.users."winston" = {
+  users.users.winston = {
     isNormalUser = true;
     description = "winston";
     extraGroups = [ "wheel" ];
@@ -83,5 +80,4 @@
 
   environment.defaultPackages = [ ];
   documentation.nixos.enable = false;
-
 }

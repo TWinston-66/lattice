@@ -1,22 +1,21 @@
 { pkgs, ... }:
 {
-
   ### SHELL ###
-  programs.zsh = {
-    enable = true;
-    enableGlobalCompInit = false;
-    promptInit = "";
+  programs = {
+    zsh = {
+      enable = true;
+      enableGlobalCompInit = false;
+      promptInit = "";
+    };
+    ssh.startAgent = true;
+    nix-ld.enable = true;
   };
-  users.users."winston".shell = pkgs.zsh;
+  users.users.winston.shell = pkgs.zsh;
 
   environment.pathsToLink = [
     "/share/zsh-autosuggestions"
     "/share/zsh-syntax-highlighting"
   ];
-
-  programs.ssh.startAgent = true;
-
-  programs.nix-ld.enable = true;
 
   ### PACKAGES ###
   environment.systemPackages = with pkgs; [

@@ -14,7 +14,7 @@
     enable = true;
     wifi.backend = "iwd";
   };
-  users.users."winston".extraGroups = [ "networkmanager" ];
+  users.users.winston.extraGroups = [ "networkmanager" ];
 
   ### MEMORY ###
   zramSwap.enable = true;
