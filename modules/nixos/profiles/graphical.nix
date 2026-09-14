@@ -58,6 +58,7 @@ in
 
   programs = {
     firefox.enable = true;
+    thunderbird.enable = true;
     thunar.enable = true;
     waybar.enable = true;
   };
