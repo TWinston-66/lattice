@@ -34,7 +34,7 @@
 
   ### DISPLAY ###
   programs.firefox = {
-    preferences."layout.css.devPixelsPerPx" = "1.2";
+    preferences."layout.css.devPixelsPerPx" = "1.1";
     preferencesStatus = "default";
   };
 

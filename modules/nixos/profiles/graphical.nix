@@ -21,7 +21,7 @@ let
     gtk-theme-name=${gtkTheme}
     gtk-icon-theme-name=${iconTheme}
     gtk-cursor-theme-name=${cursorTheme}
-    gtk-cursor-theme-size=18
+    gtk-cursor-theme-size=16
     gtk-application-prefer-dark-theme=true
     gtk-font-name=Noto Sans 11
   '';
@@ -97,7 +97,7 @@ in
         gtk-theme = gtkTheme;
         icon-theme = iconTheme;
         cursor-theme = cursorTheme;
-        cursor-size = lib.gvariant.mkInt32 18;
+        cursor-size = lib.gvariant.mkInt32 16;
         font-name = "Noto Sans 11";
         monospace-font-name = "JetBrains Mono 11";
       };
