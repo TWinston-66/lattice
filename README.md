@@ -1,101 +1,82 @@
-# lattice
+<p align="center">
+  <img src=".github/assets/banner.svg" alt="lattice" width="100%">
+</p>
 
-My NixOS configuration, as a flake.
+<p align="center">
+  <a href="https://nixos.org"><img src="https://img.shields.io/badge/NixOS-unstable-5277C3?style=flat-square&logo=nixos&logoColor=white" alt="NixOS unstable"></a>
+  <a href="https://github.com/Mic92/sops-nix"><img src="https://img.shields.io/badge/secrets-sops--nix-7EBAE4?style=flat-square" alt="sops-nix"></a>
+  <a href="https://github.com/TWinston-66/lattice/commits/main"><img src="https://img.shields.io/github/last-commit/TWinston-66/lattice?style=flat-square" alt="Last commit"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
+</p>
 
-A small, boring core that every machine gets, with everything else layered on through profiles.
+My NixOS machines, as one flake. Every host gets a small core, and everything
+else is layered on through modules and profiles.
 
-## Updating a host
+## Layout
 
-Hosts with remote access (`remote-managed.nix`) can be deployed from any
-machine with Nix and the SSH key:
+| Path | What it holds |
+| --- | --- |
+| `hosts/<host>/` | Per-host config and its generated `hardware-configuration.nix` |
+| `modules/nixos/base.nix` | The core: Nix, users, secrets, locale. No remote access |
+| `modules/nixos/remote-managed.nix` | Key-only SSH, for hosts deployed remotely |
+| `modules/nixos/dotfiles.nix` | Packages and shell for my [dotfiles](https://github.com/TWinston-66/.dotfiles) |
+| `modules/nixos/profiles/` | `laptop`, `graphical` and `server` |
+| `secrets/` | [sops](https://github.com/getsops/sops)-encrypted secrets |
+| `scripts/` | Deploy, rebuild and password helpers |
 
-```sh
-scripts/deploy.sh [host] [ip]
-```
+**Hosts:** `dell`, a Dell Pro 16 Plus laptop.
 
-The flake is evaluated locally, then built and activated on the target, so the
-target does not need a copy of this repo. Each host has a default IP in the
-script; pass one to override it. SSH host keys are pinned to the host name
-rather than the IP, so a changed address can't silently point a deploy at a
-different machine. You'll be asked for the sudo password during activation.
-
-Any host can also rebuild itself from a checkout of this repo:
-
-```sh
-scripts/rebuild.sh [host]
-```
-
-The host defaults to the machine's hostname without the `lattice-` prefix.
-
-Both scripts refuse to switch a host that can't decrypt its secrets, since it
-would come up with every account locked. The scripts get their tools from the
-flake's dev shell; run `nix develop` to use them yourself.
-
-## Secrets
-
-Secrets are encrypted with [sops-nix](https://github.com/Mic92/sops-nix).
-`.sops.yaml` lists who can decrypt them: admins, with an age key at
-`~/.config/sops/age/keys.txt`, and each host, using its SSH host key.
-
-Set or change a login password:
+## Usage
 
 ```sh
-scripts/set-password.sh [user]
+scripts/deploy.sh [host] [ip]            # build and switch a host over SSH
+scripts/rebuild.sh [host]                # build and switch this machine
+scripts/set-password.sh [user]           # set a login password
+nix develop -c sops secrets/common.yaml  # edit secrets
 ```
 
-Edit secrets directly:
-
-```sh
-nix develop -c sops secrets/common.yaml
-```
+- `deploy.sh` evaluates locally and builds on the target, so the target needs
+  no checkout. It pins the SSH host key to the host name, not the IP.
+- Both switch scripts refuse a host that can't decrypt its secrets, since it
+  would boot with every account locked.
+- Scripts bring their own tools from the flake's dev shell.
+- Secrets decrypt with an admin age key at `~/.config/sops/age/keys.txt`, or
+  with each host's SSH host key. On macOS, set `XDG_CONFIG_HOME` or
+  `SOPS_AGE_KEY_FILE` so sops finds the admin key.
 
 ## Adding a host
 
-1. Install NixOS with the stock installer, with a user named `winston`. For a
-   host with remote access, enable OpenSSH and give that user the deploy SSH
-   key and a password so the first deploy can use sudo.
-2. Copy the generated `hardware-configuration.nix` into `hosts/<host>/` and
-   write a `default.nix` that imports `base.nix` and the profiles you want.
-   Add the host to `nixosConfigurations` in `flake.nix`, and for remote access
-   to the `case` in `scripts/deploy.sh`.
-3. Let the host decrypt secrets. Get the age key for its SSH host key. For a
-   host with remote access:
+1. Install NixOS with a `winston` user. For remote access, also enable OpenSSH
+   and give the user the deploy key and a password.
+2. Copy `hardware-configuration.nix` into `hosts/<host>/`, and add a
+   `default.nix` that imports `base.nix` plus the modules you want. Register
+   the host in `flake.nix`, and in `scripts/deploy.sh` if it's remote.
+3. Get the host's age key and add it to `.sops.yaml`:
+   - Remote: `ssh-keyscan -t ed25519 <ip> | nix develop -c ssh-to-age`
+   - Local: clone this repo (`nix-shell -p git`) and run
+     `scripts/rebuild.sh <host>`. It prints the key.
 
-   ```sh
-   ssh-keyscan -t ed25519 <ip> | nix develop -c ssh-to-age
-   ```
-
-   For any other host, clone this repo on it (`nix-shell -p git` has git on a
-   stock install) and run `scripts/rebuild.sh <host>`. It creates the host key
-   if needed and prints the age key.
-
-   Add it to `.sops.yaml`, then re-encrypt from a machine with an admin key:
-
-   ```sh
-   nix develop -c sops updatekeys secrets/common.yaml
-   ```
-
-4. Run `scripts/deploy.sh <host>`, or `scripts/rebuild.sh <host>` on the host
-   after pulling the re-encrypted secrets.
+   Then re-encrypt from an admin machine:
+   `nix develop -c sops updatekeys secrets/common.yaml`
+4. Switch it with `scripts/deploy.sh <host>`, or pull the re-encrypted secrets
+   and run `scripts/rebuild.sh <host>` on the host.
 
 ## Recovery
 
-Keep a NixOS USB stick around. Passwords only come from sops, root is locked,
-and there's no emergency shell, so if a host can't decrypt its secrets or you
-forget its password, nothing on the machine will let you in.
+Root is locked and passwords only come from sops. If a host can't decrypt its
+secrets, or you forget its password, nothing on the machine will let you in.
+Keep a NixOS USB stick around.
 
-1. Fix the cause from a machine with an admin key: add the host's age key to
-   `.sops.yaml` and run `updatekeys`, or set a new password with
-   `scripts/set-password.sh`. A host's public key is at
-   `/etc/ssh/ssh_host_ed25519_key.pub` on its disk.
-2. Boot the USB stick, unlock the LUKS devices with `cryptsetup open`, and
-   mount the host's file systems under `/mnt` as `hardware-configuration.nix`
-   describes.
-3. Reinstall the fixed configuration from a checkout of this repo:
+1. Boot the stick, unlock the LUKS devices with `cryptsetup open`, and mount the
+   file systems under `/mnt` as `hardware-configuration.nix` describes.
+2. From an admin machine, fix the cause. Either add the host's key
+   (`/mnt/etc/ssh/ssh_host_ed25519_key.pub`) and run `updatekeys`, or set a new
+   password with `scripts/set-password.sh`.
+3. From a checkout with the fix, reinstall:
 
    ```sh
    sudo nixos-install --root /mnt --flake .#<host> --no-root-passwd \
-       --option experimental-features 'nix-command flakes'
+     --option experimental-features 'nix-command flakes'
    ```
 
 ## License
