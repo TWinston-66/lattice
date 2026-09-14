@@ -33,6 +33,9 @@ in
     withUWSM = true;
   };
 
+  # GTK file-chooser portal; xdg-desktop-portal-hyprland doesn't implement it.
+  xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+
   ### APPS ###
   environment.systemPackages = with pkgs; [
     ghostty
@@ -58,6 +61,9 @@ in
     cryptomator
     zathura
     impression
+    firefoxpwa
+    bitwarden-desktop
+    wf-recorder
 
     (catppuccin-gtk.override {
       variant = "mocha";
@@ -71,19 +77,31 @@ in
   ];
 
   programs = {
-    firefox.enable = true;
+    firefox = {
+      enable = true;
+      nativeMessagingHosts.packages = [ pkgs.firefoxpwa ];
+    };
     thunderbird.enable = true;
     thunar = {
       enable = true;
-      plugins = [ pkgs.thunar-archive-plugin ];
+      plugins = [
+        pkgs.thunar-archive-plugin
+        pkgs.thunar-volman
+      ];
     };
     waybar.enable = true;
+
+    appimage = {
+      enable = true;
+      binfmt = true;
+    };
   };
 
   services = {
     gvfs.enable = true;
     tumbler.enable = true;
     blueman.enable = config.hardware.bluetooth.enable;
+    flatpak.enable = true;
 
     # swayosd writes backlight brightness through sysfs, which its udev rule opens to the video group.
     udev.packages = [ pkgs.swayosd ];
@@ -92,6 +110,11 @@ in
 
   ### AUDIO ###
   security.rtkit.enable = true;
+  services.pipewire = {
+    enable = true;
+    pulse.enable = true;
+    wireplumber.enable = true;
+  };
 
   ### SECRETS ###
   services.gnome = {
@@ -109,12 +132,14 @@ in
     hyprpaper
     mako
     hyprpolkitagent
+    hyprsunset
   ];
 
   systemd.user.services = {
     hyprpaper.wantedBy = [ "graphical-session.target" ];
     mako.wantedBy = [ "graphical-session.target" ];
     hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
+    hyprsunset.wantedBy = [ "graphical-session.target" ];
 
     swayosd = {
       description = "Volume and brightness OSD";
@@ -205,6 +230,7 @@ in
   };
 
   fonts = {
+    enableDefaultPackages = true;
     packages = with pkgs; [
       noto-fonts
       jetbrains-mono

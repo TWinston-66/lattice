@@ -80,5 +80,12 @@
 
   ### DOCKER ###
   virtualisation.docker.enable = true;
-  users.users.winston.extraGroups = [ "docker" ];
+
+  ### VIRTUALIZATION ###
+  virtualisation.libvirtd.enable = true;
+  programs.virt-manager.enable = true;
+  users.users.winston.extraGroups = [
+    "docker"
+    "libvirtd"
+  ];
 }

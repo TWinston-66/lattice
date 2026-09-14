@@ -69,6 +69,7 @@
 
   ### PACKAGES ###
   nixpkgs.config.allowUnfree = true;
+  hardware.enableAllFirmware = true;
 
   environment.systemPackages = with pkgs; [
     vim
@@ -77,6 +78,7 @@
     pciutils
     usbutils
     exfatprogs
+    python3
   ];
 
   environment.defaultPackages = [ ];

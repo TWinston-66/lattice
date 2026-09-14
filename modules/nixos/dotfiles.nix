@@ -8,7 +8,41 @@
       promptInit = "";
     };
     ssh.startAgent = true;
-    nix-ld.enable = true;
+    direnv = {
+      enable = true;
+      nix-direnv.enable = true;
+    };
+    nix-ld = {
+      enable = true;
+      libraries = with pkgs; [
+        stdenv.cc.cc
+        zlib
+        openssl
+        curl
+        glib
+        gtk3
+        nss
+        nspr
+        at-spi2-atk
+        cups
+        libdrm
+        libxkbcommon
+        mesa
+        expat
+        xorg.libX11
+        xorg.libXcomposite
+        xorg.libXdamage
+        xorg.libXext
+        xorg.libXfixes
+        xorg.libXrandr
+        alsa-lib
+        libGL
+        fuse3
+        icu
+        libunwind
+        libuuid
+      ];
+    };
   };
   users.users.winston.shell = pkgs.zsh;
 
