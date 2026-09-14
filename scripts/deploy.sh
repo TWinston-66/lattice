@@ -1,47 +1,29 @@
 #!/usr/bin/env bash
-# Build and switch a NixOS host from this flake over SSH.
-#
-# Usage: scripts/deploy.sh [host] [ip]
 set -euo pipefail
-
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "$0")/.."
 source scripts/lib.sh
-use_dev_shell "$PWD/scripts/deploy.sh" "$@"
+enter_dev_shell scripts/deploy.sh "$@"
 
 host="${1:-dell}"
-
 case "$host" in
-dell) hostname="lattice-dell" default_ip="10.0.10.148" ;;
-*)
-    echo "unknown host: $host" >&2
-    exit 1
-    ;;
+    dell) ip="${2:-10.0.10.148}" ;;
+    *) echo "unknown host: $host" >&2; exit 1 ;;
 esac
-
-ip="${2:-$default_ip}"
 target="winston@$ip"
 
-# Pin the host key to the host name, not the IP, so an IP change can't
-# silently point a deploy at a different machine.
-export NIX_SSHOPTS="-o HostKeyAlias=$hostname"
-
-# shellcheck disable=SC2086 # NIX_SSHOPTS is a list of options
-pubkey="$(ssh $NIX_SSHOPTS "$target" cat /etc/ssh/ssh_host_ed25519_key.pub)"
+host_key_alias="HostKeyAlias=lattice-$host"
+export NIX_SSHOPTS="-o $host_key_alias"
+pubkey="$(ssh -o "$host_key_alias" "$target" cat /etc/ssh/ssh_host_ed25519_key.pub)"
 require_recipient "$host" "$pubkey"
 
-nix_pkg="$(dirname "$(dirname "$(readlink -f "$(command -v nix)")")")"
+local_nix="$(readlink -f "$(command -v nix)")"
 nixos_rebuild="$(nix build --no-link --print-out-paths --impure \
-    --argstr lockFile "$PWD/flake.lock" \
-    --argstr nix "$nix_pkg" \
-    --expr '{ lockFile, nix }:
-      let
-        lock = (builtins.fromJSON (builtins.readFile lockFile)).nodes.nixpkgs.locked;
-        pkgs = import (builtins.fetchTree lock) { };
-      in
-      pkgs.nixos-rebuild-ng.override { nix = builtins.storePath nix; }')"
+    --argstr flake "$PWD" \
+    --argstr nix "${local_nix%/bin/nix}" \
+    --expr '{ flake, nix }:
+      let pkgs = import (builtins.getFlake flake).inputs.nixpkgs { };
+      in pkgs.nixos-rebuild-ng.override { nix = builtins.storePath nix; }')"
 
-# nixos-rebuild keeps its ssh control socket in TMPDIR and sizes that path for
-# Linux. The dev shell's TMPDIR is too long for macOS's shorter socket limit.
 TMPDIR=/tmp exec "$nixos_rebuild/bin/nixos-rebuild" switch --no-reexec \
     --flake ".#$host" \
     --target-host "$target" \
