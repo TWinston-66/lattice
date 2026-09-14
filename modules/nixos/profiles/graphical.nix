@@ -45,6 +45,14 @@ in
     slurp
     satty
 
+    drawio
+    telegram-desktop
+    discord
+    tor-browser
+    cryptomator
+    zathura
+    impression
+
     (catppuccin-gtk.override {
       variant = "mocha";
       accents = [ "blue" ];
@@ -63,6 +71,9 @@ in
     waybar.enable = true;
   };
   services.gvfs.enable = true;
+
+  # Run Electron apps natively on Wayland so they aren't blurry under fractional scaling.
+  environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
   ### SESSION SERVICES ###
   systemd.packages = with pkgs; [

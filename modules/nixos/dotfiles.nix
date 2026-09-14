@@ -58,6 +58,7 @@
     nixd
     nixfmt
     statix
+    texliveFull
 
     claude-code
     pi-coding-agent

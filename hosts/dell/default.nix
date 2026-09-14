@@ -65,5 +65,11 @@
 
     ### POWER ###
     thermald.enable = true;
+
+    tailscale.enable = true;
   };
+
+  ### DOCKER ###
+  virtualisation.docker.enable = true;
+  users.users.winston.extraGroups = [ "docker" ];
 }
