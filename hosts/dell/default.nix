@@ -3,6 +3,7 @@ _: {
     ./hardware-configuration.nix
     ../../modules/nixos/base.nix
     ../../modules/nixos/remote-managed.nix
+    ../../modules/nixos/dotfiles.nix
     ../../modules/nixos/profiles/laptop.nix
     ../../modules/nixos/profiles/graphical.nix
   ];

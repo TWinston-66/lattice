@@ -40,7 +40,9 @@ nixos_rebuild="$(nix build --no-link --print-out-paths --impure \
       in
       pkgs.nixos-rebuild-ng.override { nix = builtins.storePath nix; }')"
 
-exec "$nixos_rebuild/bin/nixos-rebuild" switch --no-reexec \
+# nixos-rebuild keeps its ssh control socket in TMPDIR and sizes that path for
+# Linux. The dev shell's TMPDIR is too long for macOS's shorter socket limit.
+TMPDIR=/tmp exec "$nixos_rebuild/bin/nixos-rebuild" switch --no-reexec \
     --flake ".#$host" \
     --target-host "$target" \
     --build-host "$target" \
