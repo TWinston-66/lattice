@@ -36,9 +36,15 @@
   hardware.graphics.extraPackages = [ pkgs.intel-media-driver ];
 
   ### DISPLAY ###
-  programs.firefox = {
-    preferences."layout.css.devPixelsPerPx" = "1.1";
-    preferencesStatus = "default";
+  programs = {
+    firefox = {
+      preferences."layout.css.devPixelsPerPx" = "1.1";
+      preferencesStatus = "default";
+    };
+    thunderbird = {
+      preferences."layout.css.devPixelsPerPx" = "1.1";
+      preferencesStatus = "default";
+    };
   };
 
   ### BTRFS ###
