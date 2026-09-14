@@ -24,8 +24,6 @@ else is layered on through modules and profiles.
 | `secrets/` | [sops](https://github.com/getsops/sops)-encrypted secrets |
 | `scripts/` | Deploy, rebuild and password helpers |
 
-**Hosts:** `dell`, a Dell Pro 16 Plus laptop.
-
 ## Usage
 
 ```sh
