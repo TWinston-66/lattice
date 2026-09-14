@@ -44,7 +44,13 @@ in
     grim
     slurp
     satty
+    swayosd
+    xdg-user-dirs
 
+    mpv
+    imv
+    xarchiver
+    libreoffice
     drawio
     telegram-desktop
     discord
@@ -67,10 +73,33 @@ in
   programs = {
     firefox.enable = true;
     thunderbird.enable = true;
-    thunar.enable = true;
+    thunar = {
+      enable = true;
+      plugins = [ pkgs.thunar-archive-plugin ];
+    };
     waybar.enable = true;
   };
-  services.gvfs.enable = true;
+
+  services = {
+    gvfs.enable = true;
+    tumbler.enable = true;
+    blueman.enable = config.hardware.bluetooth.enable;
+
+    # swayosd writes backlight brightness through sysfs, which its udev rule opens to the video group.
+    udev.packages = [ pkgs.swayosd ];
+  };
+  users.users.winston.extraGroups = [ "video" ];
+
+  ### AUDIO ###
+  security.rtkit.enable = true;
+
+  ### SECRETS ###
+  services.gnome = {
+    gnome-keyring.enable = true;
+    # SSH keys stay with programs.ssh.startAgent.
+    gcr-ssh-agent.enable = false;
+  };
+  security.pam.services.greetd.enableGnomeKeyring = true;
 
   # Run Electron apps natively on Wayland so they aren't blurry under fractional scaling.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
@@ -87,6 +116,17 @@ in
     mako.wantedBy = [ "graphical-session.target" ];
     hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
 
+    swayosd = {
+      description = "Volume and brightness OSD";
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      serviceConfig = {
+        ExecStart = "${pkgs.swayosd}/bin/swayosd-server";
+        Restart = "on-failure";
+      };
+    };
+
     cliphist = {
       description = "Clipboard history";
       partOf = [ "graphical-session.target" ];
@@ -98,6 +138,48 @@ in
       };
     };
   };
+
+  ### DEFAULT APPS ###
+  xdg.mime.defaultApplications =
+    let
+      assign = app: types: lib.genAttrs types (_: app);
+    in
+    assign "firefox.desktop" [
+      "text/html"
+      "x-scheme-handler/http"
+      "x-scheme-handler/https"
+    ]
+    // assign "thunderbird.desktop" [ "x-scheme-handler/mailto" ]
+    // assign "thunar.desktop" [ "inode/directory" ]
+    // assign "org.pwmt.zathura.desktop" [ "application/pdf" ]
+    // assign "imv.desktop" [
+      "image/png"
+      "image/jpeg"
+      "image/gif"
+      "image/webp"
+      "image/avif"
+      "image/bmp"
+      "image/tiff"
+    ]
+    // assign "mpv.desktop" [
+      "video/mp4"
+      "video/webm"
+      "video/x-matroska"
+      "video/quicktime"
+      "audio/mpeg"
+      "audio/flac"
+      "audio/ogg"
+      "audio/wav"
+    ]
+    // assign "xarchiver.desktop" [
+      "application/zip"
+      "application/x-tar"
+      "application/gzip"
+      "application/x-xz"
+      "application/zstd"
+      "application/x-7z-compressed"
+      "application/vnd.rar"
+    ];
 
   ### THEME ###
   xdg.icons.fallbackCursorThemes = [ cursorTheme ];

@@ -34,6 +34,7 @@
     delta
     gh
     lazygit
+    lazydocker
     tmux
     sesh
     gitmux

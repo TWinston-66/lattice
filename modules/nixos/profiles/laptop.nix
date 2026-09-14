@@ -12,6 +12,7 @@
   networking.useNetworkd = false;
   networking.networkmanager.enable = true;
   users.users.winston.extraGroups = [ "networkmanager" ];
+  hardware.bluetooth.enable = true;
 
   ### MEMORY ###
   zramSwap.enable = true;
@@ -40,6 +41,17 @@
     fwupd.enable = true;
   };
   systemd.sleep.settings.Sleep.HibernateDelaySec = "30min";
+
+  systemd.user.services.batsignal = lib.mkIf config.services.graphical-desktop.enable {
+    description = "Low battery notifications";
+    partOf = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" ];
+    wantedBy = [ "graphical-session.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.batsignal}/bin/batsignal -w 20 -c 10 -d 5";
+      Restart = "on-failure";
+    };
+  };
 
   environment.etc."xdg/hypr/hypridle.conf".text = lib.mkIf config.services.hypridle.enable (
     lib.mkAfter ''

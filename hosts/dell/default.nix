@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ lib, pkgs, ... }:
 {
   imports = [
     ./hardware-configuration.nix
@@ -31,6 +31,9 @@
 
     resumeDevice = "/dev/mapper/luks-6dbb1fe5-333b-4392-a81a-bd52ef847e3f";
   };
+
+  ### GRAPHICS ###
+  hardware.graphics.extraPackages = [ pkgs.intel-media-driver ];
 
   ### DISPLAY ###
   programs.firefox = {
