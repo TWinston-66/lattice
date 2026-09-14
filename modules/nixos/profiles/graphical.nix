@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   toml = pkgs.formats.toml { };
 
@@ -92,7 +97,7 @@ in
         gtk-theme = gtkTheme;
         icon-theme = iconTheme;
         cursor-theme = cursorTheme;
-        cursor-size = 18;
+        cursor-size = lib.gvariant.mkInt32 18;
         font-name = "Noto Sans 11";
         monospace-font-name = "JetBrains Mono 11";
       };
