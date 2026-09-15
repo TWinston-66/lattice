@@ -15,6 +15,9 @@ let
   gtkTheme = "catppuccin-mocha-blue-standard";
   iconTheme = "Papirus-Dark";
   cursorTheme = "catppuccin-mocha-dark-cursors";
+  # 9pt (12px) keeps UI text close to Ghostty and waybar; qt6ct in ~/.dotfiles uses the same fonts.
+  uiFont = "Noto Sans 9";
+  monospaceFont = "JetBrains Mono 9";
 
   gtkSettings = ''
     [Settings]
@@ -23,7 +26,7 @@ let
     gtk-cursor-theme-name=${cursorTheme}
     gtk-cursor-theme-size=16
     gtk-application-prefer-dark-theme=true
-    gtk-font-name=Noto Sans 11
+    gtk-font-name=${uiFont}
   '';
 in
 {
@@ -53,7 +56,9 @@ in
     mpv
     imv
     xarchiver
-    libreoffice
+    libreoffice-qt
+    hunspellDicts.en_US
+    hyphenDicts.en_US
     drawio
     telegram-desktop
     discord
@@ -126,6 +131,10 @@ in
 
   # Run Electron apps natively on Wayland so they aren't blurry under fractional scaling.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
+  # LibreOffice picks its GTK3 backend outside KDE, which can't do fractional scaling and oversizes its icons.
+  environment.sessionVariables.SAL_USE_VCLPLUGIN = "qt6";
+  # LibreOffice finds spelling/hyphenation dictionaries under share/{hunspell,hyphen} in the system profile.
+  environment.pathsToLink = [ "/share/hyphen" ];
 
   ### SESSION SERVICES ###
   systemd.packages = with pkgs; [
@@ -160,6 +169,25 @@ in
       serviceConfig = {
         ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --watch ${pkgs.cliphist}/bin/cliphist store";
         Restart = "on-failure";
+      };
+    };
+
+    # Starting with the session rather than at login gives tmux panes WAYLAND_DISPLAY, so GTK apps
+    # launched from them don't fall back to XWayland and get upscaled blurry. Replaces continuum's boot unit.
+    tmux = {
+      description = "tmux default session (detached)";
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      # Inherit the session PATH instead of NixOS's minimal one; plugins and panes need the full system.
+      environment.PATH = lib.mkForce null;
+      serviceConfig = {
+        Type = "forking";
+        ExecStart = "${pkgs.tmux}/bin/tmux new-session -d";
+        ExecStop = [
+          "%h/.local/share/tmux/plugins/tmux-resurrect/scripts/save.sh"
+          "${pkgs.tmux}/bin/tmux kill-server"
+        ];
       };
     };
   };
@@ -217,13 +245,13 @@ in
         icon-theme = iconTheme;
         cursor-theme = cursorTheme;
         cursor-size = lib.gvariant.mkInt32 16;
-        font-name = "Noto Sans 11";
-        monospace-font-name = "JetBrains Mono 11";
+        font-name = uiFont;
+        monospace-font-name = monospaceFont;
       };
     }
   ];
 
-  # Qt apps (hyprpolkitagent) take their palette from qt6ct, configured in ~/.dotfiles.
+  # Qt apps (hyprpolkitagent, LibreOffice) take their palette and fonts from qt6ct, configured in ~/.dotfiles.
   qt = {
     enable = true;
     platformTheme = "qt5ct";
@@ -235,6 +263,8 @@ in
       noto-fonts
       jetbrains-mono
       nerd-fonts.symbols-only
+      # Microsoft core fonts (Times New Roman, Arial, Courier New, ...) so documents render as their authors saw them.
+      corefonts
     ];
     fontconfig.defaultFonts = {
       sansSerif = [ "Noto Sans" ];

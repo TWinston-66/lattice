@@ -14,6 +14,10 @@
   users.users.winston.extraGroups = [ "networkmanager" ];
   hardware.bluetooth.enable = true;
 
+  ### THUNDERBOLT ###
+  # The controller runs at security level "user", so PCIe tunnels (dock Ethernet, NVMe, eGPU) need bolt to authorize devices.
+  services.hardware.bolt.enable = true;
+
   ### MEMORY ###
   zramSwap.enable = true;
   boot.kernel.sysctl = {

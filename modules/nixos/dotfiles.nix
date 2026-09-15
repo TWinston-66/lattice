@@ -29,12 +29,12 @@
         libxkbcommon
         mesa
         expat
-        xorg.libX11
-        xorg.libXcomposite
-        xorg.libXdamage
-        xorg.libXext
-        xorg.libXfixes
-        xorg.libXrandr
+        libx11
+        libxcomposite
+        libxdamage
+        libxext
+        libxfixes
+        libxrandr
         alsa-lib
         libGL
         fuse3
@@ -80,6 +80,7 @@
     nmap
     tealdeer
     imagemagick
+    ghostscript
 
     neovim
     tree-sitter
