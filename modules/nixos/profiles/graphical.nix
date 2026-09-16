@@ -13,53 +13,46 @@ let
   # hyprlang writes colours bare, without the leading '#'.
   hex = lib.removePrefix "#";
 
-  # The asset is drawn in the default palette, so recolouring it is a straight substitution.
-  # Two passes through placeholders, so a replaced colour can't be matched again by a later rule.
-  recolour =
-    let
-      pairs = [
-        {
-          from = "#89b4fa";
-          to = theme.accentHex;
-        }
-        {
-          from = "#b4befe";
-          to = theme.accentAltHex;
-        }
-        {
-          from = "#45475a";
-          to = palette.surface1;
-        }
-        {
-          from = "#6c7086";
-          to = palette.overlay0;
-        }
-        {
-          from = "#cdd6f4";
-          to = palette.text;
-        }
-        {
-          from = "#1e1e2e";
-          to = palette.base;
-        }
-        {
-          from = "#181825";
-          to = palette.mantle;
-        }
-        {
-          from = "#11111b";
-          to = palette.crust;
-        }
-      ];
-      pass = f: lib.concatMapStrings (p: " -e 's/${f p}/g'") pairs;
-    in
-    pass (p: "${p.from}/@@${lib.removePrefix "#" p.from}@@")
-    + pass (p: "@@${lib.removePrefix "#" p.from}@@/${p.to}");
+  # The same drawing at three zoom levels: the mark stays the anchor, the grid around it
+  # gets finer or coarser. The first is the one hyprpaper starts on and hyprlock dims.
+  wallpapers = map (density: config.lattice.artwork.wallpaper { inherit density; }) [
+    "1.0"
+    "0.7"
+    "1.4"
+  ];
+  wallpaper = lib.head wallpapers;
 
-  wallpaper = pkgs.runCommand "lattice-wallpaper.png" { nativeBuildInputs = [ pkgs.librsvg ]; } ''
-    sed${recolour} ${../../../.github/assets/wallpaper.svg} > recoloured.svg
-    rsvg-convert -w 3840 -h 2400 recoloured.svg -o $out
-  '';
+  # Switching between them, for a bind in ~/.dotfiles. hyprpaper 0.8 loads an image when it
+  # is asked for -- `preload` is gone -- so the variants only have to exist in the store.
+  # hyprpaper can also rotate a directory by itself, with `timeout` and `order` in the
+  # wallpaper block below; this stays manual so the desktop only changes when asked.
+  cycleWallpaper = pkgs.writeShellApplication {
+    name = "lattice-wallpaper";
+    runtimeInputs = [ pkgs.hyprland ];
+    text = ''
+      wallpapers=(${lib.concatStringsSep " " wallpapers})
+      state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-wallpaper"
+      index=$(cat "$state" 2>/dev/null || echo 0)
+      count=''${#wallpapers[@]}
+
+      case "''${1:-next}" in
+      next) index=$(((index + 1) % count)) ;;
+      prev) index=$(((index - 1 + count) % count)) ;;
+      list)
+        printf '%s\n' "''${wallpapers[@]}"
+        exit 0
+        ;;
+      *[!0-9]*)
+        echo "usage: lattice-wallpaper [next|prev|list|<index>]" >&2
+        exit 2
+        ;;
+      *) index=$(($1 % count)) ;;
+      esac
+
+      hyprctl hyprpaper wallpaper ",''${wallpapers[index]}"
+      echo "$index" >"$state"
+    '';
+  };
 
   # Catppuccin, matching ~/.dotfiles. Theme names follow lattice.theme.
   gtkTheme = "catppuccin-${theme.flavor}-${theme.accent}-standard";
@@ -81,7 +74,11 @@ let
 in
 {
   # Everything below reads config.lattice.theme, so don't rely on branding.nix pulling it in.
-  imports = [ ../theme.nix ];
+  imports = [
+    ../artwork.nix
+    ../theme.nix
+    ../plymouth.nix
+  ];
 
   ### SESSION ###
   programs.hyprland = {
@@ -131,6 +128,10 @@ in
       inherit (theme) flavor accent;
     })
     catppuccin-cursors."${theme.flavor}Dark"
+
+    cycleWallpaper
+    # The drawing tool itself, for trying a density or a phase before wiring it in.
+    config.lattice.artwork.draw
   ];
 
   programs = {

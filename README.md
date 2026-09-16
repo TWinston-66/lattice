@@ -20,11 +20,14 @@ else is layered on through modules and profiles.
 | `modules/nixos/base.nix` | The core: Nix, users, secrets, locale. No remote access |
 | `modules/nixos/branding.nix` | lattice naming and logo in place of NixOS |
 | `modules/nixos/theme.nix` | The palette. One accent drives every themed surface |
+| `modules/nixos/artwork.nix` | The wallpaper and boot-splash drawings, in the live palette |
+| `modules/nixos/plymouth.nix` | The boot splash, and a boot with nothing else on screen |
 | `modules/nixos/remote-managed.nix` | Key-only SSH, for hosts deployed remotely |
 | `modules/nixos/dotfiles.nix` | Packages and shell for my [dotfiles](https://github.com/TWinston-66/.dotfiles) |
 | `modules/nixos/profiles/` | `laptop`, `graphical` and `server` |
 | `secrets/` | [sops](https://github.com/getsops/sops)-encrypted secrets |
 | `scripts/` | Deploy, rebuild and password helpers |
+| `assets/lattice-art.py` | Draws the wallpaper, the splash's mark and its widgets |
 
 ## Usage
 
@@ -53,9 +56,9 @@ so re-accenting the whole desktop is a one-line change:
 lattice.theme.accent = "mauve";   # any palette entry
 ```
 
-That reaches the console palette, `ANSI_COLOR`, tuigreet, hyprlock, the GTK/icon/cursor
-themes, the generated wallpaper, and the palettes under `/etc/xdg` that waybar, rofi,
-mako and swayosd import from [my dotfiles](https://github.com/TWinston-66/.dotfiles).
+That reaches the console palette, `ANSI_COLOR`, the Plymouth splash, tuigreet, hyprlock,
+the GTK/icon/cursor themes, the generated wallpaper, and the palettes under `/etc/xdg` that
+waybar, rofi, mako and swayosd import from [my dotfiles](https://github.com/TWinston-66/.dotfiles).
 
 Those four keep their layout in the dotfiles repo and import only colour, by absolute
 path, so tweaking a bar or menu needs no rebuild:
@@ -73,6 +76,26 @@ fails silently, rendering it transparent — so prefer the aliases over a litera
 Colours shared with macOS (ghostty, bat, btop, and the fzf and zsh-syntax-highlighting
 blocks in `.zshrc`) stay hardcoded in the dotfiles repo. satty and qt6ct have no include
 mechanism, so they stay hardcoded too.
+
+## Artwork
+
+`assets/lattice-art.py` draws the lattice -- the same triangular grid as the logo -- from
+the palette it is handed, so nothing is a fixed-colour asset:
+
+```sh
+lattice-art wallpaper --density 1.4 > wallpaper.svg   # installed, uses the live palette
+lattice-art mark --phase 0.3                          # one frame of the splash
+python3 assets/lattice-art.py wallpaper               # from a checkout, stock Mocha
+```
+
+`lattice.artwork.wallpaper { density = "1.4"; }` is the same drawing as a PNG, in the live
+palette. `density` is a zoom: above 1 the grid is finer and the mark smaller. The graphical
+profile builds three of them and `lattice-wallpaper [next|prev|list|<index>]` switches
+between them through hyprpaper -- bind it to a key.
+
+The boot splash is the mark alone, pulsing out from the centre, with the passphrase field
+shaped like hyprlock's. Boot is otherwise silent: no kernel or systemd messages, splash
+straight through to the greeter. `journalctl -b` still has everything.
 
 ## Adding a host
 

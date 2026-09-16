@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.lattice.theme;
 
@@ -60,6 +65,59 @@ let
     "blue"
     "lavender"
   ];
+
+  # The assets under .github/assets are drawn in stock Mocha with the blue accent, so
+  # recolouring one is a straight substitution of those literals onto the live palette.
+  assetColours = [
+    {
+      from = "#89b4fa";
+      to = cfg.accentHex;
+    }
+    {
+      from = "#b4befe";
+      to = cfg.accentAltHex;
+    }
+    {
+      from = "#45475a";
+      to = cfg.palette.surface1;
+    }
+    {
+      from = "#6c7086";
+      to = cfg.palette.overlay0;
+    }
+    {
+      from = "#cdd6f4";
+      to = cfg.palette.text;
+    }
+    {
+      from = "#1e1e2e";
+      to = cfg.palette.base;
+    }
+    {
+      from = "#181825";
+      to = cfg.palette.mantle;
+    }
+    {
+      from = "#11111b";
+      to = cfg.palette.crust;
+    }
+  ];
+
+  # Two passes through placeholders, so a replaced colour can't be matched again by a later
+  # rule. Without them `accent = "lavender"` would collapse both accents onto one colour.
+  sedArgs =
+    let
+      pass = f: lib.concatMapStrings (p: " -e 's/${f p}/g'") assetColours;
+    in
+    pass (p: "${p.from}/@@${lib.removePrefix "#" p.from}@@")
+    + pass (p: "@@${lib.removePrefix "#" p.from}@@/${p.to}");
+
+  recolourSvg =
+    {
+      name,
+      src,
+    }:
+    pkgs.runCommand name { } "sed${sedArgs} ${src} > $out";
 
   # Every generated file gets the whole palette plus `accent`/`accentAlt` aliases, so
   # configs can name the role instead of the colour and follow a re-accent for free.
@@ -175,12 +233,31 @@ in
       description = "Resolved secondary accent colour.";
     };
 
+    rgbOf = lib.mkOption {
+      type = lib.types.functionTo lib.types.str;
+      readOnly = true;
+      default = rgbOf;
+      defaultText = lib.literalExpression "color: \"r;g;b\"";
+      description = "`\"#rrggbb\"` -> `\"r;g;b\"`, for the truecolor escape sequences.";
+    };
+
     accentRgb = lib.mkOption {
       type = lib.types.str;
       readOnly = true;
       default = rgbOf cfg.accentHex;
       defaultText = lib.literalExpression "\"137;180;250\"";
       description = "Accent as decimal `r;g;b`, for escape sequences.";
+    };
+
+    recolourSvg = lib.mkOption {
+      type = lib.types.functionTo lib.types.package;
+      readOnly = true;
+      default = recolourSvg;
+      defaultText = lib.literalExpression "{ name, src }: <recoloured SVG>";
+      description = ''
+        `{ name, src }` -> that SVG with the stock Mocha literals swapped for the live
+        palette. Assets stay drawn in the default palette and follow a re-accent for free.
+      '';
     };
 
     accentAnsi = lib.mkOption {
