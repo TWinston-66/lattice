@@ -7,17 +7,67 @@
 let
   toml = pkgs.formats.toml { };
 
+  theme = config.lattice.theme;
+  inherit (theme) palette;
+
+  # hyprlang writes colours bare, without the leading '#'.
+  hex = lib.removePrefix "#";
+
+  # The asset is drawn in the default palette, so recolouring it is a straight substitution.
+  # Two passes through placeholders, so a replaced colour can't be matched again by a later rule.
+  recolour =
+    let
+      pairs = [
+        {
+          from = "#89b4fa";
+          to = theme.accentHex;
+        }
+        {
+          from = "#b4befe";
+          to = theme.accentAltHex;
+        }
+        {
+          from = "#45475a";
+          to = palette.surface1;
+        }
+        {
+          from = "#6c7086";
+          to = palette.overlay0;
+        }
+        {
+          from = "#cdd6f4";
+          to = palette.text;
+        }
+        {
+          from = "#1e1e2e";
+          to = palette.base;
+        }
+        {
+          from = "#181825";
+          to = palette.mantle;
+        }
+        {
+          from = "#11111b";
+          to = palette.crust;
+        }
+      ];
+      pass = f: lib.concatMapStrings (p: " -e 's/${f p}/g'") pairs;
+    in
+    pass (p: "${p.from}/@@${lib.removePrefix "#" p.from}@@")
+    + pass (p: "@@${lib.removePrefix "#" p.from}@@/${p.to}");
+
   wallpaper = pkgs.runCommand "lattice-wallpaper.png" { nativeBuildInputs = [ pkgs.librsvg ]; } ''
-    rsvg-convert -w 3840 -h 2400 ${../../../.github/assets/wallpaper.svg} -o $out
+    sed${recolour} ${../../../.github/assets/wallpaper.svg} > recoloured.svg
+    rsvg-convert -w 3840 -h 2400 recoloured.svg -o $out
   '';
 
-  # Catppuccin Mocha with the blue accent, matching ~/.dotfiles.
-  gtkTheme = "catppuccin-mocha-blue-standard";
+  # Catppuccin, matching ~/.dotfiles. Theme names follow lattice.theme.
+  gtkTheme = "catppuccin-${theme.flavor}-${theme.accent}-standard";
   iconTheme = "Papirus-Dark";
-  cursorTheme = "catppuccin-mocha-dark-cursors";
+  cursorTheme = "catppuccin-${theme.flavor}-dark-cursors";
   # 9pt (12px) keeps UI text close to Ghostty and waybar; qt6ct in ~/.dotfiles uses the same fonts.
-  uiFont = "Noto Sans 9";
-  monospaceFont = "JetBrains Mono 9";
+  uiFont = "${theme.fonts.ui} ${toString theme.fonts.size}";
+  monospaceFont = "${theme.fonts.monospace} ${toString theme.fonts.size}";
 
   gtkSettings = ''
     [Settings]
@@ -30,6 +80,9 @@ let
   '';
 in
 {
+  # Everything below reads config.lattice.theme, so don't rely on branding.nix pulling it in.
+  imports = [ ../theme.nix ];
+
   ### SESSION ###
   programs.hyprland = {
     enable = true;
@@ -71,14 +124,13 @@ in
     wf-recorder
 
     (catppuccin-gtk.override {
-      variant = "mocha";
-      accents = [ "blue" ];
+      variant = theme.flavor;
+      accents = [ theme.accent ];
     })
     (catppuccin-papirus-folders.override {
-      flavor = "mocha";
-      accent = "blue";
+      inherit (theme) flavor accent;
     })
-    catppuccin-cursors.mochaDark
+    catppuccin-cursors."${theme.flavor}Dark"
   ];
 
   programs = {
@@ -312,16 +364,17 @@ in
       reboot = "systemctl reboot";
     };
 
+    # tuigreet takes ANSI colour names, not hex, so the accent maps to its nearest name.
     theme = {
       container = "black";
-      border = "blue";
-      title = "blue";
+      border = theme.accentAnsi;
+      title = theme.accentAnsi;
       greet = "white";
       time = "white";
       text = "gray";
-      prompt = "blue";
+      prompt = theme.accentAnsi;
       input = "gray";
-      action = "blue";
+      action = theme.accentAnsi;
       button = "magenta";
     };
   };
@@ -357,15 +410,15 @@ in
       background {
         monitor =
         path = ${wallpaper}
-        color = rgb(1e1e2e)
+        color = rgb(${hex palette.base})
       }
 
       label {
         monitor =
         text = $TIME
-        color = rgb(cdd6f4)
+        color = rgb(${hex palette.text})
         font_size = 96
-        font_family = JetBrains Mono ExtraBold
+        font_family = ${theme.fonts.monospace} ExtraBold
         position = 0, 360
         halign = center
         valign = center
@@ -374,9 +427,9 @@ in
       label {
         monitor =
         text = cmd[update:60000] date +"%A, %B %-d"
-        color = rgb(a6adc8)
+        color = rgb(${hex palette.subtext0})
         font_size = 22
-        font_family = JetBrains Mono
+        font_family = ${theme.fonts.monospace}
         position = 0, 260
         halign = center
         valign = center
@@ -390,14 +443,14 @@ in
         valign = center
         rounding = 14
         outline_thickness = 2
-        outer_color = rgb(89b4fa)
-        inner_color = rgb(181825)
-        font_color = rgb(cdd6f4)
-        font_family = JetBrains Mono
-        check_color = rgb(b4befe)
-        fail_color = rgb(f38ba8)
-        capslock_color = rgb(f9e2af)
-        placeholder_text = <span foreground="##6c7086">password</span>
+        outer_color = rgb(${hex theme.accentHex})
+        inner_color = rgb(${hex palette.mantle})
+        font_color = rgb(${hex palette.text})
+        font_family = ${theme.fonts.monospace}
+        check_color = rgb(${hex theme.accentAltHex})
+        fail_color = rgb(${hex palette.red})
+        capslock_color = rgb(${hex palette.yellow})
+        placeholder_text = <span foreground="#${palette.overlay0}">password</span>
         fail_text = $FAIL
         fade_on_empty = false
         dots_size = 0.25

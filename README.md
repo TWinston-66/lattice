@@ -18,7 +18,8 @@ else is layered on through modules and profiles.
 | --- | --- |
 | `hosts/<host>/` | Per-host config and its generated `hardware-configuration.nix` |
 | `modules/nixos/base.nix` | The core: Nix, users, secrets, locale. No remote access |
-| `modules/nixos/branding.nix` | lattice naming and logo in place of NixOS, and the console palette |
+| `modules/nixos/branding.nix` | lattice naming and logo in place of NixOS |
+| `modules/nixos/theme.nix` | The palette. One accent drives every themed surface |
 | `modules/nixos/remote-managed.nix` | Key-only SSH, for hosts deployed remotely |
 | `modules/nixos/dotfiles.nix` | Packages and shell for my [dotfiles](https://github.com/TWinston-66/.dotfiles) |
 | `modules/nixos/profiles/` | `laptop`, `graphical` and `server` |
@@ -42,6 +43,36 @@ nix develop -c sops secrets/common.yaml  # edit secrets
 - Secrets decrypt with an admin age key at `~/.config/sops/age/keys.txt`, or
   with each host's SSH host key. On macOS, set `XDG_CONFIG_HOME` or
   `SOPS_AGE_KEY_FILE` so sops finds the admin key.
+
+## Theming
+
+`lattice.theme` holds the palette and one accent. Everything themed is written from it,
+so re-accenting the whole desktop is a one-line change:
+
+```nix
+lattice.theme.accent = "mauve";   # any palette entry
+```
+
+That reaches the console palette, `ANSI_COLOR`, tuigreet, hyprlock, the GTK/icon/cursor
+themes, the generated wallpaper, and the palettes under `/etc/xdg` that waybar, rofi,
+mako and swayosd import from [my dotfiles](https://github.com/TWinston-66/.dotfiles).
+
+Those four keep their layout in the dotfiles repo and import only colour, by absolute
+path, so tweaking a bar or menu needs no rebuild:
+
+| Config | Imports |
+| --- | --- |
+| `waybar/style.css`, `swayosd/style.css` | `@import url("file:///etc/xdg/…/lattice.css")` |
+| `rofi/config.rasi` | `@import "/etc/xdg/rofi/lattice.rasi"` |
+| `mako/config` | `include=/etc/xdg/mako/lattice` |
+
+Each generated file defines the whole palette plus `accent` and `accentAlt` aliases, so a
+config names the role rather than the colour. Name a colour that no file defines and GTK
+fails silently, rendering it transparent — so prefer the aliases over a literal hex.
+
+Colours shared with macOS (ghostty, bat, btop, and the fzf and zsh-syntax-highlighting
+blocks in `.zshrc`) stay hardcoded in the dotfiles repo. satty and qt6ct have no include
+mechanism, so they stay hardcoded too.
 
 ## Adding a host
 
