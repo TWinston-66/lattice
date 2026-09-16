@@ -9,6 +9,7 @@
   imports = [
     inputs.sops-nix.nixosModules.sops
     ./branding.nix
+    ./firewall.nix
   ];
 
   ### NIX ###

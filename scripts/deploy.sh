@@ -6,10 +6,12 @@ enter_dev_shell scripts/deploy.sh "$@"
 
 host="${1:-dell}"
 case "$host" in
-    dell) ip="${2:-10.0.10.148}" ;;
+    dell) ;;
     *) echo "unknown host: $host" >&2; exit 1 ;;
 esac
-target="winston@$ip"
+# Hosts answer SSH on the tailnet only, so the default address is the MagicDNS name.
+# Pass an address explicitly to reach a host that is not on the tailnet yet.
+target="winston@${2:-lattice-$host}"
 
 host_key_alias="HostKeyAlias=lattice-$host"
 export NIX_SSHOPTS="-o $host_key_alias"
