@@ -95,6 +95,7 @@
     nixfmt
     statix
     texliveFull
+    python3Packages.pylatexenc
 
     claude-code
     pi-coding-agent
