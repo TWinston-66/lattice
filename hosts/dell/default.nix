@@ -78,6 +78,22 @@
     tailscale.enable = true;
   };
 
+  # The bar's Tailscale pill toggles the tunnel with `tailscale up`/`down`, which tailscaled
+  # refuses for anyone but root unless a user is named as the operator. The world-writable
+  # socket is not enough: the daemon checks this preference itself. Set once per boot; the
+  # preference persists in tailscaled's state either way, so this is belt and braces.
+  systemd.services.tailscale-operator = {
+    description = "Allow winston to operate tailscaled without sudo";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "tailscaled.service" ];
+    wants = [ "tailscaled.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.tailscale}/bin/tailscale set --operator=winston";
+    };
+  };
+
   ### DOCKER ###
   virtualisation.docker.enable = true;
 

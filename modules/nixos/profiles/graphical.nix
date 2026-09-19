@@ -105,6 +105,167 @@ let
     '';
   };
 
+  # Tailscale has no Linux GUI, so the bar pill is the interface: the tooltip carries the
+  # connection report and a click brings the tunnel up or down. `tailscale status --json`
+  # exposes the daemon's own view, so there is no separate session state to keep in step --
+  # the same reason lattice-sunset asks hyprsunset rather than tracking the temperature.
+  #
+  # Peer counts skip exit nodes: this tailnet has the Mullvad integration on, so 533 of its
+  # 539 peers are exit nodes and counting them would hide the six real devices. Health is
+  # reported as a second CSS class, so a running-but-warning node doesn't read as a
+  # healthy green pill. The glyphs are Material Design Icons from Nerd Fonts 3.5.0;
+  # there is no Tailscale mark in the set, and these are recoloured by style.css anyway.
+  tailscale = pkgs.writeShellApplication {
+    name = "lattice-tailscale";
+    runtimeInputs = [
+      pkgs.tailscale
+      pkgs.jq
+      pkgs.procps
+      pkgs.xdg-utils
+    ];
+    text = ''
+      glyph_connected=$'\U000F0582' # md-vpn
+      glyph_stopped=$'\U000F0319'   # md-lan_disconnect
+      glyph_login=$'\U000F08EE'     # md-lock_alert
+      glyph_alert=$'\U000F0ECC'     # md-shield_alert
+
+      # Waybar's custom-module JSON. `class` is an array, so a state and a warning can both
+      # apply; style.css keys off the names. Built through jq rather than printf so newlines
+      # and any awkward character in a hostname or health line are escaped, not trusted.
+      emit() {
+        local text="$1" tooltip="$2"
+        shift 2
+        jq -cn \
+          --arg text "$text" \
+          --arg tooltip "$tooltip" \
+          --argjson class "$(jq -cn --args '$ARGS.positional' "$@")" \
+          '{text: $text, tooltip: $tooltip, class: $class}'
+      }
+
+      status() {
+        local json
+        if ! json="$(tailscale status --json 2>/dev/null)" || [ -z "$json" ]; then
+          emit "$glyph_stopped" $'Tailscale is not responding\ntailscaled may be stopped' stopped
+          return 0
+        fi
+
+        local backend text
+        local -a classes lines
+
+        backend="$(jq -r '.BackendState // "NoState"' <<<"$json")"
+
+        case "$backend" in
+        Running)
+          local host ip tailnet dns advertise online devs exit_id exit_name health
+          host="$(jq -r '.Self.HostName // "this device"' <<<"$json")"
+          ip="$(jq -r '.Self.TailscaleIPs[0] // ""' <<<"$json")"
+          dns="$(jq -r '.Self.DNSName // "" | sub("\\.$"; "")' <<<"$json")"
+          tailnet="$(jq -r '.CurrentTailnet.Name // ""' <<<"$json")"
+          advertise="$(jq -r '.Self.ExitNode // false' <<<"$json")"
+
+          read -r online devs <<<"$(jq -r '[([.Peer[] | select((.ExitNodeOption | not) and .Online)] | length), ([.Peer[] | select(.ExitNodeOption | not)] | length)] | @tsv' <<<"$json")"
+
+          lines=("Tailscale: Connected" "$host  $ip")
+          if [ -n "$tailnet" ]; then lines+=("tailnet: $tailnet"); fi
+          lines+=("devices: $online/$devs online")
+
+          # Using an exit node is the difference between "the tunnel is up" and "traffic
+          # is actually going through Mullvad", so it gets its own class for style.css to
+          # colour on: teal with one, red without. ExitNodeStatus is null unless this node
+          # is routing through one; its ID names the peer to show in the tooltip.
+          exit_id="$(jq -r '.ExitNodeStatus.ID // empty' <<<"$json")"
+          local exit_class
+          if [ -n "$exit_id" ]; then
+            exit_name="$(jq -r --arg id "$exit_id" '[.Peer[] | select(.ID == $id)][0].HostName // $id' <<<"$json")"
+            lines+=("exit node: $exit_name")
+            exit_class=exit-node
+          else
+            lines+=("exit node: none")
+            exit_class=no-exit-node
+          fi
+          if [ "$advertise" = true ]; then
+            lines+=("advertising as an exit node")
+          fi
+          if [ -n "$dns" ]; then lines+=("$dns"); fi
+
+          # Health is where tailscaled reports route conflicts and the like. Showing it as
+          # a second class is the whole reason the running state isn't just the vpn glyph.
+          health="$(jq -r '.Health // [] | .[]' <<<"$json")"
+          if [ -n "$health" ]; then
+            text="$glyph_alert"
+            classes=(running warning)
+            while IFS= read -r line; do lines+=("warning: $line"); done <<<"$health"
+          else
+            text="$glyph_connected"
+            classes=(running "$exit_class")
+          fi
+          ;;
+
+        Starting)
+          text="$glyph_connected"
+          classes=(starting)
+          lines=("Tailscale: starting")
+          ;;
+
+        NeedsLogin | NeedsMachineAuth)
+          local authurl
+          text="$glyph_login"
+          classes=(needs-login)
+          authurl="$(jq -r '.AuthURL // empty' <<<"$json")"
+          if [ "$backend" = NeedsMachineAuth ]; then
+            lines=("Tailscale: waiting for approval")
+          else
+            lines=("Tailscale: signed out" "click to sign in")
+          fi
+          if [ -n "$authurl" ]; then lines+=("$authurl"); fi
+          ;;
+
+        *)
+          text="$glyph_stopped"
+          classes=(stopped)
+          lines=("Tailscale: disconnected" "click to connect")
+          ;;
+        esac
+
+        local tooltip
+        printf -v tooltip '%s\n' "''${lines[@]}"
+        emit "$text" "''${tooltip%$'\n'}" "''${classes[@]}"
+      }
+
+      toggle() {
+        local backend
+        backend="$(tailscale status --json 2>/dev/null | jq -r '.BackendState // "NoState"' 2>/dev/null || echo NoState)"
+
+        if [ "$backend" = Running ]; then
+          tailscale down
+        else
+          # `tailscale up` blocks while it waits for a browser sign-in, so it is detached;
+          # when already authenticated it returns at once and the signal lands immediately.
+          tailscale up >/dev/null 2>&1 &
+          disown || true
+        fi
+
+        # RTMIN+2 matches the "signal" of custom/tailscale in ~/.dotfiles/waybar.
+        pkill -RTMIN+2 waybar 2>/dev/null || true
+      }
+
+      web() {
+        xdg-open "https://login.tailscale.com/admin/machines" >/dev/null 2>&1 &
+        disown || true
+      }
+
+      case "''${1:-status}" in
+      status) status ;;
+      toggle) toggle ;;
+      web) web ;;
+      *)
+        echo "usage: lattice-tailscale [status|toggle|web]" >&2
+        exit 2
+        ;;
+      esac
+    '';
+  };
+
   # wlogout reads $XDG_CONFIG_HOME/wlogout/{layout,style.css} and then falls straight back
   # to its own store path -- it never consults XDG_CONFIG_DIRS, so the /etc/xdg drop-in
   # trick the other shell surfaces use doesn't reach it. The paths are passed explicitly
@@ -220,6 +381,7 @@ in
 
     cycleWallpaper
     sunset
+    tailscale
     powerMenu
     # The drawing tool itself, for trying a density or a phase before wiring it in.
     config.lattice.artwork.draw
@@ -337,6 +499,7 @@ in
     # ~/.dotfiles/waybar/config.jsonc.
     waybar.path = [
       sunset
+      tailscale
       powerMenu
       pkgs.wireplumber
     ];
