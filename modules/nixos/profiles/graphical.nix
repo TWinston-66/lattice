@@ -54,6 +54,57 @@ let
     '';
   };
 
+  # hyprsunset runs from session start but idles at its 6000K default, which is no filter
+  # at all -- the daemon is only useful once something sets a temperature.
+  #
+  # Two things about driving it, both found by testing: the `hyprsunset` CLI flags spawn a
+  # *new* daemon rather than talking to the running one (it then dies with "A CTM manager
+  # is already running"), so control goes through `hyprctl hyprsunset`; and `identity`
+  # leaves the reported temperature at its last set value, so it can't be used to detect
+  # state. Toggling between 6000K and warm keeps the daemon's own reading authoritative,
+  # which means the bar can't desync from the screen and no state file is needed.
+  sunset = pkgs.writeShellApplication {
+    name = "lattice-sunset";
+    runtimeInputs = [
+      pkgs.hyprland
+      pkgs.procps
+    ];
+    text = ''
+      warm=4000
+      neutral=6000
+
+      current() { hyprctl hyprsunset temperature; }
+
+      case "''${1:-toggle}" in
+      on)     hyprctl hyprsunset temperature "$warm" >/dev/null ;;
+      off)    hyprctl hyprsunset temperature "$neutral" >/dev/null ;;
+      toggle)
+        if [ "$(current)" -lt "$neutral" ]; then
+          hyprctl hyprsunset temperature "$neutral" >/dev/null
+        else
+          hyprctl hyprsunset temperature "$warm" >/dev/null
+        fi
+        ;;
+      status)
+        temp=$(current)
+        if [ "$temp" -lt "$neutral" ]; then
+          printf '{"text":"󰖔","tooltip":"Night light on - %sK","class":"warm"}\n' "$temp"
+        else
+          printf '{"text":"󰖙","tooltip":"Night light off - %sK","class":"cool"}\n' "$temp"
+        fi
+        exit 0
+        ;;
+      *)
+        echo "usage: lattice-sunset [toggle|on|off|status]" >&2
+        exit 2
+        ;;
+      esac
+
+      # RTMIN+1 matches the "signal" of the custom/sunset module in ~/.dotfiles/waybar.
+      pkill -RTMIN+1 waybar || true
+    '';
+  };
+
   # Catppuccin, matching ~/.dotfiles. Theme names follow lattice.theme.
   gtkTheme = "catppuccin-${theme.flavor}-${theme.accent}-standard";
   iconTheme = "Papirus-Dark";
@@ -93,6 +144,12 @@ in
   environment.systemPackages = with pkgs; [
     ghostty
     rofi
+    # hyprsunset ships only as a systemd.packages unit above, so its CLI -- which is how
+    # the running daemon is driven -- wasn't on PATH for lattice-sunset or a shell.
+    hyprsunset
+    # notify-send: without it every script that tries to raise a notification fails
+    # silently, mako itself was fine all along.
+    libnotify
     brightnessctl
     playerctl
     wl-clipboard
@@ -130,6 +187,7 @@ in
     catppuccin-cursors."${theme.flavor}Dark"
 
     cycleWallpaper
+    sunset
     # The drawing tool itself, for trying a density or a phase before wiring it in.
     config.lattice.artwork.draw
   ];
@@ -202,6 +260,17 @@ in
     mako.wantedBy = [ "graphical-session.target" ];
     hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
     hyprsunset.wantedBy = [ "graphical-session.target" ];
+
+    # systemd user services get a bare default PATH -- coreutils, findutils, grep, sed,
+    # systemd -- and notably *not* /run/current-system/sw/bin. Waybar runs its module
+    # commands through `sh -c` with that environment, so anything they call has to be
+    # named here or it fails with "command not found" and the module silently renders
+    # empty. Keep this in step with the on-click/on-scroll/exec commands in
+    # ~/.dotfiles/waybar/config.jsonc -- currently just these two.
+    waybar.path = [
+      sunset
+      pkgs.wireplumber
+    ];
 
     swayosd = {
       description = "Volume and brightness OSD";

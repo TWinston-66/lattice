@@ -35,6 +35,21 @@ let
     in
     16 * hexDigits.${lib.substring 0 1 pair} + hexDigits.${lib.substring 1 1 pair};
 
+  hexChars = "0123456789abcdef";
+
+  # 0-255 -> "00".."ff". The inverse of `byte`, for building #rrggbbaa literals.
+  hexByte = n: lib.substring (n / 16) 1 hexChars + lib.substring (lib.mod n 16) 1 hexChars;
+
+  # "#1e1e2e" -> "#1e1e2ed1" at the configured opacity. rofi's rasi and mako's ini have
+  # no alpha() function, so a translucent surface has to be baked in as a literal; GTK
+  # CSS does have one, so waybar/swayosd use `alpha(@base, ...)` in ~/.dotfiles instead.
+  alphaOf =
+    color:
+    let
+      clamped = lib.min 1.0 (lib.max 0.0 cfg.opacity);
+    in
+    color + hexByte (builtins.floor ((clamped * 255.0) + 0.5));
+
   # "#89b4fa" -> "137;180;250", for os-release's ANSI_COLOR.
   rgbOf =
     color:
@@ -217,6 +232,24 @@ in
       };
     };
 
+    opacity = lib.mkOption {
+      type = lib.types.float;
+      default = 0.82;
+      description = ''
+        Background opacity for the shell surfaces that Hyprland blurs -- the waybar
+        pills, the rofi window and mako notifications. 1.0 is fully opaque, which
+        makes the `blur` layer rules in ~/.dotfiles/hypr a no-op.
+      '';
+    };
+
+    alphaOf = lib.mkOption {
+      type = lib.types.functionTo lib.types.str;
+      readOnly = true;
+      default = alphaOf;
+      defaultText = lib.literalExpression "color: \"#rrggbbaa\"";
+      description = "`\"#rrggbb\"` -> that colour at `opacity`, for configs with no alpha() function.";
+    };
+
     accentHex = lib.mkOption {
       type = lib.types.str;
       readOnly = true;
@@ -319,6 +352,7 @@ in
         ${renderNamed (name: hex: "  ${name}: ${hex};\n")}  accent: @${cfg.accent};
           accentAlt: @${cfg.accentAlt};
           highlight: bold ${cfg.accentHex};
+          baseAlpha: ${alphaOf cfg.palette.base};
         }
       '';
 
@@ -326,7 +360,7 @@ in
       # Colours only, including the per-urgency borders; geometry, fonts and timeouts
       # stay in ~/.dotfiles. Criteria here merge with the same criteria there.
       "xdg/mako/lattice".text = ''
-        background-color=${cfg.palette.base}
+        background-color=${alphaOf cfg.palette.base}
         text-color=${cfg.palette.text}
         border-color=${cfg.accentHex}
         progress-color=over ${cfg.palette.surface0}
