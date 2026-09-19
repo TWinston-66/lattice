@@ -13,6 +13,12 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Asahi kernel, m1n1/U-Boot and audio for the Apple Silicon MacBook. It has no binary
+    # cache, so the kernel is built on the Mac itself.
+    apple-silicon = {
+      url = "github:nix-community/nixos-apple-silicon";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -22,6 +28,7 @@
         f:
         nixpkgs.lib.genAttrs [
           "x86_64-linux"
+          "aarch64-linux"
           "aarch64-darwin"
         ] (system: f nixpkgs.legacyPackages.${system});
     in
@@ -30,6 +37,13 @@
         specialArgs = { inherit inputs; };
         modules = [
           ./hosts/dell
+        ];
+      };
+
+      nixosConfigurations.mac = nixpkgs.lib.nixosSystem {
+        specialArgs = { inherit inputs; };
+        modules = [
+          ./hosts/mac
         ];
       };
 

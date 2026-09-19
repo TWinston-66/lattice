@@ -80,6 +80,43 @@ with `journalctl -b` keeping everything.
    - Local: run `scripts/rebuild.sh <host>` on the host; it prints the key.
 4. Switch it with `scripts/deploy.sh <host>`, or `scripts/rebuild.sh <host>` on the host.
 
+### Apple Silicon
+
+`hosts/mac` runs the Asahi kernel from [nixos-apple-silicon](https://github.com/nix-community/nixos-apple-silicon)
+next to macOS. It is installed with a minimal config first: the installer can
+only copy its own kernel, and the host can't decrypt secrets until its key is a
+recipient. Its [install guide](https://github.com/nix-community/nixos-apple-silicon/blob/main/docs/uefi-standalone.md)
+has the details; in short:
+
+1. In macOS, run `curl https://alx.sh | sh`. Resize (`r`) to leave 500GB free, then
+   install (`f`) **UEFI environment only**, named `lattice`, and finish the
+   permissive-security steps it prints in recovery.
+2. `dd` the latest [release ISO](https://github.com/nix-community/nixos-apple-silicon/releases)
+   to a USB stick and boot it. Keep the stick: it is this host's recovery stick.
+3. Create a partition in the free space only. Damaging the GPT, the first or last
+   partition, or the APFS containers can leave the Mac unbootable.
+
+   ```sh
+   sgdisk /dev/nvme0n1 -n 0:0 -s    # then sgdisk -p for its number
+   mkfs.btrfs -L lattice /dev/nvme0n1pN
+   mount /dev/disk/by-label/lattice /mnt
+   btrfs subvolume create /mnt/home && btrfs subvolume create /mnt/nix
+   mount -o subvol=home /dev/disk/by-label/lattice /mnt/home
+   mount -o subvol=nix /dev/disk/by-label/lattice /mnt/nix
+   mkdir /mnt/boot
+   mount /dev/disk/by-partuuid/$(cat /proc/device-tree/chosen/asahi,efi-system-partition) /mnt/boot
+   nixos-generate-config --root /mnt
+   ```
+
+   Edit `configuration.nix` as the guide says, plus `networking.hostName = "lattice-mac"`,
+   NetworkManager, git, and a `winston` user with an `initialPassword`, then `nixos-install`.
+4. On NixOS, clone lattice to `~/Documents/Projects/lattice` and copy
+   `/etc/nixos/hardware-configuration.nix` over `hosts/mac/`'s. `scripts/rebuild.sh mac`
+   stops at the recipient check and prints the host's age key.
+5. Back in macOS, add the key and run `updatekeys` (step 3 above), and push.
+6. Back on NixOS, pull, pin the firmware hash (see the comment in `hosts/mac/default.nix`)
+   and run `scripts/rebuild.sh mac`. The first switch builds the kernel.
+
 ## Recovery
 
 Root is locked and passwords only come from sops, so a host that can't decrypt

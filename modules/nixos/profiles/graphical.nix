@@ -266,6 +266,44 @@ let
     '';
   };
 
+  # Resuming needs somewhere to resume from, so a host without a resume device has no
+  # business offering hibernation.
+  canHibernate = config.boot.resumeDevice != "";
+
+  powerButton = label: action: text: keybind: {
+    inherit
+      label
+      action
+      text
+      keybind
+      ;
+  };
+  lock = powerButton "lock" "pidof hyprlock || hyprlock" "󰌾  Lock" "l";
+  logout = powerButton "logout" "hyprctl dispatch 'hl.dsp.exit()'" "󰗽  Log out" "e";
+  suspend = powerButton "suspend" "systemctl suspend" "󰒲  Suspend" "u";
+  reboot = powerButton "reboot" "systemctl reboot" "󰜉  Reboot" "r";
+  hibernate = powerButton "hibernate" "systemctl hibernate" "󰋊  Hibernate" "h";
+  shutdown = powerButton "shutdown" "systemctl poweroff" "󰐥  Shut down" "s";
+
+  powerButtons =
+    if canHibernate then
+      [
+        lock
+        logout
+        suspend
+        reboot
+        hibernate
+        shutdown
+      ]
+    else
+      [
+        lock
+        suspend
+        logout
+        reboot
+        shutdown
+      ];
+
   # wlogout reads $XDG_CONFIG_HOME/wlogout/{layout,style.css} and then falls straight back
   # to its own store path -- it never consults XDG_CONFIG_DIRS, so the /etc/xdg drop-in
   # trick the other shell surfaces use doesn't reach it. The paths are passed explicitly
@@ -294,7 +332,7 @@ let
       exec wlogout \
         --layout /etc/xdg/wlogout/layout \
         --css /etc/xdg/wlogout/style.css \
-        --buttons-per-row 3
+        --buttons-per-row ${toString (if canHibernate then 3 else lib.length powerButtons)}
     '';
   };
 
@@ -334,58 +372,74 @@ in
   xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
 
   ### APPS ###
-  environment.systemPackages = with pkgs; [
-    ghostty
-    rofi
-    # hyprsunset ships only as a systemd.packages unit above, so its CLI -- which is how
-    # the running daemon is driven -- wasn't on PATH for lattice-sunset or a shell.
-    hyprsunset
-    # notify-send: without it every script that tries to raise a notification fails
-    # silently, mako itself was fine all along.
-    libnotify
-    brightnessctl
-    playerctl
-    wl-clipboard
-    cliphist
-    grim
-    slurp
-    satty
-    swayosd
-    xdg-user-dirs
+  environment.systemPackages =
+    with pkgs;
+    [
+      ghostty
+      rofi
+      # hyprsunset ships only as a systemd.packages unit above, so its CLI -- which is how
+      # the running daemon is driven -- wasn't on PATH for lattice-sunset or a shell.
+      hyprsunset
+      # notify-send: without it every script that tries to raise a notification fails
+      # silently, mako itself was fine all along.
+      libnotify
+      brightnessctl
+      playerctl
+      wl-clipboard
+      cliphist
+      grim
+      slurp
+      satty
+      swayosd
+      xdg-user-dirs
 
-    mpv
-    imv
-    xarchiver
-    libreoffice-qt
-    hunspellDicts.en_US
-    hyphenDicts.en_US
-    drawio
-    telegram-desktop
-    discord
-    tor-browser
-    cryptomator
-    zathura
-    impression
-    firefoxpwa
-    bitwarden-desktop
-    wf-recorder
+      mpv
+      imv
+      xarchiver
+      libreoffice-qt
+      hunspellDicts.en_US
+      hyphenDicts.en_US
+      drawio
+      telegram-desktop
+      zathura
+      firefoxpwa
+      bitwarden-desktop
+      wf-recorder
 
-    (catppuccin-gtk.override {
-      variant = theme.flavor;
-      accents = [ theme.accent ];
-    })
-    (catppuccin-papirus-folders.override {
-      inherit (theme) flavor accent;
-    })
-    catppuccin-cursors."${theme.flavor}Dark"
+      (catppuccin-gtk.override {
+        variant = theme.flavor;
+        accents = [ theme.accent ];
+      })
+      (catppuccin-papirus-folders.override {
+        inherit (theme) flavor accent;
+      })
+      catppuccin-cursors."${theme.flavor}Dark"
 
-    cycleWallpaper
-    sunset
-    tailscale
-    powerMenu
-    # The drawing tool itself, for trying a density or a phase before wiring it in.
-    config.lattice.artwork.draw
-  ];
+      cycleWallpaper
+      sunset
+      tailscale
+      powerMenu
+      # The drawing tool itself, for trying a density or a phase before wiring it in.
+      config.lattice.artwork.draw
+    ]
+    # These four are x86-only in nixpkgs, so the Mac gets another client for the same thing:
+    # Vesktop for Discord, the CLI for Cryptomator vaults, Popsicle for writing images.
+    # Tor Browser has no ARM build at all, so there is nothing to stand in for it.
+    ++ (
+      if pkgs.stdenv.hostPlatform.isx86_64 then
+        [
+          discord
+          tor-browser
+          cryptomator
+          impression
+        ]
+      else
+        [
+          vesktop
+          cryptomator-cli
+          popsicle
+        ]
+    );
 
   programs = {
     firefox = {
@@ -410,8 +464,8 @@ in
     # back toward 0.
     #
     # DPI is volatile: the mouse forgets it whenever it power-cycles or the Bluetooth link
-    # drops, which on this laptop includes every hibernate -- see the btintel_pcie unload
-    # in the laptop profile. The CLI alone would hold only until the next reconnect; the
+    # drops, which on the Dell includes every hibernate -- see the btintel_pcie unload
+    # in hosts/dell. The CLI alone would hold only until the next reconnect; the
     # user service is what makes it stick, reapplying ~/.config/solaar/config.yaml each
     # time the device comes back. It starts hidden, to the waybar tray.
     #
@@ -694,49 +748,21 @@ in
   # on one line with the word: wlogout's JSON reader doesn't decode escapes, so a "\n"
   # in `text` reaches the button as a literal backslash-n.
   #
-  # The order below is not the reading order. wlogout fills its grid *down the columns*,
-  # so with --buttons-per-row 3 this lays out as
+  # wlogout fills its grid *down the columns*, so with --buttons-per-row 3 the order of
+  # powerButtons lays out as
   #     Lock      Suspend   Hibernate
   #     Log out   Reboot    Shut down
-  # which puts the three that end the session along the bottom row.
-  environment.etc."xdg/wlogout/layout".text = ''
+  # which puts the three that end the session along the bottom row. A host that can't
+  # hibernate gets one row of five instead: wlogout reads a button for every cell of its
+  # grid, so five buttons in a three-wide grid would run off the end of the list.
+  environment.etc."xdg/wlogout/layout".text = lib.concatMapStrings (button: ''
     {
-      "label": "lock",
-      "action": "pidof hyprlock || hyprlock",
-      "text": "󰌾  Lock",
-      "keybind": "l"
+      "label": "${button.label}",
+      "action": "${button.action}",
+      "text": "${button.text}",
+      "keybind": "${button.keybind}"
     }
-    {
-      "label": "logout",
-      "action": "hyprctl dispatch 'hl.dsp.exit()'",
-      "text": "󰗽  Log out",
-      "keybind": "e"
-    }
-    {
-      "label": "suspend",
-      "action": "systemctl suspend",
-      "text": "󰒲  Suspend",
-      "keybind": "u"
-    }
-    {
-      "label": "reboot",
-      "action": "systemctl reboot",
-      "text": "󰜉  Reboot",
-      "keybind": "r"
-    }
-    {
-      "label": "hibernate",
-      "action": "systemctl hibernate",
-      "text": "󰋊  Hibernate",
-      "keybind": "h"
-    }
-    {
-      "label": "shutdown",
-      "action": "systemctl poweroff",
-      "text": "󰐥  Shut down",
-      "keybind": "s"
-    }
-  '';
+  '') powerButtons;
 
   # GTK CSS, like waybar's and swayosd's, but written here rather than imported from
   # ~/.dotfiles: wlogout is Wayland-only, so there is no macOS half to keep in step.
