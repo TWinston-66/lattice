@@ -105,6 +105,38 @@ let
     '';
   };
 
+  # wlogout reads $XDG_CONFIG_HOME/wlogout/{layout,style.css} and then falls straight back
+  # to its own store path -- it never consults XDG_CONFIG_DIRS, so the /etc/xdg drop-in
+  # trick the other shell surfaces use doesn't reach it. The paths are passed explicitly
+  # instead, which is why the menu is only ever opened through this wrapper.
+  #
+  # wlogout runs each action through `sh -c`, inheriting this script's environment, so
+  # runtimeInputs is also what puts hyprctl within reach of the logout button when the
+  # menu is launched from waybar's systemd unit (see waybar.path below).
+  powerMenu = pkgs.writeShellApplication {
+    name = "lattice-power";
+    runtimeInputs = [
+      pkgs.wlogout
+      pkgs.hyprland
+      config.programs.hyprlock.package
+      pkgs.procps
+      pkgs.systemd
+    ];
+    text = ''
+      # Clicking the bar pill a second time should close the menu, not stack another
+      # copy of it behind the first.
+      if pgrep -x wlogout >/dev/null; then
+        pkill -x wlogout
+        exit 0
+      fi
+
+      exec wlogout \
+        --layout /etc/xdg/wlogout/layout \
+        --css /etc/xdg/wlogout/style.css \
+        --buttons-per-row 3
+    '';
+  };
+
   # Catppuccin, matching ~/.dotfiles. Theme names follow lattice.theme.
   gtkTheme = "catppuccin-${theme.flavor}-${theme.accent}-standard";
   iconTheme = "Papirus-Dark";
@@ -188,6 +220,7 @@ in
 
     cycleWallpaper
     sunset
+    powerMenu
     # The drawing tool itself, for trying a density or a phase before wiring it in.
     config.lattice.artwork.draw
   ];
@@ -206,6 +239,26 @@ in
       ];
     };
     waybar.enable = true;
+
+    # Logitech HID++ control, for the MX Master 3. Its sensor ships at 4000 DPI, which is
+    # what makes the pointer read as fast however far down Hyprland's per-device
+    # `sensitivity` goes -- libinput can only discard motion counts after the fact, so it
+    # buys slowness at the cost of precision. `solaar config <device> dpi 1000` moves it
+    # at the source instead, and the sensitivity in ~/.dotfiles/hypr/hyprland.lua can go
+    # back toward 0.
+    #
+    # DPI is volatile: the mouse forgets it whenever it power-cycles or the Bluetooth link
+    # drops, which on this laptop includes every hibernate -- see the btintel_pcie unload
+    # in the laptop profile. The CLI alone would hold only until the next reconnect; the
+    # user service is what makes it stick, reapplying ~/.config/solaar/config.yaml each
+    # time the device comes back. It starts hidden, to the waybar tray.
+    #
+    # enable also turns on hardware.logitech.wireless, which is what installs the udev
+    # rules that let a non-root user talk to the device at all.
+    solaar = {
+      enable = true;
+      userService.enable = true;
+    };
 
     appimage = {
       enable = true;
@@ -266,9 +319,10 @@ in
     # commands through `sh -c` with that environment, so anything they call has to be
     # named here or it fails with "command not found" and the module silently renders
     # empty. Keep this in step with the on-click/on-scroll/exec commands in
-    # ~/.dotfiles/waybar/config.jsonc -- currently just these two.
+    # ~/.dotfiles/waybar/config.jsonc.
     waybar.path = [
       sunset
+      powerMenu
       pkgs.wireplumber
     ];
 
@@ -448,6 +502,112 @@ in
       button = "magenta";
     };
   };
+
+  ### POWER MENU ###
+  # Replaces the rofi -dmenu confirmation the logout bind used to shell out to, which is
+  # gone from ~/.dotfiles/hypr/hyprland.lua entirely -- CTRL + ALT + Q opens this instead.
+  # Lock runs hyprlock directly, matching the SUPER + L bind rather than going through
+  # `loginctl lock-session`, which does nothing if hypridle isn't there to answer it. The
+  # layout is a sequence of bare JSON objects, not an array -- that is the format
+  # wlogout's parser wants. `label` is also the CSS id of the button it makes.
+  #
+  # Icons are Nerd Font glyphs in the label rather than wlogout's shipped PNGs, which
+  # are a fixed white and would stay that colour through a re-accent. They have to sit
+  # on one line with the word: wlogout's JSON reader doesn't decode escapes, so a "\n"
+  # in `text` reaches the button as a literal backslash-n.
+  #
+  # The order below is not the reading order. wlogout fills its grid *down the columns*,
+  # so with --buttons-per-row 3 this lays out as
+  #     Lock      Suspend   Hibernate
+  #     Log out   Reboot    Shut down
+  # which puts the three that end the session along the bottom row.
+  environment.etc."xdg/wlogout/layout".text = ''
+    {
+      "label": "lock",
+      "action": "pidof hyprlock || hyprlock",
+      "text": "󰌾  Lock",
+      "keybind": "l"
+    }
+    {
+      "label": "logout",
+      "action": "hyprctl dispatch 'hl.dsp.exit()'",
+      "text": "󰗽  Log out",
+      "keybind": "e"
+    }
+    {
+      "label": "suspend",
+      "action": "systemctl suspend",
+      "text": "󰒲  Suspend",
+      "keybind": "u"
+    }
+    {
+      "label": "reboot",
+      "action": "systemctl reboot",
+      "text": "󰜉  Reboot",
+      "keybind": "r"
+    }
+    {
+      "label": "hibernate",
+      "action": "systemctl hibernate",
+      "text": "󰋊  Hibernate",
+      "keybind": "h"
+    }
+    {
+      "label": "shutdown",
+      "action": "systemctl poweroff",
+      "text": "󰐥  Shut down",
+      "keybind": "s"
+    }
+  '';
+
+  # GTK CSS, like waybar's and swayosd's, but written here rather than imported from
+  # ~/.dotfiles: wlogout is Wayland-only, so there is no macOS half to keep in step.
+  # The pill treatment carries over -- translucent @base, @surface0 border -- scaled up,
+  # over a scrim that dims the desktop behind it.
+  environment.etc."xdg/wlogout/style.css".text = ''
+    * {
+      background-image: none;
+      box-shadow: none;
+      font-family: "${theme.fonts.monospace}", "Symbols Nerd Font";
+      font-size: 17px;
+    }
+
+    window {
+      background-color: alpha(${palette.crust}, 0.72);
+    }
+
+    button {
+      color: ${palette.text};
+      background-color: alpha(${palette.base}, ${toString theme.opacity});
+      border: 2px solid ${palette.surface0};
+      border-radius: 14px;
+      margin: 14px;
+      padding: 28px;
+      outline-style: none;
+      /* GTK animates between the two states, so hover and focus fade rather than snap. */
+      transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+
+    button:focus,
+    button:hover {
+      color: ${theme.accentHex};
+      background-color: alpha(${palette.surface0}, ${toString theme.opacity});
+      border-color: ${theme.accentHex};
+    }
+
+    /* The two that can't be taken back warn in their own colour on the way past. */
+    #reboot:focus,
+    #reboot:hover {
+      color: ${palette.peach};
+      border-color: ${palette.peach};
+    }
+
+    #shutdown:focus,
+    #shutdown:hover {
+      color: ${palette.red};
+      border-color: ${palette.red};
+    }
+  '';
 
   ### IDLE/LOCK ###
   programs.hyprlock.enable = true;
