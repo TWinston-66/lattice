@@ -1,10 +1,11 @@
 keys:
   - &admin_winston age1353vw9fqeqd84lppsmyhu5grpvhzcyyjse8tj59n5ht47ms7f5vq54v00q
   - &host_dell age1lupuw8jgrydglh0h726vx6cdc9pghld3hmrm4f6nzj4pk7xg9geshntpd6
+  - &host_mac age1lnle30apzzsh2phzpwjvra0y8jfl4wzrvtxact4ykjtkkctrac8sy778nk
 
 creation_rules:
   - path_regex: ^secrets/common\.yaml$
     key_groups:
       - age:
           - *admin_winston
-          - *host_dell
+          - *host_mac
