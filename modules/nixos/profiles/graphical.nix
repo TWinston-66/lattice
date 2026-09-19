@@ -282,7 +282,22 @@ in
   services.pipewire = {
     enable = true;
     pulse.enable = true;
-    wireplumber.enable = true;
+    wireplumber = {
+      enable = true;
+
+      # Every bluez5 codec nixpkgs ships (AAC, aptX, LDAC, LC3, Opus, mSBC) is already built in
+      # and enabled by default, and bluetooth.profile-preference is already "quality", so codec
+      # selection needs no help. Autoswitching does.
+      #
+      # With it on, anything that opens a capture stream -- a browser tab checking for a mic,
+      # a meeting joining -- drags headphones from A2DP down to HFP, which is 8kHz mono, and
+      # music sounds broken until they are power-cycled. Off means the headset mic is no longer
+      # offered automatically; the laptop's own mic gets used instead, which is the better
+      # trade here. Switch profiles by hand in blueman on the rare call that needs the headset.
+      extraConfig."51-bluetooth-no-autoswitch" = {
+        "wireplumber.settings"."bluetooth.autoswitch-to-headset-profile" = false;
+      };
+    };
   };
 
   ### SECRETS ###

@@ -7,6 +7,12 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # A prebuilt nix-index database, rebuilt weekly. Without it nix-index is useless until
+    # someone spends several minutes running the indexer by hand.
+    nix-index-database = {
+      url = "github:nix-community/nix-index-database";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
