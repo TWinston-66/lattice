@@ -34,7 +34,7 @@
       (builtins.fetchTree {
         type = "path";
         path = "/boot/vendorfw";
-        narHash = lib.fakeHash;
+        narHash = "sha256-wETBAOJSRK5XrfeTa+vqluv3M1RxIQdGpB+6zW+2mYw=";
       }).outPath;
   };
 
