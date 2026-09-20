@@ -360,6 +360,7 @@ in
     ../artwork.nix
     ../theme.nix
     ../plymouth.nix
+    ../display.nix
   ];
 
   ### SESSION ###
