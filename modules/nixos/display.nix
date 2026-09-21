@@ -75,6 +75,26 @@ in
     '';
   };
 
+  options.lattice.display.sunsetTemperature = lib.mkOption {
+    type = lib.types.ints.between 1000 6000;
+    default = 4000;
+    example = 3000;
+    description = ''
+      Colour temperature, in kelvin, that lattice-sunset switches the screen to -- the
+      "on" end of the night-light toggle in modules/nixos/profiles/graphical.nix. The
+      "off" end is hyprsunset's own 6000K, which is no filter at all.
+
+      Per-host for the same reason the scales above are: the strength of the shift is a
+      property of the panel, not of the setting. The Dell's sRGB panel reads 4000K as a
+      clear warm cast; the MacBook's is wide-gamut and much brighter, so the same
+      transform lands far weaker there and wants a lower number to match it.
+
+      `hyprctl hyprsunset temperature <k>` tries a value on the running daemon without a
+      rebuild, which is the way to pick one; the next lattice-sunset toggle returns to
+      whatever is set here.
+    '';
+  };
+
   # Left unwritten when a host sets no overrides, which is what the `loadfile` guard in
   # ~/.dotfiles/hypr/hyprland.lua expects -- no file means its own defaults stand.
   config = lib.mkIf (cfg.monitors != { }) {

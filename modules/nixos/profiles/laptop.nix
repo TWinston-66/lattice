@@ -186,6 +186,53 @@ let
       done < <(nmcli monitor)
     '';
   };
+
+  # Neither laptop has a key for the keyboard backlight, so this is what the binds in
+  # ~/.dotfiles/hypr call.
+  #
+  # On the Mac there is genuinely no such key to find: hid-apple picks its fn translation
+  # table by bus and product, and this keyboard (BUS_SPI, 05AC:0352) is not one of the two
+  # special-cased MacBook Pro 13s, so it lands on magic_keyboard_2021_and_2024_fn_keys --
+  # where F5 is MICMUTE, F6 is SLEEP, and nothing at all maps to KEY_KBDILLUM*. That
+  # matches the legends Apple prints on the 2021+ function row, which has no backlight key
+  # either; macOS puts it in Control Center. Note that `evtest`-style capability dumps are
+  # misleading here -- the driver registers the *generic* table's capabilities
+  # unconditionally at configure time, so KEY_KBDILLUMDOWN/UP show as supported on a
+  # keyboard that never emits them.
+  #
+  # No OSD call: swayosd's server watches the LED itself (keyboard_backlight = true, its
+  # default) and raises its own pill, with the keyboard-brightness icons it bundles,
+  # whenever anything else moves the value. swayosd-client has no flag for this -- the
+  # KBD-BACKLIGHT action exists but is only reachable from the server's own watcher.
+  kbdBacklight = pkgs.writeShellApplication {
+    name = "lattice-kbd-backlight";
+    runtimeInputs = [ pkgs.brightnessctl ];
+    text = ''
+      # kbd_backlight on the Mac, vendor-prefixed elsewhere (dell::kbd_backlight and so
+      # on), and absent entirely on a machine without one -- where the bind should be a
+      # no-op rather than an error. The glob stays literal when it matches nothing, which
+      # the -e test below turns into that no-op.
+      led=""
+      for candidate in /sys/class/leds/*kbd_backlight*; do
+        [ -e "$candidate/brightness" ] || continue
+        led=$(basename "$candidate")
+        break
+      done
+      [ -n "$led" ] || exit 0
+
+      # 10% of the Mac's 255 steps, so ten presses from off to full.
+      step=10
+
+      case "''${1:-}" in
+      raise) brightnessctl -q -d "$led" -c leds set "+''${step}%" ;;
+      lower) brightnessctl -q -d "$led" -c leds set "''${step}%-" ;;
+      *)
+        echo "usage: lattice-kbd-backlight [raise|lower]" >&2
+        exit 2
+        ;;
+      esac
+    '';
+  };
 in
 {
   ### KERNEL ###
@@ -242,7 +289,25 @@ in
     };
 
     fwupd.enable = true;
+
+    # Opens the keyboard-backlight LED to the video group, for lattice-kbd-backlight above.
+    #
+    # brightnessctl ships exactly this rule, but it chgrps to `input`, and membership of
+    # `input` is read access to every evdev node on the machine -- a keylogger's worth of
+    # privilege in exchange for a keyboard light. swayosd's rule, which the graphical
+    # profile already installs, covers only SUBSYSTEM=="backlight" and so leaves this one
+    # root-owned at 0644, which is why it has never been settable. So: the same two lines,
+    # narrowed to the keyboard LED and pointed at `video`, which the graphical profile
+    # already puts the user in for the panel backlight.
+    udev.extraRules = ''
+      ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*kbd_backlight*", RUN+="${pkgs.coreutils}/bin/chgrp video /sys/class/leds/%k/brightness", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys/class/leds/%k/brightness"
+    '';
   };
+
+  # Levels survive reboots without help: systemd's own 99-systemd.rules tags any
+  # *kbd_backlight* LED for systemd-backlight@leds:kbd_backlight.service, which saves on
+  # shutdown and restores on boot.
+  environment.systemPackages = [ kbdBacklight ];
 
   # Both notifiers are no-ops without something owning org.freedesktop.Notifications, which
   # on this host is mako, out of the graphical profile.

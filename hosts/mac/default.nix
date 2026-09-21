@@ -77,6 +77,12 @@
   # scale = 2.1 })'` tries another live; it reverts on the next reload.
   lattice.display.monitors."eDP-1".scale = "2.25";
 
+  # The night-light default of 4000K, which is plainly warm on the Dell's sRGB panel,
+  # barely registers on this one -- it is wide-gamut and far brighter, so the same
+  # transform is a much smaller share of what the panel can show. 2800K puts the shift
+  # back where the Dell has it.
+  lattice.display.sunsetTemperature = 2800;
+
   # Gecko sizes both its chrome and its content in nominal pixels, so unlike LibreOffice's
   # true-to-paper page it grew with the scale above instead of staying put. Pinning
   # devPixelsPerPx decouples it from the desktop scale: 1.8 against 2.25 draws Firefox and
@@ -114,6 +120,58 @@
   # normal modifiers. Writing to /sys/module/hid_apple/parameters/swap_ctrl_cmd flips it
   # live, without a rebuild, which is how this was settled on.
   boot.extraModprobeConfig = "options hid_apple swap_ctrl_cmd=1";
+
+  ### BLUETOOTH ###
+  # hci_bcm4377 does not always survive an s2idle resume. The controller comes back deaf:
+  # every HCI command times out, and the kernel's own attempt to power the radio down and
+  # bring it back fails the same way, so the DMA rings are never torn down and the device
+  # stays wedged with the adapter unpowered.
+  #
+  #   Bluetooth: hci0: command 0x0c01 tx timeout
+  #   Bluetooth: hci0: Opcode 0x2041 failed: -110
+  #   Bluetooth: hci0: Error when powering off device on rfkill (-110)
+  #   hci_bcm4377 0000:01:00.1: failed to destroy transfer ring 6
+  #
+  # bluetoothd is healthy throughout -- it just reports `Failed to set mode: Failed (0x03)`
+  # and `Powered: no` against `PowerState: on` -- so restarting the service does nothing.
+  # Reloading the module is the only thing that clears it.
+  #
+  # This is not the Dell's hibernate bug wearing another driver. There btintel_pcie fails
+  # going *into* hibernate and the fix is to unload it beforehand; here the chip fails
+  # coming *out* of ordinary suspend. That service could not fire on this host in any
+  # case: /sys/power/disk is [disabled] and the only swap is zram, so none of the
+  # hibernate targets it binds to ever run.
+  #
+  # The fault is intermittent -- one resume in ten on 2026-09-20, and the cycle that broke
+  # was an unusually short 11s one -- which is why the module is not simply unloaded before
+  # every sleep the way the Dell's is. That would drop the mouse and the headphones on nine
+  # healthy resumes to rescue the tenth. Instead the controller is asked for its local
+  # version on the way back. That is a round trip to the chip, which is the point:
+  # `btmgmt info` is answered by the kernel's mgmt socket from cached state and calls a
+  # dead controller healthy. A live one replies in ~5ms; a wedged one never replies at all.
+  powerManagement.resumeCommands = ''
+    ${pkgs.util-linux}/bin/rfkill list bluetooth -no SOFT | ${pkgs.gnugrep}/bin/grep -q unblocked || exit 0
+
+    # The adapter re-registers a moment after the resume hooks run, so a missing hci0 here
+    # means "not back yet", not "absent". Only give up once it has stayed missing.
+    n=0
+    while [ ! -d /sys/class/bluetooth/hci0 ]; do
+      n=$((n + 1))
+      [ "$n" -ge 20 ] && exit 0
+      sleep 0.5
+    done
+
+    # hcitool waits on the raw HCI socket for the reply with no timeout of its own. A
+    # wedged controller never sends one -- the kernel's 10s tx timeout is internal and
+    # synthesises no event -- so the bare call blocks forever and systemd kills the whole
+    # script at TimeoutStopSec before the reload below is ever reached. Bound it.
+    ${pkgs.coreutils}/bin/timeout 5 ${pkgs.bluez}/bin/hcitool -i hci0 cmd 0x04 0x0001 2>/dev/null \
+      | ${pkgs.gnugrep}/bin/grep -q '^> HCI Event' && exit 0
+
+    echo "hci0 did not answer Read Local Version after resume; reloading hci_bcm4377"
+    ${pkgs.kmod}/bin/modprobe -r hci_bcm4377 || true
+    ${pkgs.kmod}/bin/modprobe hci_bcm4377 || true
+  '';
 
   ### BTRFS ###
   fileSystems = lib.genAttrs [ "/" "/home" "/nix" ] (_: {

@@ -36,6 +36,26 @@
         "type": "github"
       }
     },
+    "hyprquickframe": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789879100,
+        "narHash": "sha256-VOOMBxupQ0oRhhi5yb4a3UDKrK2YiFu0tW38buicRac=",
+        "owner": "Ronin-CK",
+        "repo": "HyprQuickFrame",
+        "rev": "a41141195e7c918ac6f57fa41a89d4caca212003",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Ronin-CK",
+        "repo": "HyprQuickFrame",
+        "type": "github"
+      }
+    },
     "nix-index-database": {
       "inputs": {
         "nixpkgs": [
@@ -75,6 +95,7 @@
     "root": {
       "inputs": {
         "apple-silicon": "apple-silicon",
+        "hyprquickframe": "hyprquickframe",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs",
         "sops-nix": "sops-nix"
