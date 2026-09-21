@@ -126,6 +126,7 @@ let
       pkgs.jq
       pkgs.procps
       pkgs.xdg-utils
+      pkgs.coreutils # sleep, while waiting on the sign-in URL
     ];
     text = ''
       glyph_connected=$'\U000F0582' # md-vpn
@@ -237,19 +238,59 @@ let
       }
 
       toggle() {
-        local backend
-        backend="$(tailscale status --json 2>/dev/null | jq -r '.BackendState // "NoState"' 2>/dev/null || echo NoState)"
+        local json backend
+        json="$(tailscale status --json 2>/dev/null || true)"
+        backend="$(jq -r '.BackendState // "NoState"' <<<"$json" 2>/dev/null || echo NoState)"
 
-        if [ "$backend" = Running ]; then
+        case "$backend" in
+        Running)
           tailscale down
-        else
-          # `tailscale up` blocks while it waits for a browser sign-in, so it is detached;
-          # when already authenticated it returns at once and the signal lands immediately.
+          ;;
+
+        # Signed out, so there is no tunnel to raise -- there is a sign-in to finish, and
+        # that needs a browser. `tailscale up` cannot be the whole answer here: it prints
+        # the sign-in URL on its own stdout and then blocks until the browser leg
+        # completes, and it has to be detached or the click would hang forever, which
+        # threw the URL away and left the pill sitting at "signed out" with nothing on
+        # screen. tailscaled publishes the same URL in its status once a flow exists --
+        # the copy the tooltip already shows -- so take it from there and open it.
+        NeedsLogin | NeedsMachineAuth)
+          local authurl n=0
+          authurl="$(jq -r '.AuthURL // empty' <<<"$json" 2>/dev/null || true)"
+
+          # No flow yet: ask for one. The URL is minted by the control plane, so it lands
+          # a beat after the request rather than with it. 10s is a generous round trip and
+          # still short enough that an unreachable control plane doesn't leave this
+          # spinning behind the bar.
+          if [ -z "$authurl" ]; then
+            tailscale up >/dev/null 2>&1 &
+            disown || true
+
+            while [ -z "$authurl" ] && [ "$n" -lt 40 ]; do
+              sleep 0.25
+              n=$((n + 1))
+              authurl="$(tailscale status --json 2>/dev/null | jq -r '.AuthURL // empty' 2>/dev/null || true)"
+            done
+          fi
+
+          if [ -n "$authurl" ]; then
+            xdg-open "$authurl" >/dev/null 2>&1 &
+            disown || true
+          fi
+          ;;
+
+        *)
+          # Authenticated and merely down, or the daemon has no opinion yet: `up` returns
+          # at once, so the signal below lands on the new state.
           tailscale up >/dev/null 2>&1 &
           disown || true
-        fi
+          ;;
+        esac
 
-        # RTMIN+2 matches the "signal" of custom/tailscale in ~/.dotfiles/waybar.
+        # RTMIN+2 matches the "signal" of custom/tailscale in ~/.dotfiles/waybar. After a
+        # sign-in it only repaints the pill as "signed out" again -- the browser leg is
+        # still in progress at this point -- so the switch to connected arrives with the
+        # module's 30s interval.
         pkill -RTMIN+2 waybar 2>/dev/null || true
       }
 
@@ -760,6 +801,7 @@ in
     ../plymouth.nix
     ../display.nix
     ../webapps.nix
+    ../phone.nix
   ];
 
   ### SESSION ###
@@ -965,12 +1007,25 @@ in
     # named here or it fails with "command not found" and the module silently renders
     # empty. Keep this in step with the on-click/on-scroll/exec commands in
     # ~/.dotfiles/waybar/config.jsonc.
+    #
+    # That reaches one step further than the commands themselves. The scripts below are
+    # writeShellApplications, so each prepends its own runtimeInputs and finds its own
+    # tools regardless of this list -- but a tool that in turn execs something by *name*
+    # is back to this PATH. xdg-open is the one that does: it resolves
+    # x-scheme-handler/https to firefox.desktop from the assignment further down and then
+    # runs `firefox`, so without the browser here lattice-tailscale's sign-in click and
+    # its right-click to the admin console both resolved a URL and then opened nothing.
+    # xdg-open does say so -- it walks its whole fallback list of browser names, reports
+    # "no method available", and exits 3 -- but both call it with output on /dev/null
+    # (they must: it is detached), so the complaint went nowhere and the pill just sat
+    # there.
     waybar.path = [
       sunset
       tailscale
       wifiMenu
       powerMenu
       pkgs.wireplumber
+      config.programs.firefox.finalPackage
     ];
 
     swayosd = {
@@ -1152,7 +1207,7 @@ in
 
   ### POWER MENU ###
   # Replaces the rofi -dmenu confirmation the logout bind used to shell out to, which is
-  # gone from ~/.dotfiles/hypr/hyprland.lua entirely -- CTRL + ALT + Q opens this instead.
+  # gone from ~/.dotfiles/hypr/hyprland.lua entirely -- CTRL + SUPER + Q opens this instead.
   # Lock runs hyprlock directly, matching the SUPER + L bind rather than going through
   # `loginctl lock-session`, which does nothing if hypridle isn't there to answer it. The
   # layout is a sequence of bare JSON objects, not an array -- that is the format
