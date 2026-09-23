@@ -28,9 +28,18 @@ let
   # make the last line of defence for a flat battery.
   batteryNotify = pkgs.writeShellApplication {
     name = "lattice-battery-notify";
+    # gawk, coreutils and gnugrep are as much runtime deps as upower is. writeShellApplication
+    # appends the inherited PATH rather than replacing it, so leaving them out did not fail the
+    # build -- it failed at runtime, and only for the one the user manager's PATH happened not
+    # to carry: every start since 2026-09-19 died on `awk: command not found` at the first
+    # upower read, five restarts and then start-limit-hit, so the whole 50/20/10/5 ladder was
+    # silent while upower still powered off at percentageAction.
     runtimeInputs = [
       pkgs.upower
       pkgs.libnotify
+      pkgs.gawk
+      pkgs.coreutils
+      pkgs.gnugrep
     ];
     text = ''
       interval=30
@@ -103,6 +112,83 @@ let
     '';
   };
 
+  # The URI NetworkManager fetches to classify a link, and the body a network with nothing
+  # in front of it answers with. Declared here because two things have to agree on it: the
+  # connectivity block under NETWORKING, which is what makes NM detect a portal at all, and
+  # lattice-portal below, which asks the same question again to find out where the portal
+  # wants the browser sent.
+  #
+  # nixpkgs builds NetworkManager without a default URI and ships no conf.d drop-in setting
+  # one, so until this exists the connectivity check is simply off. NM still transitions
+  # between UNKNOWN and FULL as devices come and go, so the "Connectivity is now" arm of
+  # lattice-network-notify does fire -- but FULL there is an assumption, not a measurement,
+  # and the one verdict worth acting on can never be among them. Confirmed on this host
+  # before the change: ConnectivityCheckAvailable and ConnectivityCheckEnabled both false
+  # and ConnectivityCheckUri empty, while `nmcli general` reported "full" regardless.
+  #
+  # It has to be plain HTTP. The whole mechanism depends on an intermediary being able to
+  # intercept and rewrite the answer, which is precisely what TLS exists to stop. The cost
+  # is a beacon to a GNOME-run host every `interval` seconds on every network this laptop
+  # joins; nmcheck.gnome.org is the endpoint NM upstream runs for the purpose, so it is the
+  # least surprising choice, but any plain-HTTP URL that answers predictably would do.
+  portalCheckUri = "http://nmcheck.gnome.org/check_network_status.txt";
+  portalCheckResponse = "NetworkManager is online";
+
+  # NM's connectivity check classifies the link and stops there. On GNOME or KDE the shell
+  # is what turns a "portal" verdict into a sign-in window; there is no shell here, so this
+  # is that step -- reachable from the notification lattice-network-notify raises, and by
+  # hand from a terminal once that banner has been dismissed, which is the common case.
+  #
+  # The login URL is discovered, not guessed. A portal answers the check URI with a redirect
+  # to wherever it wants the browser, so a request that deliberately does not follow it (-L
+  # is absent on purpose) hands the target back in %{redirect_url}. Portals that instead
+  # answer 200 with their own page carry no redirect header, and for those the check URI
+  # itself is the right thing to hand the browser: the same interception happens again
+  # there, where it can be followed properly.
+  #
+  # --private-window is what programs.captive-browser would otherwise have been for. That
+  # module exists to solve two problems -- a browser profile whose DNS and HSTS state fight
+  # the portal, and a resolver that isn't the portal's. The second is already handled here:
+  # NM hands the wifi link's DHCP resolver to systemd-resolved, and nothing on this host
+  # does DoH or DoT, so a portal's DNS interception lands. That leaves the profile, which a
+  # private window covers -- no cookies in, none left behind -- without a second browser
+  # engine in the closure for a page seen twice a year.
+  portalSignIn = pkgs.writeShellApplication {
+    name = "lattice-portal";
+    runtimeInputs = [
+      pkgs.curl
+      pkgs.libnotify
+      config.programs.firefox.finalPackage
+    ];
+    text = ''
+      uri=${lib.escapeShellArg portalCheckUri}
+
+      # -m 8 rather than curl's default of waiting forever: a portal that accepts the
+      # connection and then never answers is a real failure mode, and this runs from a
+      # click. Both requests are allowed to fail -- an unreachable check URI is itself
+      # consistent with a portal, and opening the browser is the right move either way.
+      target="$(curl -sS -m 8 -o /dev/null -w '%{redirect_url}' "$uri" 2>/dev/null || true)"
+
+      if [ -z "$target" ]; then
+        # No redirect. Either there is no portal, or there is one that serves its page
+        # straight from the check URI -- the body is what tells the two apart, and it is
+        # only worth a second request in this branch.
+        if [ "$(curl -sS -m 8 "$uri" 2>/dev/null || true)" = ${lib.escapeShellArg portalCheckResponse} ]; then
+          notify-send -a lattice-portal -u low -i network-wireless-symbolic \
+            -h string:x-canonical-private-synchronous:lattice-portal \
+            "No portal here" "This network is already passing traffic"
+          exit 0
+        fi
+        target="$uri"
+      fi
+
+      # Detached, for the same reason lattice-tailscale detaches xdg-open: this is called
+      # from a notification action, and a foreground browser would hold that open.
+      firefox --private-window "$target" >/dev/null 2>&1 &
+      disown || true
+    '';
+  };
+
   # NetworkManager raises nothing on its own -- nm-applet is what normally turns its events
   # into notifications, and installing it would also plant a tray icon next to blueman that
   # duplicates waybar's network module. `nmcli monitor` is the same event stream with no
@@ -128,12 +214,40 @@ let
     runtimeInputs = [
       pkgs.networkmanager
       pkgs.libnotify
+      portalSignIn
     ];
     text = ''
       notify() {
         notify-send -a lattice-network -u "$1" -i "$2" \
           -h string:x-canonical-private-synchronous:lattice-network \
           "$3" "''${4:-}"
+      }
+
+      # The one notification here that is not purely a report. `notify-send -A` implies
+      # --wait: it blocks until the banner is acted on or closed, then prints the chosen
+      # action's name. The loop below is draining `nmcli monitor` and cannot afford to
+      # block -- every event behind it would queue up for however long the banner stands --
+      # so the whole exchange is pushed into a background subshell.
+      #
+      # The action is named `default` deliberately. mako draws no buttons for actions; what
+      # it does ship is on-button-left=invoke-default-action, so naming it this is what
+      # makes a left click on the banner reach lattice-portal. The body says so out loud
+      # for the same reason -- there is nothing on screen that looks clickable.
+      #
+      # Critical urgency, which /etc/xdg/mako/config gives default-timeout=0, so the banner
+      # waits as long as the portal does instead of expiring in ten seconds and taking the
+      # only way to act on it with it. And its own synchronous tag rather than
+      # lattice-network's: the connect/disconnect pills replace each other on purpose, and
+      # a portal banner sharing that group would be wiped by the next interface event.
+      portal() {
+        (
+          action=$(notify-send -a lattice-network -u critical \
+            -i network-wireless-acquiring-symbolic \
+            -h string:x-canonical-private-synchronous:lattice-portal \
+            -A 'default=Sign in' \
+            "Sign-in required" "Click to open this network's portal" || true)
+          if [ "$action" = default ]; then lattice-portal; fi
+        ) &
       }
 
       declare -A profile
@@ -156,6 +270,8 @@ let
           notify low network-wireless-symbolic "NetworkManager started" ;;
         "NetworkManager is now in the "*)
           notify low network-wireless-symbolic "NetworkManager" "$line" ;;
+        "Connectivity is now 'portal'")
+          portal ;;
         "Connectivity is now "*)
           notify low network-wireless-symbolic "Connectivity" "$line" ;;
         *": using connection "*)
@@ -331,6 +447,24 @@ in
   networking.useNetworkd = false;
   networking.networkmanager.enable = true;
   users.users.winston.extraGroups = [ "networkmanager" ];
+
+  # Detection, and only detection -- NM classifies the link and publishes the verdict on
+  # D-Bus, which is where `nmcli monitor` picks it up for lattice-network-notify. Nothing
+  # here signs in to anything; that is lattice-portal, up in the let block.
+  #
+  # `response` is left unset on purpose. NM then accepts either an "X-NetworkManager-Status:
+  # online" header or a body of "NetworkManager is online", and the endpoint serves the body
+  # while its CDN drops the custom header -- so the fallback is what actually matches today.
+  # Pinning `response` to the body string would work now and break the moment the header is
+  # the half that survives.
+  #
+  # 300 is NM's own default, restated because the number is the interesting part: it is the
+  # ceiling on how long a portal that appears *after* a successful join goes unnoticed. The
+  # join itself is checked as it happens, which is the case that actually matters.
+  networking.networkmanager.settings.connectivity = {
+    uri = portalCheckUri;
+    interval = 300;
+  };
   hardware.bluetooth = {
     enable = true;
     # Experimental is what exposes org.bluez.BatteryProvider1, so blueman and the tray show
@@ -402,7 +536,10 @@ in
   # Levels survive reboots without help: systemd's own 99-systemd.rules tags any
   # *kbd_backlight* LED for systemd-backlight@leds:kbd_backlight.service, which saves on
   # shutdown and restores on boot.
-  environment.systemPackages = [ kbdBacklight ];
+  environment.systemPackages = [
+    kbdBacklight
+  ]
+  ++ lib.optional config.services.graphical-desktop.enable portalSignIn;
 
   # Ordered Before=sleep.target and pulled in by it, so ExecStart lands going down and
   # ExecStop coming back up. StopWhenUnneeded is what makes ExecStop run at all: the unit

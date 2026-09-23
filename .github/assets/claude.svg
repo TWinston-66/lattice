@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A stand-in mark for the Claude web app, drawn here rather than vendored, for the same
+  reason as gemini.svg next to it: Anthropic ships no redistributable SVG, and no
+  installed icon theme has a claude mark to fall through to. This is the radial burst in
+  Claude's terracotta, which is the part that reads at 24px in the launcher. It is not
+  the official asset. Drop the real one in at this path if it ever becomes available;
+  nothing else has to change.
+
+  Deliberately not run through theme.recolourSvg: an app icon should keep the app's own
+  colours, so this one does not follow a re-accent the way lattice's own logo does.
+
+  The twelve spokes are generated geometry, tapered from a wide hub to a narrow tip,
+  which is what survives the downscale. Edit them by regenerating rather than by
+  nudging coordinates.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <path fill="#d97757"
+        d="M27.00 24.00 L25.00 3.00 L23.00 3.00 L21.00 24.00 Z
+           M26.60 25.50 L35.37 6.31 L33.63 5.31 L21.40 22.50 Z
+           M25.50 26.60 L42.69 14.37 L41.69 12.63 L22.50 21.40 Z
+           M24.00 27.00 L45.00 25.00 L45.00 23.00 L24.00 21.00 Z
+           M22.50 26.60 L41.69 35.37 L42.69 33.63 L25.50 21.40 Z
+           M21.40 25.50 L33.63 42.69 L35.37 41.69 L26.60 22.50 Z
+           M21.00 24.00 L23.00 45.00 L25.00 45.00 L27.00 24.00 Z
+           M21.40 22.50 L12.63 41.69 L14.37 42.69 L26.60 25.50 Z
+           M22.50 21.40 L5.31 33.63 L6.31 35.37 L25.50 26.60 Z
+           M24.00 21.00 L3.00 23.00 L3.00 25.00 L24.00 27.00 Z
+           M25.50 21.40 L6.31 12.63 L5.31 14.37 L22.50 26.60 Z
+           M26.60 22.50 L14.37 5.31 L12.63 6.31 L21.40 25.50 Z"/>
+</svg>

@@ -26,15 +26,24 @@ let
   # pinning, and that path is random per machine. Leaving it off takes the default profile,
   # which is both portable and the one already signed in.
   apps = [
-    # No Gemini mark in Papirus -- its gemini.svg is Calligra Gemini, a KDE office app --
-    # so webAppIcons below installs one into hicolor. The file itself is a stand-in drawn
-    # for this, not Google's asset; .github/assets/gemini.svg says what to do about that.
+    # Neither of these has a usable mark in Papirus -- its gemini.svg is Calligra Gemini,
+    # a KDE office app, and there is no claude.svg at all -- so webAppIcons below installs
+    # both into hicolor. The files are stand-ins drawn for this, not the vendors' assets;
+    # .github/assets/gemini.svg and claude.svg each say what to do about that.
     {
       id = "fe0b1e57-cca8-48be-bd34-df63fa837afc";
       name = "Gemini";
       url = "https://gemini.google.com/app";
       hostname = "gemini.google.com";
       icon = "lattice-gemini";
+      categories = [ "Network" ];
+    }
+    {
+      id = "a7c62fd4-e771-4988-8efa-c046dd773719";
+      name = "Claude";
+      url = "https://claude.ai/new";
+      hostname = "claude.ai";
+      icon = "lattice-claude";
       categories = [ "Network" ];
     }
     # Papirus ships one icloud.svg and no per-app variants, so both iCloud apps would wear
@@ -92,6 +101,8 @@ let
   webAppIcons = pkgs.runCommand "lattice-webapp-icons" { } ''
     install -Dm644 ${../../.github/assets/gemini.svg} \
       $out/share/icons/hicolor/scalable/apps/lattice-gemini.svg
+    install -Dm644 ${../../.github/assets/claude.svg} \
+      $out/share/icons/hicolor/scalable/apps/lattice-claude.svg
   '';
 
   # The declared half of the registry, in the shape TaskbarTabs.1.schema.json asks for.

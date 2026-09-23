@@ -667,7 +667,7 @@ let
   # does not override -- `fullscreen` among them, which is why that moved out of the CLI
   # and into the config file. It passes its own --output-filename, --early-exit,
   # --init-tool and --copy-command.
-  hqf = inputs.hyprquickframe.packages.${pkgs.system}.default;
+  hqf = inputs.hyprquickframe.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   # Upstream reads theme.toml from, in order, ~/.config/hyprquickframe, then
   # ~/.config/quickshell/HyprQuickFrame, then its own install directory. XDG_CONFIG_DIRS is
@@ -688,7 +688,13 @@ let
     borderRadius = 10;
     outlineThickness = 2;
     bottomMargin = 60;
-    animations = true;
+
+    # Off. This gates only the two selectors (shell.qml wires it to RegionSelector's
+    # globalAnimations and WindowSelector's animateSelection), where it puts a spring --
+    # 5/0.7, underdamped and slack -- between the pointer and the rectangle, so the region
+    # visibly trails the cursor while you drag. The bar and the toggles animate from
+    # hardcoded springs of their own and keep their movement either way.
+    animations = false;
     annotationTool = "satty";
 
     bar = {
@@ -719,6 +725,26 @@ let
     cp -r ${hqf}/share/hyprquickframe $out
     chmod -R u+w $out
     cp ${hqfTheme} $out/theme.toml
+
+    # Each bar item is one Text holding "<glyph>  Region", the glyph coming from the
+    # Material Design range of Nerd Fonts that waybar also draws from. Upstream names no
+    # family, so the item takes the default UI font and every glyph comes out as tofu:
+    # Qt's fontconfig backend builds its fallback list from the family alone and then
+    # keeps only the fonts whose writing system it recognises, which no amount of
+    # installing nerd-fonts.symbols-only changes -- that is a plain-PUA font and fc-match
+    # finding it for :charset=f0489 is not something Qt ever asks. Naming the symbol font
+    # outright is what works. Qt's fallback does run in the other direction, so the Latin
+    # half of the string still lands on fontconfig's sans default, which is
+    # theme.fonts.ui. font.families, Qt 6's real fallback list, is not reachable: the QML
+    # font value type here exposes family and not families.
+    #
+    # Only the bar needs this. The floating toggles used to carry glyphs too -- the dead
+    # `icon:` properties in shell.qml still hold them -- and upstream moved those to
+    # bundled SVGs, presumably over the same thing.
+    substituteInPlace $out/components/ControlBar.qml \
+      --replace-fail 'font.pixelSize: 15' \
+        'font.pixelSize: 15
+                    font.family: "Symbols Nerd Font"'
   '';
 
   # --path rather than upstream's --config: -c takes a *name* to look up under the
