@@ -233,6 +233,94 @@ let
       esac
     '';
   };
+  # What each suspend actually cost, as a number in the journal rather than a feeling.
+  #
+  # Recovering this after the fact meant reading upower's history as root and diffing it
+  # by hand against the `PM: suspend entry` lines in the journal -- which is how the Mac's
+  # 4.8 %/hr was first measured, and far too much work to repeat every time something in
+  # the sleep path changes. The rate is the whole story on a host whose only sleep state
+  # is s2idle, so it is worth having logged on every cycle.
+  #
+  # Reports rather than acts: nothing here changes power behaviour, it only measures it.
+  sleepDrain = pkgs.writeShellApplication {
+    name = "lattice-sleep-drain";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.gawk
+    ];
+    text = ''
+      state=/run/lattice-sleep-drain
+
+      # Whichever supply calls itself a battery and counts in energy rather than charge:
+      # macsmc-battery on the Mac, BAT0 on the Dell.
+      bat=""
+      for d in /sys/class/power_supply/*; do
+        [ -r "$d/type" ] || continue
+        [ "$(cat "$d/type")" = "Battery" ] || continue
+        [ -r "$d/energy_now" ] || continue
+        bat="$d"
+        break
+      done
+      [ -n "$bat" ] || exit 0
+
+      # Mains at either end makes the delta meaningless -- the machine may have been
+      # charging for part of the sleep -- so the AC state is recorded going in and checked
+      # again coming out, and any sample that saw a charger is dropped rather than logged
+      # as a suspiciously good result.
+      ac=0
+      for d in /sys/class/power_supply/*; do
+        if [ -r "$d/online" ] && [ "$(cat "$d/online")" = "1" ]; then
+          ac=1
+        fi
+      done
+
+      case "''${1-}" in
+        record)
+          printf '%s %s %s\n' "$(date +%s)" "$(cat "$bat/energy_now")" "$ac" > "$state"
+          ;;
+
+        report)
+          [ -r "$state" ] || exit 0
+          read -r t0 e0 ac0 < "$state"
+          rm -f "$state"
+
+          if [ "$ac0" != "0" ] || [ "$ac" != "0" ]; then
+            echo "slept on mains, or charged during; no drain figure"
+            exit 0
+          fi
+
+          awk -v t0="$t0" -v e0="$e0" \
+              -v t1="$(date +%s)" \
+              -v e1="$(cat "$bat/energy_now")" \
+              -v ef="$(cat "$bat/energy_full")" '
+            BEGIN {
+              secs = t1 - t0
+
+              # Under two minutes the gauge'"'"'s own granularity swamps the delta; the Mac
+              # reports energy in µWh but only moves it in visible steps.
+              if (secs < 120) exit
+
+              hours = secs / 3600
+              used  = (e0 - e1) / 1e6
+              full  = ef / 1e6
+
+              # Reading higher on resume than going in is gauge noise, not free charge.
+              if (used <= 0 || full <= 0) exit
+
+              watts = used / hours
+
+              printf "slept %.2fh: %.2f Wh of %.1f Wh (%.2f W, %.2f %%/hr, %.0fh from full to empty)\n",
+                     hours, used, full, watts, used / full * 100 / hours, full / watts
+            }'
+          ;;
+
+        *)
+          echo "usage: lattice-sleep-drain [record|report]" >&2
+          exit 2
+          ;;
+      esac
+    '';
+  };
 in
 {
   ### KERNEL ###
@@ -284,7 +372,14 @@ in
 
     logind.settings.Login = {
       HandleLidSwitch = lib.mkDefault "suspend";
-      HandlePowerKey = "suspend";
+      # Deliberately not "suspend". The power key is also what wakes this machine, and the
+      # press that wakes it arrives at logind on resume as a fresh short press -- so waking
+      # queued a second suspend straight away. Anything asked for inside that window lost:
+      # logind refuses a poweroff while a sleep operation is in flight, so wlogout's Shut
+      # down button returned "Action suspend already in progress" to the journal and the
+      # laptop slept through the night looking like it had shut down. Suspending on purpose
+      # still has the lid, hypridle, and the power menu's own button.
+      HandlePowerKey = "ignore";
       HandlePowerKeyLongPress = "poweroff";
     };
 
@@ -308,6 +403,26 @@ in
   # *kbd_backlight* LED for systemd-backlight@leds:kbd_backlight.service, which saves on
   # shutdown and restores on boot.
   environment.systemPackages = [ kbdBacklight ];
+
+  # Ordered Before=sleep.target and pulled in by it, so ExecStart lands going down and
+  # ExecStop coming back up. StopWhenUnneeded is what makes ExecStop run at all: the unit
+  # would otherwise stay active after resume and never report. Wants=, not the Requires=
+  # the Mac's sleep guard uses -- a failure in instrumentation must never be the reason a
+  # laptop declined to sleep.
+  systemd.services.lattice-sleep-drain = {
+    description = "Record what each suspend cost in battery";
+
+    before = [ "sleep.target" ];
+    wantedBy = [ "sleep.target" ];
+    unitConfig.StopWhenUnneeded = true;
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${lib.getExe sleepDrain} record";
+      ExecStop = "${lib.getExe sleepDrain} report";
+    };
+  };
 
   # Both notifiers are no-ops without something owning org.freedesktop.Notifications, which
   # on this host is mako, out of the graphical profile.

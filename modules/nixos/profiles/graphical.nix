@@ -311,6 +311,25 @@ let
     '';
   };
 
+  # rofi with the calculator mode compiled in. A rofi plugin is a shared object loaded from
+  # rofi's own -plugin-path, so `rofi-calc` on its own in systemPackages would be a file
+  # nothing ever opens: the nixpkgs wrapper is what joins the plugin into $out/lib/rofi and
+  # passes that flag. `rofi -h` lists it under "Detected modes" once it is there, which is
+  # the quick check that a nixpkgs bump hasn't broken the plugin ABI -- rofi 2.0 changed it,
+  # and a plugin built against the wrong one is silently not loaded.
+  #
+  # Every caller below takes this one rather than pkgs.rofi. Two wrappers differing only in
+  # the plugin would otherwise collide in the system profile, and whichever won would decide
+  # whether `-show calc` finds anything.
+  #
+  # The engine is libqalculate, which is what makes this worth a launcher mode rather than a
+  # window: bases and units convert in place (`0xff to bin`, `1 GiB to MB`, `0.1+0.2 to
+  # double` for the IEEE bits), solve/diff/sum and matrices work, and integers stay exact.
+  # nixpkgs patches the plugin's `qalc` lookup to an absolute store path, so nothing needs to
+  # be on PATH for the mode itself; libqalculate is in systemPackages below only for the
+  # `qalc` CLI, and adds no closure of its own because the plugin already pulls it in.
+  rofiWithCalc = pkgs.rofi.override { plugins = [ pkgs.rofi-calc ]; };
+
   # The Wi-Fi picker behind the network pill. NetworkManager's own front ends are either a
   # tray applet that would duplicate the pill (nm-applet, already turned down in
   # profiles/laptop.nix) or a window (nm-connection-editor); what is actually wanted from
@@ -327,7 +346,7 @@ let
     name = "lattice-wifi";
     runtimeInputs = [
       pkgs.networkmanager
-      pkgs.rofi
+      rofiWithCalc
       pkgs.gawk
       pkgs.libnotify
       # makoctl, to take the scan banner back down; see scanning() below.
@@ -816,7 +835,16 @@ in
   ### APPS ###
   environment.systemPackages = with pkgs; [
     ghostty
-    rofi
+    rofiWithCalc
+    # The same libqalculate engine at its other two surfaces: `qalc` in a terminal, and a
+    # real window for the times a calculation is worth keeping on screen and editing --
+    # qalculate-gtk carries the history, stored variables, user functions and the plot
+    # button that a one-line launcher prompt has nowhere to put. It is GTK3, so the
+    # catppuccin-gtk theme below dresses it; it lands in `rofi -show drun` as "Qalculate!".
+    # libqalculate is free here (rofi-calc already put it in the closure) and qalculate-gtk
+    # adds ~8 MiB on top of it.
+    libqalculate
+    qalculate-gtk
     # hyprsunset ships only as a systemd.packages unit above, so its CLI -- which is how
     # the running daemon is driven -- wasn't on PATH for lattice-sunset or a shell.
     hyprsunset
@@ -841,7 +869,6 @@ in
     drawio
     telegram-desktop
     zathura
-    firefoxpwa
     bitwarden-desktop
     wf-recorder
 
@@ -893,10 +920,10 @@ in
   ];
 
   programs = {
-    firefox = {
-      enable = true;
-      nativeMessagingHosts.packages = [ pkgs.firefoxpwa ];
-    };
+    # No nativeMessagingHosts: firefoxpwa was the one entry here, and its host is only
+    # reachable by the PWAsForFirefox extension, which isn't installed. Web apps are
+    # Firefox's own Taskbar Tabs instead -- see modules/nixos/webapps.nix for why.
+    firefox.enable = true;
     thunderbird.enable = true;
     thunar = {
       enable = true;

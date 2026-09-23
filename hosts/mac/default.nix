@@ -4,6 +4,17 @@
   pkgs,
   ...
 }:
+let
+  # Named rather than inlined because the grace period appears in the log line, the
+  # notification and the timer, and the transient unit's name appears in both the timer and
+  # the cancel instruction the notification prints.
+  sleepGuard = {
+    unit = "lattice-sleep-taint-guard";
+    powerOffUnit = "lattice-taint-poweroff";
+    user = "winston";
+    graceSeconds = 10;
+  };
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -121,6 +132,74 @@
   # live, without a rebuild, which is how this was settled on.
   boot.extraModprobeConfig = "options hid_apple swap_ctrl_cmd=1";
 
+  ### TRACKPAD ###
+  # The pad is a clickpad -- one physical button under the whole surface, BTN_LEFT the only
+  # key code it reports -- so which button a press *means* is libinput's to decide. That
+  # half is settled in the hypr dotfiles (clickfinger_behavior), which counts fingers the
+  # way macOS does instead of cutting the bottom of the pad into invisible zones.
+  #
+  # Counting fingers only works if libinput knows which contacts are fingers, and that is
+  # what this file is for. libinput 1.31 already carries a match for this device:
+  #
+  #   [Apple Laptop Touchpad (MTP)]   MatchName=Apple*MTP*  MatchVendor=0x05AC
+  #   ModelAppleTouchpad=1  AttrSizeHint=104x75  AttrPalmSizeThreshold=1600
+  #   AttrTouchSizeRange=150:130
+  #
+  # -- but it sets no thumb threshold at all, and its numbers were carried over from the
+  # Intel bcm5974 and SPI pads. This one is a different controller reached through
+  # hid-magicmouse, with its own ABS_MT_TOUCH_MAJOR scale (0..5000, though palms overshoot
+  # the declared max and reach ~7700), so they were worth re-measuring rather than
+  # trusting. Recorded with `libinput record` and analysed per contact -- peak
+  # ABS_MT_TOUCH_MAJOR over each tracking id, ~10 contacts per gesture:
+  #
+  #   fingertip   388 .. 526     (minor 716..932)
+  #   thumb       852 .. 1300    (one light outlier at 366)
+  #   palm       3314 .. 7754    (plus fingers that land alongside, 246..590)
+  #
+  # Three clusters with two empty bands between them, which is what makes the two
+  # thresholds below obvious rather than tuned. 700 sits 174 above the largest fingertip
+  # and 152 below the lightest real thumb; 1800 sits 500 above the largest thumb and far
+  # under the smallest real palm -- anything from 1400 to 3000 would behave identically on
+  # this data, so the exact number is not load-bearing.
+  #
+  # The thumb one is the fix that matters. Without it a thumb resting low on the pad counts
+  # as an ordinary finger, and under clickfinger that turns every click into a right-click
+  # -- so enabling clickfinger without this would have traded one vague click for another.
+  # It also keeps a resting thumb out of the two-finger scroll and tap counts.
+  #
+  # Deliberately absent: AttrPressureRange, AttrPalmPressureThreshold,
+  # AttrThumbPressureThreshold. The pad does report ABS_MT_PRESSURE (0..6000) and the
+  # obvious guess is that a palm presses harder, but measured it does not separate at all
+  # -- fingertip 41..248, thumb 15..231, palm 0..498, three ranges sitting on top of one
+  # another. Worse, pressure reads 0 on the first frames of a real touch, so handing
+  # libinput a pressure range would move touch-down detection onto an axis that would drop
+  # light taps. Size is the only axis on this device that carries the signal.
+  #
+  # AttrSizeHint is corrected here only as insurance. The kernel reports a resolution on
+  # ABS_X/ABS_Y (98 and 97 units/mm, giving a true 125x77mm), and libinput consults the
+  # hint only when resolution is missing, so today this line is inert -- but 104x75 is a
+  # 20% error that would silently misplace the edge palm zones if a kernel ever stopped
+  # reporting it.
+  #
+  # Re-measure with the libinput below, which is here for that and nothing else:
+  #
+  #   sudo libinput record -o /tmp/pad.yml /dev/input/event2
+  #   sudo libinput debug-events --verbose        # what libinput decided at init
+  #
+  # `libinput quirks list /dev/input/event2` prints the merged result of this file and the
+  # shipped one, which is the quickest check that a change here was actually picked up.
+  environment.etc."libinput/local-overrides.quirks".text = ''
+    [Apple Laptop Touchpad (MTP) lattice-mac]
+    MatchUdevType=touchpad
+    MatchName=Apple*MTP*
+    MatchVendor=0x05AC
+    AttrSizeHint=125x77
+    AttrPalmSizeThreshold=1800
+    AttrThumbSizeThreshold=700
+  '';
+
+  environment.systemPackages = [ pkgs.libinput ];
+
   ### BLUETOOTH ###
   # hci_bcm4377 does not always survive an s2idle resume. The controller comes back deaf:
   # every HCI command times out, and the kernel's own attempt to power the radio down and
@@ -172,6 +251,94 @@
     ${pkgs.kmod}/bin/modprobe -r hci_bcm4377 || true
     ${pkgs.kmod}/bin/modprobe hci_bcm4377 || true
   '';
+
+  ### SUSPEND GUARD ###
+  # On 2026-09-22 this machine went into s2idle and never came back:
+  #
+  #   Sep 21 21:41:04  PM: suspend entry (s2idle)
+  #   Sep 22 08:50:45  PM: suspend exit           <- eleven hours, clean
+  #   Sep 22 10:39:03  PM: suspend entry (s2idle)
+  #   <journal ends here; unclean reboot at 12:32>
+  #
+  # No `suspend exit`, no systemd-shutdown, nothing flushed after the entry line. The SoC
+  # stayed awake with the fans idle in a closed bag for nearly two hours.
+  #
+  # s2idle is not the problem and there is no alternative to it in any case: it is the only
+  # state Asahi has, /sys/power/disk is [disabled] and the only swap is zram, so
+  # suspend-then-hibernate cannot exist here the way it does on the Dell. What the suspend
+  # could not survive was the state the kernel was already in. Three Oopses that morning,
+  # all identical:
+  #
+  #   pc : get_pd_product_type+0x5c/0xc0 [typec]
+  #   Call trace: get_pd_product_type -> dev_attr_show -> sysfs_kf_seq_show -> vfs_read
+  #
+  # -- reading a file under /sys/class/typec while a USB-C partner was being torn down by
+  # the re-enumeration loop on xhci-hcd.4.auto. Each died inside kernfs_fop_read_iter
+  # holding a kernfs active reference and of->mutex that are never released, so the kernel
+  # carried the D taint from 09:08 onward and the 10:39 suspend was the first one after it.
+  #
+  # Powering off rather than merely refusing is the point of this. A bare refusal leaves the
+  # lid closed over a fully awake desktop session, which is the same bag and rather more
+  # heat than the hang produced.
+  systemd.services.${sleepGuard.unit} = {
+    description = "Power off instead of sleeping on a kernel that has already Oopsed";
+
+    # RequiredBy=, not the WantedBy= that nixpkgs' own sleep-actions.service uses: a failing
+    # Wants= dependency does not fail the target, and failing the target is the entire
+    # mechanism. systemd-suspend.service carries `Requires=sleep.target` and
+    # `After=sleep.target`, so once sleep.target fails the suspend is never reached.
+    before = [ "sleep.target" ];
+    requiredBy = [ "sleep.target" ];
+
+    path = [
+      pkgs.coreutils
+      pkgs.libnotify
+      pkgs.systemd
+      pkgs.util-linux
+    ];
+
+    serviceConfig.Type = "oneshot";
+
+    script = ''
+      # /proc/sys/kernel/tainted is a bitmask, and this host is *always* tainted: Asahi runs
+      # the CPU outside Apple's published spec, so bit 2 (TAINT_CPU_OUT_OF_SPEC -- the `S` in
+      # every Oops header above) is set from boot and the file reads 4 on a perfectly healthy
+      # system. Testing for nonzero would power the laptop off on every suspend it ever took.
+      # Only bit 7, TAINT_DIE, means die() actually ran. Bit 9 (TAINT_WARN) is deliberately
+      # not included: a WARN_ON leaves no lock behind and is far too common to act on.
+      tainted=$(cat /proc/sys/kernel/tainted)
+      if [ $(( tainted & 128 )) -eq 0 ]; then
+        exit 0
+      fi
+
+      echo "kernel carries TAINT_DIE (tainted=$tainted); refusing to sleep, powering off in ${toString sleepGuard.graceSeconds}s"
+
+      # Best effort, and never allowed to fail the guard. A system unit has no session bus of
+      # its own, so the notification is handed to the user's by address; with nobody logged in
+      # the socket is simply absent and there is no one to tell anyway.
+      bus="/run/user/$(id -u ${sleepGuard.user})/bus"
+      if [ -S "$bus" ]; then
+        runuser -u ${sleepGuard.user} -- \
+          env DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" \
+          notify-send -a lattice-sleep -u critical -i dialog-error \
+            "Kernel has Oopsed" \
+            "Sleeping is unsafe on this kernel. Powering off in ${toString sleepGuard.graceSeconds}s.
+      Cancel with: systemctl stop ${sleepGuard.powerOffUnit}.timer" || true
+      fi
+
+      # Detached onto a timer rather than called straight out. logind refuses a poweroff while
+      # a sleep operation is in flight -- the same thing that made wlogout's Shut down button
+      # answer "Action suspend already in progress", see HandlePowerKey in the laptop profile
+      # -- and this unit *is* that sleep operation until it exits. The delay lets the failed
+      # sleep.target transaction unwind first, and doubles as the window the notification
+      # offers for cancelling.
+      systemd-run --quiet --unit=${sleepGuard.powerOffUnit} \
+        --on-active=${toString sleepGuard.graceSeconds} \
+        systemctl poweroff
+
+      exit 1
+    '';
+  };
 
   ### BTRFS ###
   fileSystems = lib.genAttrs [ "/" "/home" "/nix" ] (_: {
