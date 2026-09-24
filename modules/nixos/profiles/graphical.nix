@@ -1204,12 +1204,22 @@ in
     # button, whose click reaches lattice-window-switcher above). Rules are read once at
     # start-up, so editing that file means `systemctl --user restart solaar`.
     #
-    # Those rules run commands rather than synthesising keystrokes: Solaar's KeyPress
-    # action writes to /dev/uinput, which is root:root 0660 and reachable by no group
-    # winston is in, so it would fail without saying so. Execute needs no privilege, and
-    # the uwsm-populated user environment already carries HYPRLAND_INSTANCE_SIGNATURE into
-    # the service, which is what makes hyprctl work from there. Its PATH does not carry
-    # /run/current-system/sw/bin, though, so the rules name every binary absolutely.
+    # Most of those rules run commands rather than synthesising keystrokes. Execute needs
+    # no privilege, and the uwsm-populated user environment already carries
+    # HYPRLAND_INSTANCE_SIGNATURE into the service, which is what makes hyprctl work from
+    # there. Its PATH does not carry /run/current-system/sw/bin, though, so the rules name
+    # every binary absolutely.
+    #
+    # The exception is the gesture button, which holds SUPER down for as long as it is
+    # held. That one needs KeyPress, which writes to /dev/uinput -- hence the
+    # hardware.uinput block below. It buys the thing Solaar cannot do on its own: its
+    # mouse-gesture mode only reports the direction once the button is released (the
+    # notification is pushed from release_action, with no mid-gesture hook), so a gesture
+    # can move one workspace per press and no more. Held as a modifier instead, the button
+    # feeds the SUPER+scroll and SUPER+drag binds already in hyprland.lua, and workspaces
+    # cycle continuously under the wheel. The cost is that a button is diverted as Mouse
+    # Gestures or as a plain key, never both, so the four directional gestures are gone
+    # and the window switcher moved to the Smart Shift button.
     solaar = {
       enable = true;
       userService.enable = true;
@@ -1230,7 +1240,17 @@ in
     # swayosd writes backlight brightness through sysfs, which its udev rule opens to the video group.
     udev.packages = [ pkgs.swayosd ];
   };
-  users.users.winston.extraGroups = [ "video" ];
+  # /dev/uinput, for the Solaar rule that holds SUPER while the mouse's gesture button is
+  # down. The NixOS module loads the module, makes the group and writes the udev rule; the
+  # group membership is what the solaar user service actually needs. Supplementary groups
+  # are fixed when the session starts, so this only reaches a running Solaar after a
+  # re-login -- until then KeyPress fails silently, which is its only failure mode.
+  hardware.uinput.enable = true;
+
+  users.users.winston.extraGroups = [
+    "video"
+    "uinput"
+  ];
 
   ### AUDIO ###
   security.rtkit.enable = true;
