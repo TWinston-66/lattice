@@ -14,4 +14,16 @@ if [[ ! -f "$key" ]]; then
 fi
 require_recipient "$host" "$(cat "$key.pub")"
 
-exec nixos-rebuild switch --flake ".#$host" --sudo
+nixos-rebuild switch --flake ".#$host" --sudo
+
+# The hypr configs this flake generates -- /etc/xdg/hypr/lattice.lua and the hyprpaper,
+# hypridle and hyprlock confs beside it -- are /etc symlinks whose target moves on every
+# switch. Hyprland's autoreload watches the path, not the store path behind it, so a running
+# session keeps the config it started with until it is told to reread.
+#
+# Guarded on the signature rather than on `command -v hyprctl`: the variable is set only
+# inside a Hyprland session, so a switch from a TTY or over SSH skips this instead of
+# failing an otherwise good rebuild on a socket that is not there.
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    hyprctl reload >/dev/null
+fi
