@@ -311,6 +311,187 @@ let
     '';
   };
 
+  # Weather, from Open-Meteo: no API key, no account, and -- the reason it is this rather
+  # than the usual wttr.in one-liner -- it takes explicit coordinates. Anything that
+  # geolocates by IP reads the Tailscale exit node instead of the laptop, and this tailnet
+  # has the Mullvad integration on (see lattice-tailscale above), so the pill would quietly
+  # report another country's weather most of the time. The coordinates are
+  # lattice.weather.* in modules/nixos/weather.nix.
+  #
+  # The pill is glyph + temperature + apparent temperature, the last dimmed with Pango
+  # markup rather than split into a second module, so the whole reading stays one bubble on
+  # a bar whose right side is already full. Conditions are carried by the glyph and the
+  # colour, which is why the text spells out neither: the script emits a class per
+  # temperature band and style.css colours it, the same contract lattice-sunset and
+  # lattice-tailscale use.
+  #
+  # The last good payload is cached in XDG_RUNTIME_DIR, so a resume with the Wi-Fi still
+  # associating re-renders the previous reading greyed (.stale) instead of blanking the
+  # pill. Runtime dir rather than /var/lib: a reading that survived a reboot would be too
+  # old to show anyway.
+  weather = pkgs.writeShellApplication {
+    name = "lattice-weather";
+    runtimeInputs = [
+      pkgs.curl
+      pkgs.jq
+      pkgs.procps
+      pkgs.coreutils # mktemp
+    ];
+    text = ''
+      lat=${config.lattice.weather.latitude}
+      lon=${config.lattice.weather.longitude}
+      label=${lib.escapeShellArg config.lattice.weather.label}
+
+      cache="''${XDG_RUNTIME_DIR:-/tmp}/lattice-weather.json"
+
+      # forecast_days=1 because the tooltip only shows today's high, low and sunset; the
+      # hourly block is left off for the same reason. `timezone=auto` resolves from the
+      # coordinates, so the sunset timestamp is already local and needs no conversion.
+      api="https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day&daily=temperature_2m_max,temperature_2m_min,sunset&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1"
+
+      # Written to a temp file and moved into place only once jq confirms the body parses,
+      # so a captive portal's login page or a truncated response can't overwrite a good
+      # cache with something that renders as an empty pill.
+      fetch() {
+        local tmp
+        tmp=$(mktemp)
+        if curl -fsS --max-time 10 "$api" -o "$tmp" && jq -e '.current.temperature_2m' "$tmp" >/dev/null 2>&1; then
+          mv "$tmp" "$cache"
+          return 0
+        fi
+        rm -f "$tmp"
+        return 1
+      }
+
+      # 16 points of 22.5 degrees each. Integer arithmetic, so the half-degree is carried by
+      # scaling both sides by 10: index = (deg * 10 + 112) / 225, which rounds to the
+      # nearest point rather than truncating toward N.
+      compass() {
+        local points=(N NNE NE ENE E ESE SE SSE S SSW SW WSW W WNW NW NNW)
+        echo "''${points[$((($1 * 10 + 112) / 225 % 16))]}"
+      }
+
+      # WMO 4677, as Open-Meteo documents it. Codes are grouped to the glyphs the Material
+      # Design range actually has -- there is no "slight vs moderate drizzle" mark -- and
+      # the day/night split only exists for the three clear-ish codes, which are the only
+      # ones that look wrong with a sun in them at midnight.
+      icon_for() {
+        case "$1" in
+        0)        if [ "$2" = 1 ]; then echo "󰖙 Clear"; else echo "󰖔 Clear"; fi ;;
+        1)        if [ "$2" = 1 ]; then echo "󰖙 Mainly clear"; else echo "󰖔 Mainly clear"; fi ;;
+        2)        if [ "$2" = 1 ]; then echo "󰖕 Partly cloudy"; else echo "󰼱 Partly cloudy"; fi ;;
+        3)        echo "󰖐 Overcast" ;;
+        45 | 48)  echo "󰖑 Fog" ;;
+        51 | 53 | 55) echo "󰼳 Drizzle" ;;
+        56 | 57)  echo "󰙿 Freezing drizzle" ;;
+        61 | 63)  echo "󰖖 Rain" ;;
+        65)       echo "󰖗 Heavy rain" ;;
+        66 | 67)  echo "󰙿 Freezing rain" ;;
+        71 | 73)  echo "󰖘 Snow" ;;
+        75)       echo "󰼶 Heavy snow" ;;
+        77)       echo "󰖘 Snow grains" ;;
+        80 | 81)  echo "󰖖 Rain showers" ;;
+        82)       echo "󰖗 Violent rain showers" ;;
+        85 | 86)  echo "󰖘 Snow showers" ;;
+        95)       echo "󰖓 Thunderstorm" ;;
+        96 | 99)  echo "󰼯 Thunderstorm with hail" ;;
+        *)        echo "󰼮 WMO $1" ;;
+        esac
+      }
+
+      # Fahrenheit bands. The glyph says what is falling out of the sky; the colour says
+      # whether to put a coat on, which is the part a forecast usually gets consulted for.
+      band_for() {
+        if   [ "$1" -lt 32 ]; then echo freezing
+        elif [ "$1" -lt 50 ]; then echo cold
+        elif [ "$1" -lt 75 ]; then echo mild
+        elif [ "$1" -lt 90 ]; then echo warm
+        else echo hot
+        fi
+      }
+
+      render() {
+        local stale="$1"
+        local code isday temp feels hum wind wdir hi lo sunset
+        local icon desc band classes text tooltip
+
+        # One jq pass into positional fields rather than ten invocations. round() gives
+        # integers, which is what the [ -lt ] comparisons in band_for need and what the
+        # pill should show -- a tenth of a degree is noise at this size.
+        IFS=$'\t' read -r code isday temp feels hum wind wdir hi lo sunset < <(
+          jq -r '[
+            .current.weather_code,
+            .current.is_day,
+            (.current.temperature_2m | round),
+            (.current.apparent_temperature | round),
+            .current.relative_humidity_2m,
+            (.current.wind_speed_10m | round),
+            (.current.wind_direction_10m | round),
+            (.daily.temperature_2m_max[0] | round),
+            (.daily.temperature_2m_min[0] | round),
+            (.daily.sunset[0] | split("T")[1])
+          ] | @tsv' "$cache"
+        )
+
+        read -r icon desc <<<"$(icon_for "$code" "$isday")"
+        band=$(band_for "$temp")
+
+        classes=$(jq -cn --arg b "$band" --argjson s "$stale" \
+          'if $s then [$b, "stale"] else [$b] end')
+
+        # Pango markup: the apparent temperature is the same size but dimmed, so it reads
+        # as a qualifier on the number beside it rather than as a second reading competing
+        # with it. waybar runs a custom module's text through set_markup, so this is parsed
+        # rather than shown literally.
+        #
+        # Both temperatures are right-aligned in a three-character field. The bar font is
+        # JetBrains Mono, so that makes the pill a fixed width whatever the reading is --
+        # which is what lets the centre group's counterweight be a constant. Without it the
+        # pill would be two characters narrower at 73° than at -5°, and the clock beside it
+        # would wander off centre as the temperature changed. Three characters covers
+        # -99..999; a reading outside that widens the pill, and the clock drifts by half the
+        # difference until it comes back.
+        text=$(printf '%s %3s° <span alpha="55%%">%3s°</span>' "$icon" "$temp" "$feels")
+
+        tooltip=$(printf '<b>%s</b>\n%s\nH %s°  L %s°\nWind %s mph %s · Humidity %s%%\nSunset %s' \
+          "$label" "$desc" "$hi" "$lo" "$wind" "$(compass "$wdir")" "$hum" "$sunset")
+
+        if [ "$stale" = true ]; then
+          tooltip=$(printf '%s\n<i>Offline - last known reading</i>' "$tooltip")
+        fi
+
+        jq -cn --arg text "$text" --arg tooltip "$tooltip" --argjson class "$classes" \
+          '{text: $text, tooltip: $tooltip, class: $class}'
+      }
+
+      status() {
+        local stale=false
+        fetch || stale=true
+
+        # Nothing cached and nothing fetched -- a cold boot with no network yet. A muted
+        # glyph rather than an empty module, which waybar would collapse to a bare pill.
+        if [ ! -s "$cache" ]; then
+          printf '{"text":"󰅤","tooltip":"Weather unavailable","class":["unavailable"]}\n'
+          return
+        fi
+
+        render "$stale"
+      }
+
+      case "''${1:-status}" in
+      status) status ;;
+      # The signal is the whole of it: waybar re-runs `status` on receipt, and that is what
+      # re-fetches. Doing the fetch here as well would make every click two round trips.
+      # RTMIN+3 matches the "signal" of custom/weather in ~/.dotfiles/waybar.
+      refresh) pkill -RTMIN+3 waybar 2>/dev/null || true ;;
+      *)
+        echo "usage: lattice-weather [status|refresh]" >&2
+        exit 2
+        ;;
+      esac
+    '';
+  };
+
   # rofi with the calculator mode compiled in. A rofi plugin is a shared object loaded from
   # rofi's own -plugin-path, so `rofi-calc` on its own in systemPackages would be a file
   # nothing ever opens: the nixpkgs wrapper is what joins the plugin into $out/lib/rofi and
@@ -788,6 +969,38 @@ let
     ];
   };
 
+  # The window switcher, shared by two callers that cannot share a keybind: SUPER+TAB in
+  # ~/.dotfiles/hypr/.config/hypr/hyprland.lua, and the MX Master's gesture button, which
+  # Solaar fires with `Execute` rather than a synthetic keystroke (see the solaar block
+  # below for why). It lived inline in the Lua bind until the mouse needed it too, and one
+  # jq filter maintained in two repos is the thing this wrapper exists to prevent.
+  #
+  # Nothing filters the list by workspace id: special workspaces carry negative ids, and
+  # the scratchpad is exactly the window that gets lost, so it has to stay findable here.
+  #
+  # rofi exits 1 when the prompt is dismissed, which under writeShellApplication's
+  # `set -o pipefail` would take the script down as a failure. Dismissing is a normal
+  # outcome, so the pipeline is captured and a cancel leaves through exit 0 instead.
+  windowSwitcher = pkgs.writeShellApplication {
+    name = "lattice-window-switcher";
+    runtimeInputs = [
+      pkgs.hyprland
+      pkgs.jq
+      rofiWithCalc
+      pkgs.coreutils # cut
+    ];
+    text = ''
+      selection=$(
+        hyprctl clients -j \
+          | jq -r 'sort_by(.workspace.id) | .[] | "\(.address)\t[\(.workspace.name)] \(.title)"' \
+          | rofi -dmenu -i -p window -display-columns 2
+      ) || exit 0
+      [ -n "$selection" ] || exit 0
+
+      hyprctl dispatch focuswindow "address:$(printf '%s' "$selection" | cut -f1)"
+    '';
+  };
+
   # wlogout reads $XDG_CONFIG_HOME/wlogout/{layout,style.css} and then falls straight back
   # to its own store path -- it never consults XDG_CONFIG_DIRS, so the /etc/xdg drop-in
   # trick the other shell surfaces use doesn't reach it. The paths are passed explicitly
@@ -845,7 +1058,9 @@ in
     ../theme.nix
     ../plymouth.nix
     ../display.nix
+    ../weather.nix
     ../webapps.nix
+    ../widevine.nix
     ../phone.nix
   ];
 
@@ -939,6 +1154,7 @@ in
     tailscale
     wifiMenu
     powerMenu
+    windowSwitcher
     screenshot
     screenshotItem
     # The drawing tool itself, for trying a density or a phase before wiring it in.
@@ -980,6 +1196,20 @@ in
     #
     # enable also turns on hardware.logitech.wireless, which is what installs the udev
     # rules that let a non-root user talk to the device at all.
+    #
+    # The buttons are mapped in ~/.config/solaar/rules.yaml, the other half of the same
+    # stow package: config.yaml diverts Middle, Back, Forward and the gesture button away
+    # from their built-in meanings, and rules.yaml says what they do instead (volume on
+    # back/forward, the launcher on middle click, and Hyprland navigation on the gesture
+    # button, whose click reaches lattice-window-switcher above). Rules are read once at
+    # start-up, so editing that file means `systemctl --user restart solaar`.
+    #
+    # Those rules run commands rather than synthesising keystrokes: Solaar's KeyPress
+    # action writes to /dev/uinput, which is root:root 0660 and reachable by no group
+    # winston is in, so it would fail without saying so. Execute needs no privilege, and
+    # the uwsm-populated user environment already carries HYPRLAND_INSTANCE_SIGNATURE into
+    # the service, which is what makes hyprctl work from there. Its PATH does not carry
+    # /run/current-system/sw/bin, though, so the rules name every binary absolutely.
     solaar = {
       enable = true;
       userService.enable = true;
@@ -1075,6 +1305,7 @@ in
     waybar.path = [
       sunset
       tailscale
+      weather
       wifiMenu
       powerMenu
       pkgs.wireplumber
