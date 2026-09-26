@@ -488,7 +488,9 @@ in
 
   ### POWER ###
   services = {
-    power-profiles-daemon.enable = true;
+    # mkDefault so a host whose hardware PPD cannot actually drive can swap in another
+    # daemon on the same D-Bus name. hosts/mac does; see the tuned block there.
+    power-profiles-daemon.enable = lib.mkDefault true;
 
     upower = {
       enable = true;
@@ -563,12 +565,18 @@ in
 
   # Both notifiers are no-ops without something owning org.freedesktop.Notifications, which
   # on this host is mako, out of the graphical profile.
+  #
+  # Both also carry onFailure, and they are the reason it exists: a notifier that has died
+  # and a notifier with nothing to report look identical from the outside, so these two are
+  # the units least able to announce their own absence. The template lives in the graphical
+  # profile; %n hands it the failing unit's name.
   systemd.user.services = lib.mkIf config.services.graphical-desktop.enable {
     lattice-battery-notify = {
       description = "Battery level notifications";
       partOf = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
       wantedBy = [ "graphical-session.target" ];
+      onFailure = [ "lattice-notify-failure@%n.service" ];
       serviceConfig = {
         ExecStart = lib.getExe batteryNotify;
         Restart = "on-failure";
@@ -580,6 +588,7 @@ in
       partOf = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
       wantedBy = [ "graphical-session.target" ];
+      onFailure = [ "lattice-notify-failure@%n.service" ];
       serviceConfig = {
         ExecStart = lib.getExe networkNotify;
         Restart = "on-failure";

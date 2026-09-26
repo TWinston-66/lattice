@@ -381,6 +381,46 @@ in
     };
   };
 
+  ### POWER ###
+  # tuned rather than power-profiles-daemon, which the laptop profile enables for the Dell.
+  # PPD has no generic cpufreq driver: it drives intel_pstate, amd-pstate or an ACPI
+  # platform_profile, and Apple Silicon offers none of the three. So it fell back to its
+  # `placeholder` driver, which advertises exactly power-saver and balanced -- no
+  # performance at all -- and applies nothing beyond the trickle_charge action:
+  #
+  #   $ powerprofilesctl set performance
+  #   invalid choice: 'performance' (choose from 'power-saver', 'balanced')
+  #
+  # waybar's power-profiles-daemon module cycles whatever the daemon reports, so those two
+  # entries are the whole reason the bar's bubble only ever toggled between power-saver and
+  # balanced. tuned-ppd serves the same net.hadess.PowerProfiles name, so the bar needs no
+  # change, and tuned's cpu plugin works off plain cpufreq sysfs -- which apple-cpufreq does
+  # provide (ondemand, userspace, performance, schedutil).
+  services.tuned = {
+    enable = true;
+
+    # `throughput-performance`, tuned's stock target for the performance profile, is a
+    # server profile: alongside the governor it sets vm.swappiness=10, dirty_bytes=40% and a
+    # 4096-sector readahead, which fight the zram tuning in the laptop profile. This does
+    # the one thing wanted here. The stock profile's other cpu keys -- energy_perf_bias,
+    # energy_performance_preference, boost -- are x86/ACPI only and would just log
+    # "not supported" on this machine, so they are left out.
+    profiles.lattice-performance = {
+      main.summary = "Performance without throughput-performance's server sysctls";
+      cpu.governor = "performance";
+    };
+
+    # The stock powersave and balanced profiles both resolve to the schedutil governor here,
+    # since apple-cpufreq has neither `powersave` nor `conservative` and schedutil heads both
+    # of their fallback lists. They still differ in what the rest of the profile touches:
+    # vm.laptop_mode, dirty_writeback_centisecs, the audio timeout and SCSI ALPM.
+    ppdSettings.profiles = {
+      power-saver = "powersave";
+      balanced = "balanced";
+      performance = "lattice-performance";
+    };
+  };
+
   ### DOCKER ###
   virtualisation.docker.enable = true;
 

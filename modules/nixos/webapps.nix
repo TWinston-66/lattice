@@ -238,6 +238,9 @@ in
     description = "Seed Firefox's Taskbar Tabs registry with lattice's web apps";
     wantedBy = [ "graphical-session.target" ];
     after = [ "graphical-session.target" ];
+    # A oneshot that failed leaves no trace in the UI except web apps that are missing from
+    # rofi, which is easy to read as never having added them.
+    onFailure = [ "lattice-notify-failure@%n.service" ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = lib.getExe seedRegistry;

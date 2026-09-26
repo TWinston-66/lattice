@@ -79,6 +79,12 @@ in
     # Reaching the inbox at all needs LocalAPI access, which is root or the operator. The
     # tailscale-operator unit in the host config hands winston that; without it every
     # iteration fails on permissions and this sits in the 30s backoff.
+    #
+    # Which is also why it reports: a unit whose entire output is notifications reads,
+    # when dead, as a tailnet nobody has sent anything over. Same blindness as the
+    # notifiers in the laptop profile, same template.
+    onFailure = [ "lattice-notify-failure@%n.service" ];
+
     serviceConfig = {
       ExecStart = "${taildrop}/bin/lattice-taildrop ${downloads}";
       Restart = "on-failure";

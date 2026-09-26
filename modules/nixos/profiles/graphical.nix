@@ -1033,6 +1033,50 @@ let
     '';
   };
 
+  # The reporter behind the OnFailure= lines on the session's own units. A unit that dies
+  # is otherwise indistinguishable from a unit with nothing to say: lattice-battery-notify
+  # failed on every boot for four days over one missing `awk`, and the only symptom was a
+  # battery that never warned.
+  notifyFailure = pkgs.writeShellApplication {
+    name = "lattice-notify-failure";
+    runtimeInputs = [
+      pkgs.libnotify
+      pkgs.systemd
+      pkgs.gnugrep
+      pkgs.coreutils
+    ];
+    text = ''
+      unit="$1"
+
+      # Two different answers, and the banner wants both. Result is systemd's own verdict
+      # -- exit-code, start-limit-hit, timeout -- while the journal tail is where the
+      # reason actually lives; the outage this was written for was one line of it.
+      result="$(systemctl --user show -P Result -- "$unit" 2>/dev/null || true)"
+      # `|| true` for grep exiting 1 on an empty capture, which pipefail would otherwise
+      # turn into a failed reporter.
+      log="$(journalctl --user --no-pager -o cat -n 5 -u "$unit" 2>/dev/null | grep -v '^$' || true)"
+
+      body="''${result:-failed}"
+      # An `if`, not `[ -n "$log" ] && body=...`: that list returns 1 when the tail is
+      # empty and errexit takes the whole script down with it.
+      if [ -n "$log" ]; then
+        body="$(printf '%s\n\n%s' "$body" "$log")"
+      fi
+
+      # Onto the journal as well as the screen. If nothing owns org.freedesktop.Notifications
+      # -- the one failure this cannot raise a banner for -- the attempt is still on record.
+      printf '%s failed: %s\n' "$unit" "''${result:-unknown}"
+
+      # Critical, so the default-timeout=0 in ~/.dotfiles/mako leaves it up until it is
+      # dismissed: a unit breaking while nobody is looking is the case that must not time
+      # out. Keyed synchronous per unit, so a unit that fails, gets fixed and fails again
+      # replaces its own banner rather than stacking, while two units still get one each.
+      notify-send -a lattice-systemd -u critical -i dialog-error \
+        -h "string:x-canonical-private-synchronous:lattice-failure-$unit" \
+        "$unit failed" "$body"
+    '';
+  };
+
   # Catppuccin, matching ~/.dotfiles. Theme names follow lattice.theme.
   gtkTheme = "catppuccin-${theme.flavor}-${theme.accent}-standard";
   iconTheme = "Papirus-Dark";
@@ -1299,6 +1343,34 @@ in
   ];
 
   systemd.user.services = {
+    # The OnFailure= target for the session's own units, so a unit that gives up says so
+    # on screen instead of in the journal nobody reads. %i is the failing unit's full
+    # name, handed over by `OnFailure=lattice-notify-failure@%n.service` at each use site.
+    #
+    # It fires once per failure, not once per restart attempt: OnFailure= triggers on
+    # entry to the failed state, and an automatic restart is not that -- a unit with
+    # Restart=on-failure reports when it exhausts its start limit and gives up, not five
+    # times on the way there.
+    #
+    # Nothing sets OnFailure= on this unit, deliberately. A reporter that cannot report
+    # has nothing left to report with, and a self-reference would only spin.
+    "lattice-notify-failure@" = {
+      description = "Report %i as a desktop notification";
+
+      # The banner needs something to receive it, and mako is Type=dbus on
+      # org.freedesktop.Notifications -- so ordering after it already means the name is
+      # owned, with nothing to poll for. Wants and not Requires: when mako itself is the
+      # broken thing, this should still run and leave its line in the journal. The only
+      # place that names the daemon, so a swap away from mako would edit here.
+      wants = [ "mako.service" ];
+      after = [ "mako.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${lib.getExe notifyFailure} %i";
+      };
+    };
+
     hyprpaper.wantedBy = [ "graphical-session.target" ];
     mako.wantedBy = [ "graphical-session.target" ];
     hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
