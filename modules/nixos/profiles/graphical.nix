@@ -836,12 +836,24 @@ let
   # annotation. It replaces the grim+slurp pair that used to be inlined here; grim is still
   # what actually takes the pixels, but HyprQuickFrame builds the geometry and the pipeline.
   #
-  # Launched from rofi rather than a key. The Dell has a dedicated Print key, but the Mac's
-  # internal keyboard (hid-apple, 05AC:0352) lands on the magic_keyboard_2021_and_2024 fn
-  # table, which has no KEY_SYSRQ on either fn layer -- so a Print bind was silently dead
-  # on one of the two hosts. One launcher entry behaves the same on both. (evtest-style
-  # dumps do show KEY_SYSRQ here; that comes from the generic HID boot-keyboard descriptor,
-  # not from a key that exists. Same trap as the backlight keys in profiles/laptop.nix.)
+  # Reachable two ways, because neither one covers both hosts on its own. Print is bound in
+  # ~/.dotfiles/hypr/.config/hypr/hyprland.lua, and the key comes from the external keyboard
+  # (NuPhy Halo65 V2), which is remapped in firmware and so emits a real KEY_SYSRQ wherever
+  # it is plugged in. The Dell's built-in keyboard has a Print key too, but the Mac's
+  # (hid-apple, 05AC:0352) lands on the magic_keyboard_2021_and_2024 fn table, which has no
+  # KEY_SYSRQ on either fn layer -- so on the Mac with nothing plugged in, the launcher
+  # entry below is the only way in. (evtest-style dumps do show KEY_SYSRQ on the internal
+  # keyboard; that comes from the generic HID boot-keyboard descriptor, not from a key that
+  # exists. Same trap as the backlight keys in profiles/laptop.nix.)
+  #
+  # Temp is the default action: HQF_ACTION below starts the overlay with the bar's "Temp"
+  # toggle already on, so a capture goes to the clipboard and nowhere else -- no file in
+  # ~/Pictures/Screenshots to go back and delete. Upstream reads that variable once at
+  # startup (shell.qml, `tempActive`), and the toggle stays live, so the floating Temp
+  # button still turns it back off mid-selection and Edit still hands off to satty. The
+  # three actions are mutually exclusive, so HQF_ACTION=edit or =share picks those instead,
+  # and any other value -- HQF_ACTION=save, say -- leaves all three off, which is upstream's
+  # save-and-notify default.
   #
   # Note that HyprQuickFrame spawns satty itself, with its own flags, so the only settings
   # of ours it honours are the ones in ~/.dotfiles/satty/.config/satty/config.toml that it
@@ -942,6 +954,7 @@ let
       pkgs.libnotify
     ];
     text = ''
+      export HQF_ACTION="''${HQF_ACTION-temp}"
       exec quickshell --path ${hqfShell} -n "$@"
     '';
   };
