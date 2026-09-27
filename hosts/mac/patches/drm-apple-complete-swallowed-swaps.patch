@@ -1,0 +1,67 @@
+From 8890ede6c7ff51d03fb8abd5c06ad43b10238a0a Mon Sep 17 00:00:00 2001
+From: Gilles Goetsch <code@gillesgoetsch.ch>
+Date: Mon, 14 Sep 2026 15:59:53 +0200
+Subject: [PATCH] drm/apple: Complete swaps the DCP discards before a modeset
+
+The DCP reports a hotplugged display as connected before it has powered
+its pipeline and programmed timings. Swaps submitted in that window are
+accepted and then discarded by the firmware:
+
+    swap_submit_dcp: swallowed swap ID 10380 as fControllerPowerState is 0
+    swap_submit_dcp: swallowed swap ID 10380 as timinsg are not enabled
+    [drm] *ERROR* flip_done timed out
+    [drm] *ERROR* [CRTC:68:crtc-1] commit wait timed out
+
+The swap_complete callback never arrives, so every commit blocks in
+drm_atomic_helper_wait_for_flip_done() for 10 seconds. With a compositor
+that keeps drawing, a hotplug stalls the whole desktop for as long as it
+takes userspace to get round to the modeset that would make the display
+usable, and often it never does.
+
+valid_mode is only set by a successful set_digital_out_mode(), so until
+then complete the frame from dcp_flush() through the delayed vblank work,
+the same fallback already used when the command channel is busy and after
+an unplug.
+
+Tested on a MacBook Air (M2, 2022) with a hotplugged DP alt mode display:
+the flip_done timeouts are gone (0 per boot, previously one per frame
+until the modeset), and the display comes up once a modeset is issued.
+
+Assisted-by: Claude:claude-opus-5
+Assisted-by: Claude:claude-fable-5-1
+Signed-off-by: Gilles Goetsch <code@gillesgoetsch.ch>
+---
+ drivers/gpu/drm/apple/iomfb.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/drivers/gpu/drm/apple/iomfb.c b/drivers/gpu/drm/apple/iomfb.c
+index 1d9448f0f4dc47..e0dd06876df5e9 100644
+--- a/drivers/gpu/drm/apple/iomfb.c
++++ b/drivers/gpu/drm/apple/iomfb.c
+@@ -478,6 +478,26 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
+ 		dcp->ch_cmd.warned_busy = false;
+ 	}
+ 
++	/*
++	 * The DCP reports a display as connected before it has powered its
++	 * pipeline and programmed timings. Swaps submitted in that window are
++	 * accepted but discarded by the firmware ("swallowed swap ... as
++	 * fControllerPowerState is 0" / "... as timings are not enabled"), so
++	 * the swap_complete callback never arrives and every commit blocks in
++	 * drm_atomic_helper_wait_for_flip_done() for 10 seconds. On hotplug
++	 * that stalls the whole compositor for as long as it keeps drawing,
++	 * which also keeps userspace from getting round to the modeset that
++	 * would make the display usable.
++	 *
++	 * valid_mode is only set by a successful set_digital_out_mode(), so
++	 * until then complete the frame here, as the busy command channel
++	 * above already does.
++	 */
++	if (!dcp->valid_mode) {
++		schedule_work(&dcp->vblank_wq);
++		return;
++	}
++
+ 	switch (dcp->fw_compat) {
+ 	case DCP_FIRMWARE_V_12_3:
+ 		iomfb_flush_v12_3(dcp, crtc, state);

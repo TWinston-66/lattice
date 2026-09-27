@@ -202,6 +202,55 @@ in
     neovim
     tree-sitter
     gcc
+
+    # Zed, the GUI editor, kept next to neovim rather than with the windowed apps in
+    # profiles/graphical.nix: everything it drives is in this file -- clang-tools, nixd,
+    # nixfmt, neocmakelsp, node, go -- and nix-ld above is what lets the language servers
+    # and the node runtime Zed downloads for itself under ~/.local/share/zed run at all.
+    # Both hosts import this module and graphical.nix, so the choice only decides where it
+    # reads, not which machine gets it.
+    #
+    # The CLI is `zeditor`: nixpkgs installs no `zed`. ~/.dotfiles/zsh/.zshrc aliases `zed`
+    # to it on Linux, beside the `open` alias there, so the word is the same on this side
+    # and on macOS, where Zed is the Homebrew cask in ~/.dotfiles/Brewfile. The desktop
+    # entry is dev.zed.Zed.desktop, so `rofi -show drun` lists it as "Zed".
+    #
+    # Rendering is Vulkan (wgpu) with no GL path, so it needs an ICD present: the Dell has
+    # intel_icd from mesa, the Mac honeykrisp from the Asahi mesa, both already installed by
+    # hardware.graphics -- `ls /run/opengl-driver/share/vulkan/icd.d` is the check if a
+    # window ever fails to come up. The Rust tree is large but nothing is built here:
+    # cache.nixos.org has 1.19.2 for aarch64-linux as well as x86_64.
+    #
+    # Its config is the `zed` stow package, which has always been in the shared stow list in
+    # ~/.dotfiles/lib/stow.sh -- so until now NixOS was linking ~/.config/zed/settings.json
+    # for an editor that was not installed.
+    zed-editor
+
+    # clangd, clang-format and clang-tidy -- the editor side only; gcc above stays the
+    # compiler. Deliberately not from mason: upstream clangd ships no aarch64 Linux
+    # release, so `ensure_installed` failed on every nvim start here with "The current
+    # platform is unsupported" and C buffers got no LSP at all. The nixpkgs build is
+    # wrapped with the glibc and libstdc++ include paths baked in -- the same glibc and
+    # the same gcc 15 headers that gcc itself uses -- so a lone .c file resolves its
+    # includes with no compile_commands.json and no .clangd, and clangd agrees with gcc
+    # about what is in scope. Only clangd/clang-format/clang-tidy are in this package;
+    # it shares no filenames with the gcc wrapper, so `cc` and `ld` are unaffected.
+    clang-tools
+
+    # CMake on the host, not just inside `fhs`. gnumake comes with it because cmake's
+    # default generator on Linux is "Unix Makefiles" -- cmake alone configures a project
+    # and then cannot build it. ninja is the generator cmake-tools.nvim is usually pointed
+    # at and costs nothing to carry. Note this also makes a plain `make` project work
+    # outside the sandbox, which it previously did not: gcc was here but make was not.
+    cmake
+    gnumake
+    ninja
+    # CMakeLists.txt LSP: completion, hover, and its own formatter, so there is no
+    # conform entry for cmake. Mason could actually install this one -- it ships an
+    # aarch64 Linux asset, unlike clangd -- but nixpkgs has the same 0.11.1 and keeps it
+    # alongside the other servers the flake owns.
+    neocmakelsp
+
     unzip
     wget
     nodejs

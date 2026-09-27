@@ -88,31 +88,151 @@ in
   # scale = 2.1 })'` tries another live; it reverts on the next reload.
   lattice.display.monitors."eDP-1".scale = "2.25";
 
+  # The Samsung on the desk. Pinned per-host rather than left to the desc-keyed rule in
+  # ~/.dotfiles, so it can be tuned against this laptop without dragging the Dell along --
+  # it happens to agree with that rule's 1.5 today, which is why the value looks redundant.
+  #
+  # Set by eye, and the first attempt at setting it by arithmetic is worth recording as a
+  # dead end. Matching the panel above on *logical dpi* -- 3840x2160 across 700x390mm is
+  # 139 dpi native, so scale 1.25 lands 3072x1728 at 111 dpi against the panel's 113 -- is
+  # a clean geometric match and reads far too small in practice. Equal logical dpi means
+  # equal size in millimetres, and millimetres are not what the eye judges: a 32" monitor
+  # sits most of an arm further away than a laptop panel, so matched physical size comes
+  # out visibly smaller. Apparent size is the target, and viewing distance is a property of
+  # the desk, not of either display, so there is no number here to derive. The scales this
+  # monitor admits, on the usual two constraints (whole logical pixels, and a multiple of
+  # 1/120, see modules/nixos/display.nix):
+  #
+  #   1.25 -> 3072x1728  (matches the panel in mm -- too small)
+  #   1.5  -> 2560x1440  (22% larger than the panel in mm)
+  #   1.6  -> 2400x1350  (30% larger)
+  #   1.666667 -> 2304x1296  (35% larger)
+  #
+  # `hyprctl eval 'hl.monitor({ output = "desc:Samsung Electric Company U32R59x", mode =
+  # "preferred", position = "auto", scale = 1.6 })'` tries another live; it reverts on the
+  # next reload.
+  lattice.display.monitors."desc:Samsung Electric Company U32R59x".scale = "1.5";
+
+  # The built-in HDMI port lights that Samsung exactly once per boot. Every replug after
+  # the first leaves it dark *and* stalls the whole desktop, ~10s per frame, for as long as
+  # the cable is in -- badly enough that Hyprland stops answering hyprctl on its IPC
+  # socket, so nothing in userspace can drive a recovery. Unplugging is the only way out.
+  #
+  # The cause is a missing modeset, not a missing signal. EDID reads fine over DDC the
+  # whole time (39 modes, right make/model/serial), so from userspace the output looks
+  # live. In the driver, set_digital_out_mode() -- the only thing that sets dcp->valid_mode
+  # -- is called from dcp_crtc_atomic_modeset(), and *that* is reached only from
+  # apple_crtc_atomic_enable() (apple_drv.c), which the atomic helpers call only when a
+  # CRTC goes off->on in a modeset commit. Plain page-flips never reach it. On a replug
+  # there is no such transition, so the modeset is never even attempted: the logs carry no
+  # set_digital_out_mode line at all, failing or otherwise, where the working first plug
+  # has `set_digital_out_mode finished:2064`. With valid_mode still 0 the firmware accepts
+  # each swap and throws it away ("swallowed swap ... as fControllerPowerState is 0" /
+  # "... as timinsg are not enabled"), the swap_complete callback never comes, and every
+  # commit burns the full 10s in wait_for_flip_done -- which is the stall, and which is
+  # also what keeps userspace from ever getting round to the modeset that would fix it.
+  #
+  # This patch breaks that loop at the one place it can be broken from inside the kernel:
+  # while valid_mode is 0, dcp_flush() completes the frame through the delayed vblank work
+  # instead of waiting on a swap the firmware has already discarded -- the same fallback
+  # the busy-command-channel branch immediately above it already uses. The stalls go away,
+  # so the compositor stays responsive and its own disable/enable of the output can land.
+  #
+  # Carried locally, from AsahiLinux/linux PR #622 (commit 8890ede, "drm/apple: Complete
+  # swaps the DCP discards before a modeset"). Upstream closed it under the project's
+  # generative-AI policy rather than on anything technical, so it will not arrive in this
+  # form and this file is where it lives for now. It applies to asahi-7.1.13-3, where
+  # dcp_flush() sits at drivers/gpu/drm/apple/iomfb.c:461; re-check it on every kernel
+  # bump, because a bump will not bring it along. hardware.asahi wires boot.kernelPatches
+  # into the linux-asahi override itself (modules/kernel/default.nix), so the stock NixOS
+  # option is all this needs. Unbinding 289c00000.dcp -- the dcpext that drives HDMI, and a
+  # separate device from the internal panel's 389c00000.dcp -- looks like it should reset
+  # this port on its own, but dcp.c tears the device down with component_del(), which takes
+  # the apple-drm component master and all of card1 (eDP included) with it, so it is not a
+  # recovery path. Related upstream reports: AsahiLinux/linux#625 (same dcpext, same
+  # swallowed-swap signature on a j416s) and #634.
+  boot.kernelPatches = [
+    {
+      name = "drm-apple-complete-swallowed-swaps";
+      patch = ./patches/drm-apple-complete-swallowed-swaps.patch;
+    }
+  ];
+
   # The night-light default of 4000K, which is plainly warm on the Dell's sRGB panel,
   # barely registers on this one -- it is wide-gamut and far brighter, so the same
   # transform is a much smaller share of what the panel can show. 2800K puts the shift
   # back where the Dell has it.
   lattice.display.sunsetTemperature = 2800;
 
-  # Gecko sizes both its chrome and its content in nominal pixels, so unlike LibreOffice's
-  # true-to-paper page it grew with the scale above instead of staying put. Pinning
-  # devPixelsPerPx decouples it from the desktop scale: 1.8 against 2.25 draws Firefox and
-  # Thunderbird at 80% of what the scale alone would give them, landing a little under
-  # where they sat at scale 2 -- which was already slightly large.
+  # Gecko sizes both its chrome and its content in nominal pixels, and devPixelsPerPx pins
+  # that to an absolute ratio rather than to a multiple of the desktop scale -- so a single
+  # number cannot be right on two monitors at once. The old 1.8 was tuned against this
+  # panel's 2.25; on the Samsung at 1.5 the same pin drew Gecko at 1.2x that output's
+  # native size, half again as large as it was meant to be, while ghostty and waybar
+  # tracked the output correctly because they read the per-output scale. -1 hands the
+  # choice back to the compositor, so Gecko follows whichever monitor the window is on and
+  # re-scales as it moves between them.
   #
-  # The Dell sets the same pair the other way, at 1.1, because its panel takes scale 1 and
-  # wanted Gecko nudged up rather than reined in. Status "default" rather than the module's
-  # "locked", there and here, so the number stays adjustable from about:config.
+  # The 80% the pin used to buy back is recovered instead from levers that are proportional
+  # rather than absolute, so they hold docked, undocked, and on either screen:
+  #   - content: default zoom 80%. Gecko keeps this per profile in content-prefs.sqlite as
+  #     browser.content.full-zoom and exposes no pref for it, so it cannot be set from
+  #     here -- it is Settings > General > Zoom if the profile is ever rebuilt.
+  #   - chrome: compact uidensity, plus the stylesheet below for what compact leaves alone.
+  #
+  # The Dell still pins 1.1 against its scale 1. One panel, so the ratio cannot drift there,
+  # but it would break in exactly this way the first time that machine is docked. Status
+  # "default" rather than the module's "locked", there and here, so the numbers stay
+  # adjustable from about:config.
   programs = {
     firefox = {
-      preferences."layout.css.devPixelsPerPx" = "1.8";
+      preferences = {
+        "layout.css.devPixelsPerPx" = "-1";
+        "browser.uidensity" = 1;
+        "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+      };
       preferencesStatus = "default";
     };
+    # Nothing compensates on this side yet: Thunderbird loses the pin's shrink and so draws
+    # larger on this panel than it used to, until mail.uidensity -- whose values are ordered
+    # differently from browser.uidensity -- and a stylesheet of its own are worked out.
     thunderbird = {
-      preferences."layout.css.devPixelsPerPx" = "1.8";
+      preferences."layout.css.devPixelsPerPx" = "-1";
       preferencesStatus = "default";
     };
   };
+
+  # The NixOS firefox module has no userChrome option and there is no home-manager here, so
+  # the stylesheet is linked into the profile directly. That profile directory name is
+  # generated at first run and is derivable from nothing in this file: a new profile means
+  # this path has to be updated, and until it is the stylesheet stops applying silently.
+  systemd.user.tmpfiles.rules =
+    let
+      profile = "%h/.config/mozilla/firefox/uk8qrdih.default";
+      userChrome = pkgs.writeText "lattice-firefox-userChrome.css" ''
+        /* Chrome font. Much of the chrome -- the vertical tab strip among it -- draws with
+           `font: menu`, which resolves to the GTK font (gtk-font-name, Noto Sans 9 -> 12px)
+           and resets font-size as part of the shorthand, so a smaller size inherited from
+           :root never reaches it; setting the resolved size directly is what bites. These
+           stay CSS pixels, which devPixelsPerPx goes on scaling per monitor. */
+        #navigator-toolbox,
+        #sidebar-main,
+        #vertical-tabs {
+          font-size: 10px !important;
+        }
+
+        /* Vertical tab rows. Under the sidebar.verticalTabs pref tabs.css sizes these as
+           max(32px, line-height * 1em), so the 32px floor has to come down explicitly --
+           the horizontal strip's own --tab-min-height never applies in this mode. */
+        :root {
+          --tab-min-height: 24px !important;
+        }
+      '';
+    in
+    [
+      "d ${profile}/chrome 0755 - - -"
+      "L+ ${profile}/chrome/userChrome.css - - - - ${userChrome}"
+    ];
 
   ### KEYBOARD ###
   # The built-in keyboard is bound to hid-apple (HID 05AC:0352), which can swap the two

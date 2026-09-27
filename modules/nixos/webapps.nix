@@ -147,6 +147,12 @@ let
     runtimeInputs = [
       pkgs.jq
       pkgs.procps
+      # A user unit's PATH is NixOS's default -- coreutils, findutils, gnugrep, gnused,
+      # systemd -- and awk is in none of them. Leaving gawk out made every boot's run die
+      # in the profile lookup below while still exiting 0, so the registry went unseeded
+      # for weeks and two apps picked up duplicate launcher entries. Running it by hand
+      # hid that: writeShellApplication appends $PATH, and an interactive shell has awk.
+      pkgs.gawk
     ];
     text = ''
       # Firefox keeps the registry in memory and rewrites the whole file on exit, so a
@@ -168,7 +174,10 @@ let
       # The default profile's directory name is random per machine, so it has to be read
       # rather than hardcoded. Only [Profile*] sections are considered: an [Install*]
       # section also carries a Default= key, but its value is a path, not a flag.
-      read -r relative path <<< "$(awk -F'\n' '
+      # Captured before the read rather than substituted into it: errexit does not see a
+      # command substitution that feeds a here-string, so an awk that dies leaves $path
+      # empty and is indistinguishable from a profiles.ini that has no Path.
+      if ! parsed="$(awk -F'\n' '
         /^\[/  { sec = $0; next }
         sec ~ /^\[Profile/ && /^Path=/        { p[sec] = substr($0, 6) }
         sec ~ /^\[Profile/ && /^IsRelative=/  { r[sec] = substr($0, 12) }
@@ -177,11 +186,17 @@ let
           for (s in d)     { print (r[s] == "0" ? "abs" : "rel"), p[s]; exit }
           for (s in p)     { print (r[s] == "0" ? "abs" : "rel"), p[s]; exit }
         }
-      ' "$ini")"
+      ' "$ini")"; then
+        echo "could not parse $ini" >&2
+        exit 1
+      fi
+      read -r relative path <<< "$parsed"
 
+      # Fatal rather than a quiet skip: profiles.ini exists, so Firefox has run, and a
+      # copy of it with no Path is broken in a way worth a notification.
       if [ -z "''${path:-}" ]; then
-        echo "no profile with a Path in $ini; nothing to seed"
-        exit 0
+        echo "no profile with a Path in $ini" >&2
+        exit 1
       fi
       if [ "$relative" = rel ]; then profile="$root/$path"; else profile="$path"; fi
 

@@ -1077,6 +1077,36 @@ let
     '';
   };
 
+  # Opens the NuPhy Halo65 V2's raw-HID node to whoever holds the seat, so the keyboard can
+  # be remapped from nuphy.io in the Chromium below. The board is QMK underneath: its
+  # interface 1 reports usage page 0xFF60, QMK's raw-HID endpoint and the transport both
+  # NuPhy Console and VIA speak. That node is root-only by default, and the resulting
+  # failure is badly disguised -- the WebHID chooser comes up empty and reads as "no
+  # compatible devices found", which looks like the site not supporting the keyboard
+  # rather than like a permission problem.
+  #
+  # This is a udev *package* rather than services.udev.extraRules, and that is the whole
+  # point of it. uaccess is not applied by the rule that sets the tag; systemd's
+  # 73-seat-late.rules is what turns TAG+="uaccess" into an ACL. extraRules is hardcoded
+  # into 99-local.rules, which udev reaches long after 73, so the tag is set after the
+  # only rule that would consume it and nothing happens -- silently, with the rule
+  # present and correct in the file. Numbering this below 73 is what makes it fire, and
+  # is why the MX Master's own rule ships at 42. udev.packages takes the filename from
+  # the destination, so the 60- prefix here is load-bearing.
+  #
+  # pkgs.qmk-udev-rules is no substitute: all 89 of its lines are bootloader VID/PIDs for
+  # flashing, and none touch hidraw on a running board.
+  #
+  # Scoped to the one product and to hidraw only. The evdev nodes stay shut -- remapping
+  # happens in the keyboard's own firmware, so nothing here needs to read keystrokes.
+  nuphyHidAccess = pkgs.writeTextFile {
+    name = "nuphy-halo65-udev-rules";
+    destination = "/lib/udev/rules.d/60-nuphy-halo65.rules";
+    text = ''
+      KERNEL=="hidraw*", ATTRS{idVendor}=="19f5", ATTRS{idProduct}=="3315", TAG+="uaccess"
+    '';
+  };
+
   # Catppuccin, matching ~/.dotfiles. Theme names follow lattice.theme.
   gtkTheme = "catppuccin-${theme.flavor}-${theme.accent}-standard";
   iconTheme = "Papirus-Dark";
@@ -1156,6 +1186,20 @@ in
     zathura
     bitwarden-desktop
     wf-recorder
+
+    # Not a browser: Firefox keeps http/https under DEFAULT APPS below, and nothing here
+    # changes that. This is on the machine for WebHID (navigator.hid) alone, which is the
+    # only way to reach the NuPhy Halo65 V2's QMK raw-HID interface from this host. The
+    # native clients cannot: pkgs.via and pkgs.vial are both x86_64-only AppImages in
+    # nixpkgs, so on aarch64 the configurator is nuphy.io (or usevia.app) in a Chromium
+    # tab. Firefox is not an option either -- Mozilla lists WebHID as harmful and ships no
+    # implementation -- which is the whole reason a second browser exists here.
+    #
+    # Ungoogled rather than pkgs.chromium, and it costs nothing to prefer: both are cached
+    # for aarch64 at ~200 MiB, and NIXOS_OZONE_WL below already makes either a native
+    # Wayland client. The keyboard's hidraw node still needs the udev rule below before
+    # the page can open the device.
+    ungoogled-chromium
 
     # Everything below was once picked per host, because the obvious client is x86-only
     # in nixpkgs and the Mac needed a stand-in. Running the stand-in on both is simpler
@@ -1282,7 +1326,13 @@ in
     flatpak.enable = true;
 
     # swayosd writes backlight brightness through sysfs, which its udev rule opens to the video group.
-    udev.packages = [ pkgs.swayosd ];
+    #
+    # nuphyHidAccess opens the Halo65 V2's raw-HID node so the configurator can reach it;
+    # see the note on the package itself for why it is a package here and not extraRules.
+    udev.packages = [
+      pkgs.swayosd
+      nuphyHidAccess
+    ];
   };
   # /dev/uinput, for the Solaar rule that holds SUPER while the mouse's gesture button is
   # down. The NixOS module loads the module, makes the group and writes the udev rule; the
