@@ -14,43 +14,236 @@ let
   # hyprlang writes colours bare, without the leading '#'.
   hex = lib.removePrefix "#";
 
-  # The same drawing at three zoom levels: the mark stays the anchor, the grid around it
-  # gets finer or coarser. The first is the one hyprpaper starts on and hyprlock dims.
-  wallpapers = map (density: config.lattice.artwork.wallpaper { inherit density; }) [
-    "1.0"
-    "0.7"
-    "1.4"
+  # The pool the session picks from. Every entry is its own PNG in the store and
+  # `lattice-wallpaper random` draws one per login, so the desktop is a different member of
+  # one family each session rather than the same image forever.
+  #
+  # The knobs split by which side knows the answer. The seed belongs to the generator: it
+  # varies which way the background gradient runs and which ring of the mark is lit. It
+  # leaves the mark centred and the lattice square to the screen, which is a correction
+  # rather than an oversight -- both were seeded at first, and on a real screen a mark a
+  # little off centre reads as misaligned and a grid a few degrees over reads as crooked,
+  # because there is nothing else on the canvas for either to be off-balance against.
+  #
+  # The accents belong here, because the palette's chromatic names live in lattice.theme
+  # and the generator only ever sees the nine roles it draws with. There is one entry per
+  # chromatic name, all fourteen of them, each pairing its accent with a hue-adjacent
+  # second -- the relation blue and lavender have -- so the mark stays two shades of one
+  # colour rather than turning into a gradient. Walking the whole palette rather than
+  # following lattice.theme.accent is the point: every one of those names is a colour of
+  # this theme, and fourteen wallpapers in one hue would differ only in their seeded
+  # composition. The first entry is the exception -- no accent and no seed, so it is the
+  # live accent drawn plain,
+  # which keeps it the image it was before the pool existed and the right one for
+  # hyprpaper.conf to name for the moment before the pick lands.
+  #
+  # An entry is the generator's own argument set, so one only has to name what it changes;
+  # the seed is its position in the list, which makes appending a wallpaper cheap and
+  # reordering the list a redraw of everything that moved.
+  #
+  # None of them names a density, deliberately: they all take the generator's 1.0. Density
+  # divides the node spacing, and everything in the drawing is measured in spacings -- the
+  # grid, the dots' radius, the mark -- so varying it across the pool redrew the artwork at
+  # a different size on a correctly sized canvas. The entries used to cycle 1.0, 0.7, 1.4,
+  # which meant no two neighbours shared one and a step could double the spacing. Cycling
+  # wallpapers then read as the image being resized rather than as variety, and the colour
+  # is the variety worth having.
+  pool = [
+    { }
+    {
+      accent = palette.mauve;
+      accentAlt = palette.pink;
+    }
+    {
+      accent = palette.teal;
+      accentAlt = palette.sky;
+    }
+    {
+      accent = palette.peach;
+      accentAlt = palette.yellow;
+    }
+    {
+      accent = palette.sapphire;
+      accentAlt = palette.teal;
+    }
+    {
+      accent = palette.lavender;
+      accentAlt = palette.blue;
+    }
+    {
+      accent = palette.green;
+      accentAlt = palette.teal;
+    }
+    {
+      accent = palette.pink;
+      accentAlt = palette.mauve;
+    }
+    {
+      accent = palette.maroon;
+      accentAlt = palette.peach;
+    }
+    {
+      accent = palette.sky;
+      accentAlt = palette.sapphire;
+    }
+    {
+      accent = palette.yellow;
+      accentAlt = palette.peach;
+    }
+    {
+      accent = palette.red;
+      accentAlt = palette.maroon;
+    }
+    {
+      accent = palette.flamingo;
+      accentAlt = palette.rosewater;
+    }
+    {
+      accent = palette.rosewater;
+      accentAlt = palette.flamingo;
+    }
   ];
-  wallpaper = lib.head wallpapers;
 
-  # Switching between them, for a bind in ~/.dotfiles. hyprpaper 0.8 loads an image when it
-  # is asked for -- `preload` is gone -- so the variants only have to exist in the store.
-  # hyprpaper can also rotate a directory by itself, with `timeout` and `order` in the
-  # wallpaper block below; this stays manual so the desktop only changes when asked.
+  # Every entry is drawn twice, because no single image is the right size on both screens.
+  # hyprpaper scales an image to cover whatever output it lands on, so a fixed image gives
+  # the mark a fixed *fraction* of every screen -- and a fraction is the wrong invariant.
+  # The Samsung on the desk is about 2.3x the panel's width, so an equal fraction made its
+  # mark 2.3x the size, while the criterion that actually matters is the one the greeter
+  # already uses a few hundred lines up: equal angle at the eye. The desk monitor sits
+  # ~28in away against the panel's ~20in, so it should be about 1.4x, not 2.3x.
+  #
+  # Sizing each canvas near its screen's logical resolution is what delivers that, and it
+  # needs no measurement to maintain: `spacing` is fixed, so the mark comes out a constant
+  # number of canvas units, and a canvas the size of the logical screen therefore puts the
+  # mark in the same relation to the UI drawn in those same units. It lands the two at a
+  # ratio of ~1.44 against the 1.43 the greeter derived independently.
+  #
+  # The aspects are each screen's own, so cover has nothing to crop -- the old single
+  # 16:10 image lost a tenth of its height on the 16:9 monitor. The panel figure is 16:10
+  # because both laptops here have one; a 16:9 panel would crop that tenth back, which is
+  # the cost of not knowing the panel until runtime.
+  # Per host, in modules/nixos/display.nix: the numbers are a property of the screens in
+  # front of the machine, and a canvas that does not match its screen's logical size is
+  # magnified to cover it -- which is the whole of what the paragraph above is about.
+  screens = config.lattice.display.canvas;
+
+  wallpapersFor =
+    screen:
+    lib.imap0 (
+      seed: entry: config.lattice.artwork.wallpaper (entry // screen // { inherit seed; })
+    ) pool;
+
+  panelWallpapers = wallpapersFor screens.panel;
+  deskWallpapers = wallpapersFor screens.desk;
+
+  # What hyprpaper.conf and the boot-time default name: the plain drawing at desk size.
+  wallpaper = lib.head deskWallpapers;
+
+  # Where the picker records what it set, for the things that cannot be told. hyprlock
+  # reads its backgrounds at launch from paths fixed at build time, so pointing it at these
+  # is what keeps the lock screen showing the same wallpaper the desktop has; the `color`
+  # beside them covers the gap before the first pick, and base is the gradient's own
+  # bottom-right stop, so even that reads as the wallpaper's darkest corner. One per screen
+  # size, for the same reason there are two of every wallpaper.
+  currentDir = "${config.users.users.winston.home}/.cache/lattice";
+  currentPanel = "${currentDir}/wallpaper-panel.png";
+  currentDesk = "${currentDir}/wallpaper-desk.png";
+
+  # Switching between them, for a bind in ~/.dotfiles and for the login pick below.
+  # hyprpaper 0.8 loads an image when it is asked for -- `preload` is gone -- so the pool
+  # only has to exist in the store. hyprpaper can also rotate a directory by itself, with
+  # `timeout` and `order` in the wallpaper block further down; this stays a command so that
+  # the desktop changes once at login and then only when asked.
+  #
+  # Which size goes where is decided here, at run time, rather than written into
+  # hyprpaper.conf: hyprpaper's IPC takes an output *name* and rejects a `desc:` selector
+  # (tested -- "Invalid monitor"), and a name is the one thing about a monitor that is not
+  # knowable until it is plugged in. Reading the live output list also means the pick is
+  # right whether this laptop is docked, undocked, or on a screen it has never seen.
   cycleWallpaper = pkgs.writeShellApplication {
     name = "lattice-wallpaper";
-    runtimeInputs = [ pkgs.hyprland ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.hyprland
+      pkgs.jq
+    ];
     text = ''
-      wallpapers=(${lib.concatStringsSep " " wallpapers})
+      panel=(${lib.concatStringsSep " " panelWallpapers})
+      desk=(${lib.concatStringsSep " " deskWallpapers})
       state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-wallpaper"
-      index=$(cat "$state" 2>/dev/null || echo 0)
-      count=''${#wallpapers[@]}
+      count=''${#desk[@]}
+
+      # -1 when nothing has been picked yet: the state lives in XDG_RUNTIME_DIR, so each
+      # boot starts out with no wallpaper of its own rather than with the first one.
+      current=$(cat "$state" 2>/dev/null || echo -1)
+      index=$((current < 0 ? 0 : current))
 
       case "''${1:-next}" in
       next) index=$(((index + 1) % count)) ;;
       prev) index=$(((index - 1 + count) % count)) ;;
+      # Drawn from the whole pool when nothing has been picked yet, which is the login
+      # case: any of them is a fair wallpaper for the session, the plain one included.
+      # A re-roll from a bind is a different question -- it is a request for a change, and
+      # landing back on the one already up would read as the pick having silently failed --
+      # so that one is drawn from the others.
+      random)
+        if ((current < 0)); then
+          index=$((RANDOM % count))
+        else
+          index=$(((index + 1 + RANDOM % (count - 1)) % count))
+        fi
+        ;;
       list)
-        printf '%s\n' "''${wallpapers[@]}"
+        for i in $(seq 0 $((count - 1))); do
+          printf '%s\t%s\t%s\n' "$i" "''${desk[i]}" "''${panel[i]}"
+        done
         exit 0
         ;;
       *[!0-9]*)
-        echo "usage: lattice-wallpaper [next|prev|list|<index>]" >&2
+        echo "usage: lattice-wallpaper [next|prev|random|list|<index>]" >&2
         exit 2
         ;;
       *) index=$(($1 % count)) ;;
       esac
 
-      hyprctl hyprpaper wallpaper ",''${wallpapers[index]}"
+      # Before hyprpaper is told, and recorded after it is: the lock screen reads these
+      # rather than being sent anything, so they should be right even on the login pick,
+      # where this races hyprpaper's own start and may have to be retried to get through.
+      install -d "${currentDir}"
+      ln -sfn "''${panel[index]}" "${currentPanel}"
+      ln -sfn "''${desk[index]}" "${currentDesk}"
+
+      # An internal panel is a small screen a forearm away and gets the drawing sized for
+      # one; anything else is taken for a monitor across a desk. Matching on the connector
+      # name is what hyprland and the kernel both call these, and it covers the Dell's
+      # eDP-1 as well as this Mac's.
+      apply() {
+        local output file
+        for output in $(hyprctl monitors -j | jq -r '.[].name'); do
+          case "$output" in
+          eDP-* | LVDS-* | DSI-*) file="''${panel[index]}" ;;
+          *) file="''${desk[index]}" ;;
+          esac
+          hyprctl hyprpaper wallpaper "$output,$file" || return 1
+        done
+      }
+
+      # hyprpaper binds its IPC socket a moment after its process starts, so the login pick
+      # can arrive before there is anything to answer it -- hyprctl does not wait, it exits
+      # nonzero. Retrying here rather than letting the unit fail and restart is what keeps
+      # the failure notification worth having: it now means hyprpaper is not coming, not
+      # that the pick was a second early. Five seconds is many times the gap ever measured.
+      for attempt in {1..10}; do
+        if reply=$(apply 2>&1); then
+          break
+        fi
+        if ((attempt == 10)); then
+          echo "hyprpaper did not answer after $attempt tries: $reply" >&2
+          exit 1
+        fi
+        sleep 0.5
+      done
+
       echo "$index" >"$state"
     '';
   };
@@ -106,6 +299,134 @@ let
 
       # RTMIN+1 matches the "signal" of the custom/sunset module in ~/.dotfiles/waybar.
       pkill -RTMIN+1 waybar || true
+
+      # And the Stream Deck's key for it, the other consumer of the `status` above. `|| true`
+      # for the same reason as the signal: a deck that is unplugged, or a lattice-deck that
+      # is not on this caller's PATH, must not fail the toggle that has already happened.
+      lattice-deck sync sunset || true
+    '';
+  };
+
+  # Do not disturb, as a mako mode rather than anything of our own: `[mode=dnd] invisible=1`
+  # in ~/.dotfiles/mako is the whole implementation, and this only flips the mode and tells
+  # the bar. mako owns the state, so the pill cannot desync from the daemon -- the same
+  # reason lattice-sunset reads hyprsunset instead of keeping a state file.
+  #
+  # What `invisible` does and does not do, measured rather than read off the man page:
+  # a hidden notification is still *live*, so nothing is dropped -- leaving the mode shows
+  # whatever is still up, which for critical means everything, since urgency=critical carries
+  # default-timeout=0. A normal notification instead times out unseen while the mode is on
+  # and lands in the history, recoverable on SUPER+ALT+N. So the count below is the number
+  # that will appear the moment the mode goes off, not the number missed.
+  dnd = pkgs.writeShellApplication {
+    name = "lattice-dnd";
+    runtimeInputs = [
+      pkgs.mako
+      pkgs.jq
+      pkgs.gnugrep
+      pkgs.procps
+    ];
+    text = ''
+      # -x, because `makoctl mode` prints one mode per line and a substring match would
+      # answer yes to any mode with dnd in the name.
+      enabled() { makoctl mode | grep -qx dnd; }
+
+      case "''${1:-toggle}" in
+      on)  makoctl mode -a dnd >/dev/null ;;
+      off) makoctl mode -r dnd >/dev/null ;;
+      toggle)
+        if enabled; then
+          makoctl mode -r dnd >/dev/null
+        else
+          makoctl mode -a dnd >/dev/null
+        fi
+        ;;
+      status)
+        if enabled; then
+          waiting=$(makoctl list -j | jq length)
+          if [ "$waiting" -gt 0 ]; then
+            printf '{"text":"󰂛","tooltip":"Do not disturb - %s waiting","class":"on"}\n' "$waiting"
+          else
+            printf '{"text":"󰂛","tooltip":"Do not disturb","class":"on"}\n'
+          fi
+        else
+          printf '{"text":"󰂚","tooltip":"Notifications on","class":"off"}\n'
+        fi
+        exit 0
+        ;;
+      *)
+        echo "usage: lattice-dnd [toggle|on|off|status]" >&2
+        exit 2
+        ;;
+      esac
+
+      # RTMIN+4 matches the "signal" of the custom/dnd module in ~/.dotfiles/waybar. 1, 2
+      # and 3 are sunset, tailscale and weather.
+      pkill -RTMIN+4 waybar || true
+
+      # And the Stream Deck's key for it, the other consumer of the `status` above. `|| true`
+      # for the same reason as the signal: a deck that is unplugged, or a lattice-deck that
+      # is not on this caller's PATH, must not fail the toggle that has already happened.
+      lattice-deck sync dnd || true
+    '';
+  };
+
+  # The keep-awake switch, and the one mechanism behind both surfaces that offer it.
+  #
+  # waybar's built-in idle_inhibitor was the obvious thing and is the wrong shape here: it
+  # holds a zwp_idle_inhibit_manager_v1 lock on waybar's *own* surface, which nothing
+  # outside waybar can read or release. So a Stream Deck key could only ever have been a
+  # second switch disagreeing with the first -- press one and the other still shows the
+  # opposite, both of them telling the truth about their own lock.
+  #
+  # hypridle is what actually locks the session, blanks the screens and dims the deck, so
+  # stopping it is the honest way to say "stay awake" -- and it stops all three rather than
+  # only the blank, which is what the inhibit lock did too. `systemctl is-active` is then a
+  # state both surfaces can read, and neither owns.
+  #
+  # `on` means staying awake, matching the bar's old activated/deactivated. That it stops a
+  # unit to do so is the sort of inversion worth saying out loud.
+  idleInhibit = pkgs.writeShellApplication {
+    name = "lattice-idle";
+    runtimeInputs = [
+      pkgs.systemd
+      pkgs.procps
+    ];
+    text = ''
+      unit=hypridle.service
+
+      awake() { ! systemctl --user is-active --quiet "$unit"; }
+
+      case "''${1:-toggle}" in
+      on)  systemctl --user stop "$unit" ;;
+      off) systemctl --user start "$unit" ;;
+      toggle)
+        if awake; then
+          systemctl --user start "$unit"
+        else
+          systemctl --user stop "$unit"
+        fi
+        ;;
+      status)
+        if awake; then
+          printf '{"text":"󰅶","tooltip":"Staying awake","class":"awake"}\n'
+        else
+          printf '{"text":"󰾪","tooltip":"Idle timers active","class":"idle"}\n'
+        fi
+        exit 0
+        ;;
+      *)
+        echo "usage: lattice-idle [toggle|on|off|status]" >&2
+        exit 2
+        ;;
+      esac
+
+      # RTMIN+5 matches the "signal" of custom/idle in ~/.dotfiles/waybar. 1 to 4 are
+      # sunset, tailscale, weather and dnd.
+      pkill -RTMIN+5 waybar || true
+
+      # And the deck's key for it, as the other three do.
+      lattice-deck sync awake || true
     '';
   };
 
@@ -982,35 +1303,64 @@ let
     ];
   };
 
-  # The window switcher, shared by two callers that cannot share a keybind: SUPER+TAB in
-  # ~/.dotfiles/hypr/.config/hypr/hyprland.lua, and the MX Master's gesture button, which
-  # Solaar fires with `Execute` rather than a synthetic keystroke (see the solaar block
-  # below for why). It lived inline in the Lua bind until the mouse needed it too, and one
-  # jq filter maintained in two repos is the thing this wrapper exists to prevent.
+  # Everything mako has already shown and timed out on, as a browsable list -- the whole of
+  # what a "notification centre" would otherwise be a daemon for. Bound to SUPER+ALT+N; see
+  # the mako binds in ~/.dotfiles/hypr/.config/hypr/hyprland.lua.
   #
-  # Nothing filters the list by workspace id: special workspaces carry negative ids, and
-  # the scratchpad is exactly the window that gets lost, so it has to stay findable here.
-  #
-  # rofi exits 1 when the prompt is dismissed, which under writeShellApplication's
-  # `set -o pipefail` would take the script down as a failure. Dismissing is a normal
-  # outcome, so the pipeline is captured and a cancel leaves through exit 0 instead.
-  windowSwitcher = pkgs.writeShellApplication {
-    name = "lattice-window-switcher";
+  # jq, not a format string: `makoctl history` grew -f only after 1.11, which is what this
+  # nixpkgs carries, so -j and a filter is the version-proof way to read it. The JSON is a
+  # plain array of objects, newest first, with the fields below spelled exactly as mako
+  # spells them (app_name, not app-name -- these are not the DBus hint names).
+  notifyHistory = pkgs.writeShellApplication {
+    name = "lattice-notifications";
     runtimeInputs = [
-      pkgs.hyprland
+      pkgs.mako
       pkgs.jq
       rofiWithCalc
+      pkgs.wl-clipboard
+      pkgs.libnotify
       pkgs.coreutils # cut
     ];
     text = ''
+      # Captured once, and both passes read this copy. Reading it twice would race a
+      # notification arriving mid-prompt, and the id picked from the first list would then
+      # mean a different entry in the second.
+      history="$(makoctl history -j)"
+
+      # An empty prompt is indistinguishable from a bind that did nothing, and the answer
+      # -- that nothing has arrived -- is worth saying out loud.
+      if [ "$(printf '%s' "$history" | jq 'length')" -eq 0 ]; then
+        notify-send -a lattice-notifications -u low \
+          "No notification history" "Nothing has expired since mako started."
+        exit 0
+      fi
+
+      # The id rides in a hidden first column, the way the cliphist bind does it, because
+      # the summary alone is not unique -- a unit that fails twice has two identical lines.
+      # Bodies are multi-line and rofi is not, so newlines collapse to spaces; @tsv would
+      # escape them rather than break the row, but a literal \n mid-line reads badly.
       selection=$(
-        hyprctl clients -j \
-          | jq -r 'sort_by(.workspace.id) | .[] | "\(.address)\t[\(.workspace.name)] \(.title)"' \
-          | rofi -dmenu -i -p window -display-columns 2
+        printf '%s' "$history" \
+          | jq -r '.[] | [
+              (.id | tostring),
+              ((.app_name // "?") + ": " + (.summary // "")
+                + " | " + ((.body // "") | split("\n") | join(" ")))
+            ] | @tsv' \
+          | rofi -dmenu -i -p notifications -display-columns 2
       ) || exit 0
       [ -n "$selection" ] || exit 0
+      # That `|| exit 0` is for rofi answering 1 on a dismissed prompt, which is a normal
+      # outcome and must not take the script down under pipefail. It cannot tell a cancel
+      # from rofi failing to reach the compositor at all, and deliberately: both end with
+      # no selection and nothing to copy.
 
-      hyprctl dispatch focuswindow "address:$(printf '%s' "$selection" | cut -f1)"
+      # The body, not the summary. Going back to a notification that has already gone is
+      # nearly always about something inside it -- a code, a path, a link -- and mako keeps
+      # no action registry for an expired notification, so there is nothing to invoke.
+      printf '%s' "$history" \
+        | jq -r --argjson id "$(printf '%s' "$selection" | cut -f1)" \
+            '.[] | select(.id == $id) | .body' \
+        | wl-copy
     '';
   };
 
@@ -1061,13 +1411,27 @@ let
     text = ''
       unit="$1"
 
+      # Which manager owns the failing unit, because one reporter serves both. A session
+      # unit's OnFailure= reaches this directly; a system unit's goes through the root
+      # bridge in systemd.services below and arrives here as `system`. Only the flag
+      # differs -- winston is in wheel, so the system manager and its journal are readable
+      # from the session without privilege, and nothing has to be handed across.
+      case "''${2:-user}" in
+        user) manager=(--user) ;;
+        system) manager=() ;;
+        *)
+          echo "usage: lattice-notify-failure <unit> [user|system]" >&2
+          exit 1
+          ;;
+      esac
+
       # Two different answers, and the banner wants both. Result is systemd's own verdict
       # -- exit-code, start-limit-hit, timeout -- while the journal tail is where the
       # reason actually lives; the outage this was written for was one line of it.
-      result="$(systemctl --user show -P Result -- "$unit" 2>/dev/null || true)"
+      result="$(systemctl "''${manager[@]}" show -P Result -- "$unit" 2>/dev/null || true)"
       # `|| true` for grep exiting 1 on an empty capture, which pipefail would otherwise
       # turn into a failed reporter.
-      log="$(journalctl --user --no-pager -o cat -n 5 -u "$unit" 2>/dev/null | grep -v '^$' || true)"
+      log="$(journalctl "''${manager[@]}" --no-pager -o cat -n 5 -u "$unit" 2>/dev/null | grep -v '^$' || true)"
 
       body="''${result:-failed}"
       # An `if`, not `[ -n "$log" ] && body=...`: that list returns 1 when the tail is
@@ -1085,7 +1449,7 @@ let
       # out. Keyed synchronous per unit, so a unit that fails, gets fixed and fails again
       # replaces its own banner rather than stacking, while two units still get one each.
       notify-send -a lattice-systemd -u critical -i dialog-error \
-        -h "string:x-canonical-private-synchronous:lattice-failure-$unit" \
+        -h "string:x-canonical-private-synchronous:lattice-failure-''${2:-user}-$unit" \
         "$unit failed" "$body"
     '';
   };
@@ -1137,6 +1501,112 @@ let
     gtk-application-prefer-dark-theme=true
     gtk-font-name=${uiFont}
   '';
+
+  # regular0-7 then bright0-7, read straight off the list ../theme.nix hands the kernel as
+  # vt.default_red/grn/blu, so the greeter's sixteen colours and the console's are one
+  # source. console.colors is already '#'-less, which is also foot's format.
+  greeterAnsi = lib.concatStringsSep "\n" (
+    lib.imap0 (
+      i: colour: "${if i < 8 then "regular" else "bright"}${toString (lib.mod i 8)}=${colour}"
+    ) config.console.colors
+  );
+
+  # The greeter's terminal. tuigreet is untouched by this -- same binary, same config, same
+  # theme block below -- it just draws into foot under cage now rather than into fbcon on
+  # VT1.
+  #
+  # Sizing is the whole reason. fbcon has one framebuffer and one bitmap font for every
+  # output it takes over, so a docked boot shares a single 16x32 cell between the Mac's
+  # 254 dpi panel and the 140 dpi Samsung: 0.13" of glyph on one and 0.26" on the other, the
+  # same image mirrored. No console font setting fixes both at once -- shrinking it for the
+  # monitor shrinks the panel by the same factor, because the font is pixels and the screens
+  # differ in pixel size. A Wayland terminal can size type from each output's own physical
+  # DPI instead, which is what dpi-aware does below.
+  greeterTerminal = ''
+    # foot, as the greeter's terminal: greetd runs cage -> foot -> tuigreet, wired up in the
+    # LOGIN block of this profile. Written from lattice.theme, so it is not the place to keep
+    # an edit -- change it there.
+
+    # 7pt is measured, not picked. fbcon's TER16x32 cell is 32px tall; foot reads the panel
+    # as `eDP-1: 3024x1890+0x0@120Hz 14.03" scale=3, DPI=254.24/338.99 (physical/scaled)`;
+    # and JetBrains Mono's cell comes out 1.345x its pixel size (28.25px of font -> 38px of
+    # cell). So 32px of cell is 23.8px of font is 6.74pt, and 7pt rounds up rather than down.
+    # Measured back, it lands a 15x34 cell against fbcon's 16x32 -- 0.134" a row against
+    # 0.126", so the panel ends a shade larger than the console was, never smaller. dpi-aware
+    # is what makes that a physical figure rather than a pixel one, so the Samsung renders the
+    # same 0.134" from its own ~140 dpi and halves what it shows today.
+    #
+    # dpi-aware has to be `yes` rather than the default `no`, and not because of HiDPI as
+    # such: cage has no scale of its own -- its entire option set is -d -D -h -m -s -v -- so
+    # every output reports scale 1, and sizing by scale would land 7pt at 96 dpi on a 254 dpi
+    # panel. `yes` ignores the scale and reads the output's millimetres, which appledrm does
+    # report for both outputs even though it publishes no EDID for either.
+    #
+    # 7pt is the undocked size, i.e. the panel's. greeterSession overrides it when the greeter
+    # is going to land on an external screen instead, because equal inches is the wrong target
+    # across a desk -- see there.
+    font=${theme.fonts.monospace}:size=7
+    dpi-aware=yes
+
+    # cage maximises its one client and asks it not to draw decorations, so padding is all
+    # the geometry there is to set -- and none of it, because tuigreet centres its own box
+    # inside whatever grid it is handed.
+    pad=0x0
+
+    # foot's own terminfo is not in the system profile, only ncurses' entries are, and the
+    # greeter is the worst place to find that out. tuigreet drives the screen through
+    # crossterm, which writes plain ANSI and never opens terminfo, so the entry only has to
+    # exist for anything else that looks; xterm-256color always does.
+    term=xterm-256color
+
+    # tuigreet is themed by ANSI colour name, so this block is where those names get their
+    # values: `blue` in its theme is the palette's blue, exactly as it was on the console,
+    # which gets these same sixteen through vt.default_red/grn/blu.
+    [colors-dark]
+    background=${hex palette.base}
+    foreground=${hex palette.text}
+    ${greeterAnsi}
+  '';
+
+  # cage's client, and the reason there is a script here at all: the size the greeter wants
+  # depends on which screen cage is about to put it on, and that is knowable before foot
+  # starts but not from inside foot's config.
+  #
+  # dpi-aware sizes type in inches, which made the two screens agree physically and then read
+  # wrong anyway: 7pt is 0.134" a row on the panel at arm's length and the same 0.134" on a
+  # 32" monitor most of a desk away, where it is roughly a third too small. Angle is what the
+  # eye measures, so the monitor wants that 0.134" scaled by the ratio of the viewing
+  # distances -- ~28" against ~20" -- which is 0.19" and, at 1.345 cells per pixel of font,
+  # 10pt. That also lands between the two sizes already ruled out by eye: fbcon's 0.26" on
+  # this monitor was too big, physical parity's 0.13" too small.
+  #
+  # The check is any connected output that is not an internal panel, rather than this Mac's
+  # HDMI-A-1 by name, so the Dell's DP outputs pick the same branch. It reads the same sysfs
+  # the greeter's compositor is about to read; nothing is cached between the two.
+  greeterSession = pkgs.writeShellApplication {
+    name = "lattice-greeter";
+    runtimeInputs = [
+      pkgs.foot
+      pkgs.tuigreet
+    ];
+    text = ''
+      size=7
+      for status in /sys/class/drm/card*-*/status; do
+        case "$status" in *-eDP-*) continue ;; esac
+        if [ "$(cat "$status")" = connected ]; then
+          size=10
+          break
+        fi
+      done
+
+      # -o rather than a second config file: everything else about the two cases is identical,
+      # and a font line is the one thing that differs.
+      exec foot \
+        --config=/etc/greetd/foot.ini \
+        --override="font=${theme.fonts.monospace}:size=$size" \
+        tuigreet
+    '';
+  };
 in
 {
   # Everything below reads config.lattice.theme, so don't rely on branding.nix pulling it in.
@@ -1146,6 +1616,7 @@ in
     ../plymouth.nix
     ../display.nix
     ../weather.nix
+    ../streamdeck.nix
     ../webapps.nix
     ../widevine.nix
     ../phone.nix
@@ -1179,6 +1650,11 @@ in
     # notify-send: without it every script that tries to raise a notification fails
     # silently, mako itself was fine all along.
     libnotify
+    # The same story as hyprsunset above, and for the same reason: mako ships as a
+    # systemd.packages unit, which installs the service and nothing else. makoctl is how a
+    # running mako is driven -- every bind in hyprland.lua goes through it, and Hyprland
+    # execs those with the session PATH, not a wrapper's runtimeInputs.
+    mako
     brightnessctl
     playerctl
     wl-clipboard
@@ -1252,10 +1728,12 @@ in
 
     cycleWallpaper
     sunset
+    idleInhibit
     tailscale
     wifiMenu
     powerMenu
-    windowSwitcher
+    notifyHistory
+    dnd
     screenshot
     screenshotItem
     # The drawing tool itself, for trying a density or a phase before wiring it in.
@@ -1299,11 +1777,11 @@ in
     # rules that let a non-root user talk to the device at all.
     #
     # The buttons are mapped in ~/.config/solaar/rules.yaml, the other half of the same
-    # stow package: config.yaml diverts Middle, Back, Forward and the gesture button away
-    # from their built-in meanings, and rules.yaml says what they do instead (volume on
-    # back/forward, the launcher on middle click, and Hyprland navigation on the gesture
-    # button, whose click reaches lattice-window-switcher above). Rules are read once at
-    # start-up, so editing that file means `systemctl --user restart solaar`.
+    # stow package: config.yaml diverts Back, Forward, Smart Shift and the gesture button
+    # away from their built-in meanings, and rules.yaml says what they do instead (volume
+    # on back/forward, the launcher on Smart Shift, and Hyprland navigation on the gesture
+    # button). Rules are read once at start-up, so editing that file means
+    # `systemctl --user restart solaar`.
     #
     # Most of those rules run commands rather than synthesising keystrokes. Execute needs
     # no privilege, and the uwsm-populated user environment already carries
@@ -1319,8 +1797,7 @@ in
     # can move one workspace per press and no more. Held as a modifier instead, the button
     # feeds the SUPER+scroll and SUPER+drag binds already in hyprland.lua, and workspaces
     # cycle continuously under the wheel. The cost is that a button is diverted as Mouse
-    # Gestures or as a plain key, never both, so the four directional gestures are gone
-    # and the window switcher moved to the Smart Shift button.
+    # Gestures or as a plain key, never both, so the four directional gestures are gone.
     solaar = {
       enable = true;
       userService.enable = true;
@@ -1434,10 +1911,61 @@ in
       };
     };
 
+    # Where the system half lands. The bridge in systemd.services below starts this, and the
+    # only difference from the template above is the scope the reporter is told to look in:
+    # a system unit's Result and journal tail live in the system manager, and asking the
+    # user manager for them yields an empty banner that says nothing but "failed".
+    "lattice-notify-failure-system@" = {
+      description = "Report system unit %i as a desktop notification";
+
+      wants = [ "mako.service" ];
+      after = [ "mako.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${lib.getExe notifyFailure} %i system";
+      };
+    };
+
     hyprpaper.wantedBy = [ "graphical-session.target" ];
     mako.wantedBy = [ "graphical-session.target" ];
     hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
     hyprsunset.wantedBy = [ "graphical-session.target" ];
+
+    # One wallpaper out of the pool per login.
+    #
+    # It hangs off hyprpaper rather than off graphical-session.target, which is not a
+    # stylistic choice: hyprpaper's own unit is `After=graphical-session.target`, so a unit
+    # that the target wants *and* that waits for hyprpaper closes a loop -- the target waits
+    # for the pick, the pick waits for hyprpaper, hyprpaper waits for the target. systemd
+    # spots that at activation and breaks it by deleting a job from the cycle, which is a
+    # warning in the journal and a wallpaper that never changes, not a failure anyone is
+    # told about. Being wanted by hyprpaper instead says the same thing -- pick once the
+    # wallpaper daemon is up -- with no edge back to the target. It also means a hyprpaper
+    # that died and restarted gets a fresh pick rather than coming back on whatever
+    # hyprpaper.conf names, which is the better answer anyway.
+    #
+    # There is no Restart= here on purpose. hyprpaper is Type=simple, so ordering after it
+    # only means its process has been forked and its IPC socket may not be bound yet -- but
+    # riding that out with a restart makes systemd enter the failed state first, and
+    # OnFailure= fires on entry, not on giving up, so every login would raise a banner that
+    # the retry then quietly disproved. The waiting belongs in the command instead, which is
+    # where it is; reaching this unit's OnFailure= now means hyprpaper never arrived at all.
+    lattice-wallpaper-pick = {
+      description = "Pick this session's wallpaper";
+
+      after = [ "hyprpaper.service" ];
+      wantedBy = [ "hyprpaper.service" ];
+      # Stop-propagation only -- PartOf implies no ordering, so it adds no edge back to the
+      # target. It is here so a pick still retrying cannot outlive the session it is for.
+      partOf = [ "graphical-session.target" ];
+      onFailure = [ "lattice-notify-failure@%n.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${lib.getExe cycleWallpaper} random";
+      };
+    };
 
     # systemd user services get a bare default PATH -- coreutils, findutils, grep, sed,
     # systemd -- and notably *not* /run/current-system/sw/bin. Waybar runs its module
@@ -1459,6 +1987,8 @@ in
     # there.
     waybar.path = [
       sunset
+      dnd
+      idleInhibit
       tailscale
       weather
       wifiMenu
@@ -1506,6 +2036,31 @@ in
           "${pkgs.tmux}/bin/tmux kill-server"
         ];
       };
+    };
+  };
+
+  # The same reporter, reached from the system manager. A unit's OnFailure= resolves in the
+  # manager that owns it, so `lattice-notify-failure@%n.service` spelled in a host file's
+  # systemd.services lands here rather than on the user template above -- one spelling for
+  # both scopes, and a unit that moves between them needs no edit at its use site.
+  #
+  # `--machine=winston@.host` is the whole of it: root opens the user manager's own bus by
+  # name and starts the unit there, so neither a uid nor a DBUS_SESSION_BUS_ADDRESS has to
+  # be reconstructed the way the Mac's sleep guard still does for its own banner. Reaching
+  # the session becomes the reporter's problem instead of the failing unit's.
+  #
+  # With nobody logged in there is no bus to open and this fails, leaving only its journal
+  # line -- the same outcome as a banner with no one in front of it. So a boot-time oneshot
+  # gets less out of this than it looks: the case it does cover is that unit failing during
+  # a `nixos-rebuild switch`, where a session is up by definition.
+  #
+  # No OnFailure= of its own, for the same reason the user template has none.
+  systemd.services."lattice-notify-failure@" = {
+    description = "Report system unit %i as a desktop notification";
+
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/systemctl --user --machine=winston@.host start lattice-notify-failure-system@%i.service";
     };
   };
 
@@ -1606,9 +2161,46 @@ in
   ### LOGIN ###
   services.greetd = {
     enable = true;
-    useTextGreeter = true;
-    settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet";
+
+    # cage -> foot -> tuigreet, for the per-screen sizing the console cannot do; see
+    # greeterTerminal above for the arithmetic. cage is a kiosk compositor -- one client,
+    # maximised, no decorations -- and it exits when that client does, so greetd starts the
+    # session on exactly the same signal it did when tuigreet owned the VT. The cost over the
+    # console path is 6.9 MB of store (cage brings wlroots and xwayland; foot brings 976 KB
+    # and nothing that was not already here) and ~50 MB of RSS that is gone before the
+    # desktop starts.
+    #
+    # `-m last` rather than letting cage extend across both outputs, which is what decides
+    # where the greeter appears. Extending puts the window on the first output, eDP-1, and that
+    # is the one output which might be a closed lid -- a greeter nobody can see. `last` follows
+    # whichever output came up last instead, and a docked boot confirms that is the HDMI one:
+    # the panel is already live out of simpledrm while dcp debounces its HPD for 500ms. The
+    # panel then stays dark while docked, which is the other half of why greeterSession sizes
+    # for the external screen when one is attached -- the greeter is on exactly one screen,
+    # never both, so there is one right size rather than a compromise between two.
+    #
+    # `-s` keeps VT switching, which is the way out if the greeter ever comes up blank; `-d`
+    # stops cage asking foot for decorations it would then have to draw.
+    #
+    # No useTextGreeter: that option only adjusts greetd's own TTY plumbing so systemd cannot
+    # scribble over a TUI sharing VT1 with it. The TUI is inside a compositor now, and there
+    # is nothing left on the VT to protect.
+    settings.default_session.command = lib.concatStringsSep " " [
+      "${pkgs.cage}/bin/cage"
+      "-s"
+      "-d"
+      "-m"
+      "last"
+      "--"
+      (lib.getExe greeterSession)
+    ];
   };
+
+  # Beside tuigreet's own config below rather than in the store path of the command above, so
+  # a size can be tried with `foot --config=/etc/greetd/foot.ini -o font=...` from a terminal
+  # before it is committed to a boot -- and because dpi-aware sizes in inches, a window opened
+  # that way on a screen renders at exactly the size the greeter will on that same screen.
+  environment.etc."greetd/foot.ini".text = greeterTerminal;
 
   environment.etc."tuigreet/config.toml".source = toml.generate "tuigreet.toml" {
     display = {
@@ -1629,7 +2221,10 @@ in
       reboot = "systemctl reboot";
     };
 
-    # tuigreet takes ANSI colour names, not hex, so the accent maps to its nearest name.
+    # tuigreet takes ANSI colour names, not hex, so the accent maps to its nearest name. What
+    # those names resolve to is foot's [colors-dark] block above, which is ../theme.nix's
+    # palette -- so `blue` is the palette's blue rather than a terminal's idea of blue, and a
+    # re-accent carries through here without touching this block.
     theme = {
       container = "black";
       border = theme.accentAnsi;
@@ -1743,6 +2338,20 @@ in
         on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = "off" })'
         on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = "on" })'
       }
+
+      # The Stream Deck's backlight, on the same timeout as the lock above so the two go
+      # dark together. It is only the backlight: streamdeck-ui knows nothing about the lock
+      # screen, so its keys still work while the session is locked -- behind hyprlock's
+      # input grab, where the windows they open cannot be seen or typed into.
+      #
+      # This rather than streamdeck-ui's own display_timeout, which is off in
+      # modules/nixos/streamdeck.nix: its dimmer eats the first press after it dims, and a
+      # key that does nothing the first time is worse than a lit deck.
+      listener {
+        timeout = 300
+        on-timeout = lattice-deck dim
+        on-resume = lattice-deck wake
+      }
     '';
 
     "xdg/hypr/hyprlock.conf".text = ''
@@ -1750,9 +2359,18 @@ in
         hide_cursor = true
       }
 
+      # Two blocks for the same reason there are two of every wallpaper: an image sized for
+      # the desk monitor has too small a mark on the panel. The generic one comes first and
+      # the panel's second, so on eDP-1 the later block is the one left showing.
       background {
         monitor =
-        path = ${wallpaper}
+        path = ${currentDesk}
+        color = rgb(${hex palette.base})
+      }
+
+      background {
+        monitor = eDP-1
+        path = ${currentPanel}
         color = rgb(${hex palette.base})
       }
 

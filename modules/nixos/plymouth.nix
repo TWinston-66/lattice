@@ -135,6 +135,9 @@ in
     ];
   };
 
-  # greetd waits on plymouth-quit-wait.service by default, so the splash stays up until
-  # tuigreet is ready to draw, and the screen goes from splash straight to the greeter.
+  # greetd waits on plymouth-quit-wait.service by default, so the splash stays up until the
+  # greeter is ready to draw. That handoff is one step longer than it used to be: greetd now
+  # starts cage, which modesets and then launches foot and tuigreet inside it (see the LOGIN
+  # block in profiles/graphical.nix for why), so there is a compositor's startup between the
+  # splash going and the first character appearing rather than just a VT switch.
 }

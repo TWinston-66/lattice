@@ -84,9 +84,37 @@ in
   #   2     -> 1512x945  127 dpi        2.25  -> 1344x840  113 dpi
   #   2.1   -> 1440x900  121 dpi        2.625 -> 1152x720   97 dpi (nominal)
   #
-  # `hyprctl eval 'hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto",
-  # scale = 2.1 })'` tries another live; it reverts on the next reload.
-  lattice.display.monitors."eDP-1".scale = "2.25";
+  # `hyprctl eval 'hl.monitor({ output = "eDP-1", mode = "preferred", position = "0x0",
+  # scale = 2.1 })'` tries another live; it reverts on the next reload. Carry the position
+  # along when trying one: a scale is a logical size, and the size is what the offset below
+  # is measured against.
+  # Measured off `hyprctl monitors -j`: the panel is 3024x1890 at scale 2.25 and the Samsung
+  # 3840x2160 at 1.5, so their logical sizes are 1344x840 and 2560x1440. Both canvases are
+  # those, and each scale is the monitor's own -- so every wallpaper rasterises to exactly
+  # its screen's pixels, with nothing left for hyprpaper to magnify.
+  lattice.display.canvas = {
+    panel = {
+      width = 1344;
+      height = 840;
+      scale = 2.25;
+    };
+    desk = {
+      width = 2560;
+      height = 1440;
+      scale = 1.5;
+    };
+  };
+
+  lattice.display.monitors."eDP-1" = {
+    scale = "2.25";
+
+    # Pinned to the origin rather than left at "auto", because auto is a placement pass
+    # rather than a rule: it drops each output to the right of everything already laid out.
+    # The moment the Samsung below takes a position of its own the panel is placed after it
+    # and lands at x=3904, on the far side of the desk from where it is sitting. Pinning
+    # either output means pinning both.
+    position = "0x0";
+  };
 
   # The Samsung on the desk. Pinned per-host rather than left to the desc-keyed rule in
   # ~/.dotfiles, so it can be tuned against this laptop without dragging the Dell along --
@@ -109,9 +137,42 @@ in
   #   1.666667 -> 2304x1296  (35% larger)
   #
   # `hyprctl eval 'hl.monitor({ output = "desc:Samsung Electric Company U32R59x", mode =
-  # "preferred", position = "auto", scale = 1.6 })'` tries another live; it reverts on the
-  # next reload.
-  lattice.display.monitors."desc:Samsung Electric Company U32R59x".scale = "1.5";
+  # "preferred", position = "1344x-1020", scale = 1.6 })'` tries another live; it reverts on
+  # the next reload. A different scale wants a different offset -- see below.
+  lattice.display.monitors."desc:Samsung Electric Company U32R59x" = {
+    scale = "1.5";
+
+    # To the right of the panel, and lifted so the seam matches the desk rather than the
+    # pixels. Measured: this monitor's bottom edge sits 4.5" above the desk, the panel's
+    # bottom 1", and the panel's top edge 3.5" above this monitor's bottom. Those three
+    # agree -- they put the panel's visible height at 7.0" against the 7.44" its 189mm
+    # would give flat, the lid being tilted back ~20 degrees -- and they say the panel
+    # hangs 3.5" below this monitor with only its top 3.5" having screen beside it at all.
+    #
+    # No offset maps that exactly, because the two run at different logical densities by
+    # construction: 840px over 7.0" is 120 px/inch on the panel, against 1440px over 15.35"
+    # (390mm) = 94 px/inch here. That gap is the apparent-size choice above, not a mistake,
+    # so an anchor is the most there is to have -- roughly 26px of drift per inch away from
+    # whichever point is anchored. -1020 anchors the shared band at 3.5" measured in the
+    # panel's inches, which is also where the two centres line up. The alternatives:
+    #
+    #   -1110  puts the panel's top edge at its true 8.0" instead, exact on this monitor's
+    #          side rather than the panel's; 328px of shared band rather than 420
+    #    -600  bottom edges flush, all 840px of the panel adjoining, at the cost of
+    #          claiming its top edge is 13.4" off the desk rather than 8.0"
+    #
+    # Below y=420 the panel's right edge is a wall the pointer stops at, which is true of
+    # the desk too: right of there is this monitor's stand. The offset rides on this output
+    # rather than on the panel so that undocked the panel still holds the origin.
+    position = "1344x-1020";
+  };
+
+  # Notification banners follow the Samsung when it is there and stay on the panel when it
+  # is not -- see lattice.display.notificationOutput in modules/nixos/display.nix for why an
+  # absent output needs no fallback of its own. Spelled as the connector rather than by
+  # description because mako has no desc: matching; this is the built-in HDMI port, so it
+  # changes if the Samsung is ever driven off USB-C DisplayPort instead.
+  lattice.display.notificationOutput = "HDMI-A-1";
 
   # The built-in HDMI port lights that Samsung exactly once per boot. Every replug after
   # the first leaves it dark *and* stalls the whole desktop, ~10s per frame, for as long as
@@ -193,23 +254,50 @@ in
       };
       preferencesStatus = "default";
     };
-    # Nothing compensates on this side yet: Thunderbird loses the pin's shrink and so draws
-    # larger on this panel than it used to, until mail.uidensity -- whose values are ordered
-    # differently from browser.uidensity -- and a stylesheet of its own are worked out.
+    # The same two proportional levers as Firefox, because the absolute pin is just as wrong
+    # here. Note mail.uidensity counts the other way round from browser.uidensity: its
+    # UIDensity.sys.mjs is MODE_COMPACT 0, MODE_NORMAL 1, MODE_TOUCH 2, so compact is 0
+    # where Firefox's compact is 1. Getting that backwards asks for normal density and looks
+    # like the pref having no effect at all.
+    #
+    # toolkit.legacyUserProfileCustomizations.stylesheets cannot come along here, which is
+    # the asymmetry with the firefox block above. This module funnels `preferences` into the
+    # enterprise policy engine, and Policies.sys.mjs filters every pref against an
+    # allowlist: Firefox's carries that exact pref name as a special case, while
+    # Thunderbird's has only prefix entries and no `toolkit.` among them. A pref that fails
+    # the filter is dropped with a console message and nothing else -- no build error, no
+    # about:config entry -- so it has to be set from the profile's user.js instead, below.
     thunderbird = {
-      preferences."layout.css.devPixelsPerPx" = "-1";
+      preferences = {
+        "layout.css.devPixelsPerPx" = "-1";
+        "mail.uidensity" = 0;
+      };
       preferencesStatus = "default";
     };
   };
 
-  # The NixOS firefox module has no userChrome option and there is no home-manager here, so
-  # the stylesheet is linked into the profile directly. That profile directory name is
-  # generated at first run and is derivable from nothing in this file: a new profile means
-  # this path has to be updated, and until it is the stylesheet stops applying silently.
+  # Neither the NixOS firefox nor the thunderbird module has a userChrome option and there is
+  # no home-manager here, so the stylesheets are linked into the profiles directly. Both
+  # profile directory names are generated at first run and are derivable from nothing in this
+  # file: a new profile means the path has to be updated, and until it is the stylesheet
+  # stops applying silently.
   systemd.user.tmpfiles.rules =
     let
-      profile = "%h/.config/mozilla/firefox/uk8qrdih.default";
-      userChrome = pkgs.writeText "lattice-firefox-userChrome.css" ''
+      linkChrome = profile: css: [
+        "d ${profile}/chrome 0755 - - -"
+        "L+ ${profile}/chrome/userChrome.css - - - - ${css}"
+      ];
+
+      # Read on every startup and applied to the user branch, so it does the job the policy
+      # allowlist refuses for Thunderbird. Only for the pref that has no other route --
+      # anything settable through the module belongs there, where about:config can still
+      # override it for an evening.
+      thunderbirdUserJs = pkgs.writeText "lattice-thunderbird-user.js" ''
+        user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+      '';
+
+      firefoxProfile = "%h/.config/mozilla/firefox/uk8qrdih.default";
+      firefoxUserChrome = pkgs.writeText "lattice-firefox-userChrome.css" ''
         /* Chrome font. Much of the chrome -- the vertical tab strip among it -- draws with
            `font: menu`, which resolves to the GTK font (gtk-font-name, Noto Sans 9 -> 12px)
            and resets font-size as part of the shorthand, so a smaller size inherited from
@@ -228,11 +316,27 @@ in
           --tab-min-height: 24px !important;
         }
       '';
+
+      thunderbirdProfile = "%h/.config/thunderbird/7uftjt3v.default";
+      thunderbirdUserChrome = pkgs.writeText "lattice-thunderbird-userChrome.css" ''
+        /* Chrome font. messenger.css sets no font-size of its own, so the whole window
+           inherits `font: message-box` from global-shared.css's :root -- the GTK font again
+           (Noto Sans 9 -> 12px), and again a shorthand that resets font-size, so :root is
+           where it has to be overridden rather than somewhere further down. Compact
+           uidensity above only rewrites --space-base (6px -> 3px in spacings.css), which is
+           padding and nothing else; the type stays 12px until this rule lands.
+
+           This reaches every chrome document in the window -- the 3-pane, the spaces
+           toolbar, dialogs -- which is the point. Message bodies are content documents and
+           are untouched by userChrome.css, so reading size is still Ctrl+= / View > Zoom. */
+        :root {
+          font-size: 11px !important;
+        }
+      '';
     in
-    [
-      "d ${profile}/chrome 0755 - - -"
-      "L+ ${profile}/chrome/userChrome.css - - - - ${userChrome}"
-    ];
+    linkChrome firefoxProfile firefoxUserChrome
+    ++ linkChrome thunderbirdProfile thunderbirdUserChrome
+    ++ [ "L+ ${thunderbirdProfile}/user.js - - - - ${thunderbirdUserJs}" ];
 
   ### KEYBOARD ###
   # The built-in keyboard is bound to hid-apple (HID 05AC:0352), which can swap the two
@@ -400,6 +504,11 @@ in
   # Powering off rather than merely refusing is the point of this. A bare refusal leaves the
   # lid closed over a fully awake desktop session, which is the same bag and rather more
   # heat than the hang produced.
+  #
+  # Deliberately without the onFailure= the other system units here carry. This one ends in
+  # the failed state *by design* -- the exit 1 at the bottom is how sleep.target is failed --
+  # so a failure reporter would fire on every successful refusal, and it would fire second,
+  # behind the banner the script already raises itself.
   systemd.services.${sleepGuard.unit} = {
     description = "Power off instead of sleeping on a kernel that has already Oopsed";
 
@@ -494,6 +603,11 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "tailscaled.service" ];
     wants = [ "tailscaled.service" ];
+    # A pill that refuses to toggle is the symptom, and it points at the bar rather than
+    # here. At boot there is no session to notify and only the journal line lands; the
+    # failure this actually catches is the one during a `nixos-rebuild switch`, which is
+    # when the ExecStart changes and so when it is most likely to break.
+    onFailure = [ "lattice-notify-failure@%n.service" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;

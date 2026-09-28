@@ -63,6 +63,19 @@ let
         "Audio"
       ];
     }
+    {
+      id = "1974c9ee-1d00-4a81-881d-66f7f14adb6d";
+      name = "YouTube";
+      url = "https://www.youtube.com";
+      # www, not the bare domain: youtube.com 301s to it, and a scope registered on the
+      # domain the redirect leaves behind is a scope the window never matches again.
+      hostname = "www.youtube.com";
+      icon = "youtube";
+      categories = [
+        "AudioVideo"
+        "Video"
+      ];
+    }
     # Papirus ships one icloud.svg and no per-app variants, so both iCloud apps would wear
     # the same mark. Generic-but-distinct reads better in rofi than correct-but-identical.
     #
@@ -92,6 +105,12 @@ let
     }
   ];
 
+  # The argv Firefox writes for a tab pinned by hand, minus -profile (see the note on
+  # `apps` above). Both the .desktop entries below and the Stream Deck's keys launch through
+  # this, so an app cannot end up reachable from rofi under one command and from the deck
+  # under another -- and the ids stay written down exactly once, here.
+  launch = { id, url, ... }: "firefox -taskbar-tab ${id} -new-window ${url} -container 0";
+
   webApp =
     {
       id,
@@ -105,7 +124,7 @@ let
       inherit icon categories;
       name = "lattice-webapp-${id}";
       desktopName = name;
-      exec = "firefox -taskbar-tab ${id} -new-window ${url} -container 0";
+      exec = launch { inherit id url; };
       # Firefox names its own entries firefox.webapp-<uuid> and takes the Wayland app_id
       # from the glib prgname, so these windows most likely report app_id "firefox" like
       # any other. Check with `hyprctl clients` before writing a windowrule against them.
@@ -232,33 +251,50 @@ let
   };
 in
 {
-  # Off by default on Linux as of Firefox 155 -- `pref("browser.taskbarTabs.enabled",
-  # false)` in the shipped firefox.js. Status stays whatever the host set for its other
-  # Firefox prefs ("default" on both), so this is still reachable from about:config.
-  programs.firefox.preferences."browser.taskbarTabs.enabled" = true;
+  options.lattice.webapps.apps = lib.mkOption {
+    type = lib.types.listOf (lib.types.attrsOf lib.types.str);
+    readOnly = true;
+    default = map (app: {
+      inherit (app) id name url;
+      launch = launch app;
+    }) apps;
+    defaultText = lib.literalExpression "[ { id, name, url, launch } ... ]";
+    description = ''
+      The web apps, for anything that wants to launch one without knowing how. `launch` is
+      the whole argv, which is what a launcher that has no shell to run it in needs -- see
+      modules/nixos/streamdeck.nix, whose button commands are split rather than interpreted.
+    '';
+  };
 
-  environment.systemPackages = [
-    webAppIcons
-    # On PATH too, so the merge can be re-run by hand after editing `apps` without
-    # waiting for the next session.
-    seedRegistry
-  ]
-  ++ map webApp apps;
+  config = {
+    # Off by default on Linux as of Firefox 155 -- `pref("browser.taskbarTabs.enabled",
+    # false)` in the shipped firefox.js. Status stays whatever the host set for its other
+    # Firefox prefs ("default" on both), so this is still reachable from about:config.
+    programs.firefox.preferences."browser.taskbarTabs.enabled" = true;
 
-  # At session start rather than at activation: the registry lives in the user's home, and
-  # this is the moment the browser is reliably not running. It is a oneshot with no
-  # ordering against anything but the target -- nothing else reads the file, and Firefox
-  # cannot have opened it yet.
-  systemd.user.services.lattice-webapp-seed = {
-    description = "Seed Firefox's Taskbar Tabs registry with lattice's web apps";
-    wantedBy = [ "graphical-session.target" ];
-    after = [ "graphical-session.target" ];
-    # A oneshot that failed leaves no trace in the UI except web apps that are missing from
-    # rofi, which is easy to read as never having added them.
-    onFailure = [ "lattice-notify-failure@%n.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = lib.getExe seedRegistry;
+    environment.systemPackages = [
+      webAppIcons
+      # On PATH too, so the merge can be re-run by hand after editing `apps` without
+      # waiting for the next session.
+      seedRegistry
+    ]
+    ++ map webApp apps;
+
+    # At session start rather than at activation: the registry lives in the user's home, and
+    # this is the moment the browser is reliably not running. It is a oneshot with no
+    # ordering against anything but the target -- nothing else reads the file, and Firefox
+    # cannot have opened it yet.
+    systemd.user.services.lattice-webapp-seed = {
+      description = "Seed Firefox's Taskbar Tabs registry with lattice's web apps";
+      wantedBy = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      # A oneshot that failed leaves no trace in the UI except web apps that are missing from
+      # rofi, which is easy to read as never having added them.
+      onFailure = [ "lattice-notify-failure@%n.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = lib.getExe seedRegistry;
+      };
     };
   };
 }

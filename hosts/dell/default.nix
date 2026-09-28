@@ -138,6 +138,11 @@
       wantedBy = hibernating;
       before = hibernating;
       unitConfig.StopWhenUnneeded = true;
+      # Both directions swallow their own errors below, so this should never fire -- which
+      # is the point of having it: if it ever does, modprobe itself is missing or the unit
+      # was rewritten, and a hibernate that quietly stopped unloading the module costs a
+      # flat battery and 8.2G of writes to discover the usual way.
+      onFailure = [ "lattice-notify-failure@%n.service" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -157,6 +162,11 @@
     wantedBy = [ "multi-user.target" ];
     after = [ "tailscaled.service" ];
     wants = [ "tailscaled.service" ];
+    # A pill that refuses to toggle is the symptom, and it points at the bar rather than
+    # here. At boot there is no session to notify and only the journal line lands; the
+    # failure this actually catches is the one during a `nixos-rebuild switch`, which is
+    # when the ExecStart changes and so when it is most likely to break.
+    onFailure = [ "lattice-notify-failure@%n.service" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
