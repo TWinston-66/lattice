@@ -76,6 +76,28 @@ let
         "Video"
       ];
     }
+    # No apple-tv mark in Papirus and no Nerd Font one either, so this wears the generic
+    # video-player icon rather than a stand-in drawn here -- the same call as the two iCloud
+    # apps below, and there is nothing on the row to confuse it with.
+    #
+    # Widevine again, as with Apple Music above: without modules/nixos/widevine.nix this is
+    # an error page on the Mac rather than a window. Unlike Music, signing in *is* a
+    # navigation to idmsa.apple.com -- which stays in the window anyway, because navigation
+    # scope compares base domains and that one is apple.com either way. The exact-hostname
+    # check that keeps the two iCloud apps apart does not apply to it.
+    {
+      id = "b36782de-012b-408f-951e-46db7bee11de";
+      name = "Apple TV";
+      # tv.apple.com/us redirects to the bare root, so the root is what gets registered --
+      # a start URL that 301s is a start URL the scope has to be written against twice.
+      url = "https://tv.apple.com/";
+      hostname = "tv.apple.com";
+      icon = "multimedia-video-player";
+      categories = [
+        "AudioVideo"
+        "Video"
+      ];
+    }
     # Papirus ships one icloud.svg and no per-app variants, so both iCloud apps would wear
     # the same mark. Generic-but-distinct reads better in rofi than correct-but-identical.
     #

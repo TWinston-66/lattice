@@ -64,9 +64,10 @@ lattice-art wallpaper --density 1.4 > wallpaper.svg   # live palette
 lattice-art mark --phase 0.3                          # one frame of the splash
 ```
 
-The graphical profile builds three wallpapers; `lattice-wallpaper [next|prev|list|<index>]`
-switches between them. Boot is silent — splash straight through to the greeter,
-with `journalctl -b` keeping everything.
+The graphical profile builds a pool of them, one per accent in the palette;
+`lattice-wallpaper [next|prev|random|list|current|<index>]` switches between them, and the
+bar's wallpaper pill cycles on a click or opens a picker on a right-click. Boot is silent
+— splash straight through to the greeter, with `journalctl -b` keeping everything.
 
 ## Adding a host
 
