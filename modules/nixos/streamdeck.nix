@@ -29,8 +29,6 @@ let
     # as mush at arm's length, and the mute key below is the one that should wear a speaker.
     volumeDown = "󰝞"; # md-volume_minus
     volumeUp = "󰝝"; # md-volume_plus
-    rewind = "󰴪"; # md-rewind_10
-    forward = "󰵱"; # md-fast_forward_10
     awake = "󰅶"; # md-coffee
     idle = "󰾪"; # md-coffee_off
     sound = "󰖀"; # md-volume_medium
@@ -39,6 +37,10 @@ let
     micOff = "󰍭"; # md-microphone_off
     apple = "󰀵"; # md-apple
     youtube = "󰗃"; # md-youtube
+    # Not md-apple, which the Apple Music key already wears one row over -- and there is no
+    # md-apple_tv to have instead. A plain set reads better at arm's length than the same
+    # mark twice.
+    television = "󰔂"; # md-television
     mail = "󰇮"; # md-email
     calendar = "󰸗"; # md-calendar_month
     checklist = "󰝖"; # md-format_list_checks
@@ -60,6 +62,7 @@ let
     saver = "󰾆"; # md-speedometer_slow
     lock = "󰌾"; # md-lock
     rebuild = "󰜉"; # md-restart
+    refresh = "󰑐"; # md-refresh
     power = "󰐥"; # md-power
 
     dashboard = "󰕮"; # md-view_dashboard
@@ -408,7 +411,26 @@ let
         }
       ];
     }
-    (blank 3)
+    {
+      # The media page's one free key, and the right page for it: everything this mends is
+      # on this page. Dim rather than plain because it is not part of the transport row it
+      # sits in -- it is the key you only reach for when something has gone wrong, and it
+      # cuts whatever is playing on the way to fixing it.
+      #
+      # One press, not armed. The arm mechanism is a single key's (see the throw in this
+      # module), it belongs to the rebuild, and a recovery key that wants confirming is a
+      # recovery key you are fighting while the audio is already broken.
+      index = 3;
+      cmd = "lattice-deck audio-restart";
+      faces = [
+        {
+          icon = "audio-restart";
+          glyph = g.refresh;
+          label = "restart";
+          tone = "dim";
+        }
+      ];
+    }
     {
       # Through swayosd rather than straight at wireplumber, so a volume change from the deck
       # puts the same OSD on screen as the one from the keyboard.
@@ -494,27 +516,21 @@ let
       ];
     }
     {
+      # Beside YouTube because the three of them are the same kind of key: a window onto a
+      # service, not a control over whatever is already playing.
       index = 12;
-      cmd = "${bin pkgs.playerctl "playerctl"} position 10-";
+      cmd = webapp "Apple TV";
       faces = [
         {
-          icon = "rewind";
-          glyph = g.rewind;
-          label = "-10";
+          icon = "apple-tv";
+          glyph = g.television;
+          label = "apple tv";
         }
       ];
     }
-    {
-      index = 13;
-      cmd = "${bin pkgs.playerctl "playerctl"} position 10+";
-      faces = [
-        {
-          icon = "forward";
-          glyph = g.forward;
-          label = "+10";
-        }
-      ];
-    }
+    # What the second seek key left behind. Blank rather than dropped, so the corner keeps
+    # its slice of the lattice instead of going dark -- see `blank` above.
+    (blank 13)
   ];
 
   # A Home Assistant device, as a toggle key: the same two-face shape as the local toggles
@@ -797,6 +813,24 @@ let
     else
       "${toString (lib.head tagged).page} ${toString (lib.head tagged).index}";
 
+  # Every key whose face is a Home Assistant device: what sync_home repaints, and -- through
+  # the page they all sit on -- what makes switching to that page re-read them.
+  haButtons = lib.filter (button: button ? haEntity) buttons;
+
+  # The page those keys are on. Unlike a toggle pressed here, a light switched from a phone,
+  # a motion automation or the dial tells this machine nothing at all, so a key can sit wrong
+  # for as long as five minutes -- the sync timer is the only thing that would catch it.
+  # Re-reading on the way in costs three GETs and makes the keys right whenever they are
+  # actually being looked at, which is the only time it matters.
+  haPage =
+    let
+      pagesWith = lib.unique (map (button: button.page) haButtons);
+    in
+    if lib.length pagesWith != 1 then
+      throw "lattice.streamdeck: Home Assistant keys are spread over ${toString (lib.length pagesWith)} pages; sync_home assumes one."
+    else
+      toString (lib.head pagesWith);
+
   # What both units below run their children with. A launcher's PATH is the session's, and
   # that is the whole difference between this and waybar.path in profiles/graphical.nix:
   # waybar calls a fixed handful of commands that can be listed, while the deck's keys open
@@ -895,6 +929,19 @@ let
         esac
       }
 
+      # A sink's description rather than its node name, for the banners: "MacBook Pro J414
+      # Speakers" is what the key changed, `audio_effect.j414-convolver` is only how it is
+      # spelled. `pactl list` is the listing that carries both, and the pairing is
+      # positional -- Description follows the Name it belongs to -- so the name is held
+      # until its description arrives. Falls back to the node name, which is better than an
+      # empty banner if the sink went away between the switch and the read.
+      sink_label() {
+        pactl list sinks | awk -v want="$1" '
+          /^\tName: /        { name = $2 }
+          /^\tDescription: / { sub(/^\tDescription: /, ""); if (name == want) { print; exit } }
+        ' | grep . || printf '%s' "$1"
+      }
+
       sync_mute() {
         if wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q MUTED; then
           face ${at "mute"} 1
@@ -957,7 +1004,7 @@ let
           # indent the line above it ends up at.
           lib.concatMapStringsSep "\n  " (
             button: "home_face ${button.haEntity} ${toString button.page} ${toString button.index}"
-          ) (lib.filter (button: button ? haEntity) buttons)
+          ) haButtons
         }
       }
 
@@ -1021,6 +1068,12 @@ let
         # now; this is here for a page switch from anywhere else.
         deck -a SET_PAGE -p "$target"
         sync_rail
+        # See the note on haPage in modules/nixos/streamdeck.nix: the house is the one
+        # subject here that changes without telling us, so its page is re-read on the way in
+        # rather than only every five minutes.
+        if [ "$target" = ${haPage} ]; then
+          sync_home
+        fi
         ;;
 
       play)
@@ -1064,13 +1117,65 @@ let
           [ -n "$stream" ] || continue
           pactl move-sink-input "$stream" "$next" 2>/dev/null || true
         done < <(pactl list short sink-inputs | cut -f1)
-        # The human-readable half of the same listing, so the banner names the speakers and
-        # not their node name.
-        label="$(pactl list sinks | awk -v want="$next" '
-          /^\tName: /        { name = $2 }
-          /^\tDescription: / { sub(/^\tDescription: /, ""); if (name == want) { print; exit } }
-        ')"
-        notify-send -a lattice-deck -i audio-card "Audio output" "''${label:-$next}"
+        notify-send -a lattice-deck -i audio-card "Audio output" "$(sink_label "$next")"
+        ;;
+
+      # The recovery for the one way the audio stack here gets wedged. Moving a live stream
+      # off the MacBook's speakers -- which the `audio` key above does, and so does the
+      # bar's output picker -- takes the speakers with it: the ALSA node behind
+      # asahi-audio's convolver hangs up ("poll fd error/hangup (card removed?)" in
+      # wireplumber's journal), the software-dsp filter in front of it goes too, and the
+      # speakers stop being a device anything can switch back to.
+      #
+      # Restarting wireplumber is not enough. The node that died belongs to the pipewire
+      # daemon, so that is what has to come back; wireplumber and pipewire-pulse follow it
+      # because they are its clients and hold handles that the restart invalidates.
+      #
+      # swayosd is collateral and easy to miss: swayosd-server resolves the default sink
+      # once and holds it, so a pipewire that came back underneath leaves every
+      # --output-volume call a silent no-op. Separate, and tolerated, because it is not
+      # part of the fix -- a host without the OSD should still be able to mend its audio.
+      audio-restart)
+        notify-send -a lattice-deck -i audio-card \
+          -h string:x-canonical-private-synchronous:lattice-deck-audio \
+          "Audio" "Restarting PipeWire"
+
+        systemctl --user restart pipewire pipewire-pulse wireplumber
+        systemctl --user restart swayosd || true
+
+        # The units are back as soon as they have started, which is a good deal before
+        # PipeWire has re-enumerated the hardware and WirePlumber has picked what to route
+        # to -- so without this the banner names nothing and the two key faces below sync
+        # off a device list that is still empty.
+        #
+        # What it waits for is a *named* default, not merely a sink existing: in the gap
+        # between the two, `pactl get-default-sink` answers "@DEFAULT_SINK@", which is the
+        # placeholder for "whatever the server picks" and not a node at all. It reads
+        # straight through sink_label, which finds no Name to match and falls back to
+        # printing what it was given -- so the first version of this put the literal string
+        # @DEFAULT_SINK@ on screen as the name of the speakers.
+        #
+        # Ten seconds is a ceiling rather than a wait; it breaks in well under one.
+        default=""
+        for _ in $(seq 40); do
+          default="$(pactl get-default-sink 2>/dev/null || true)"
+          case "$default" in
+          "" | "@DEFAULT_SINK@") default=""; sleep 0.25 ;;
+          *) break ;;
+          esac
+        done
+
+        if [ -n "$default" ]; then
+          body="$(sink_label "$default")"
+        else
+          body="restarted, with nothing to play through yet"
+        fi
+        notify-send -a lattice-deck -i audio-card \
+          -h string:x-canonical-private-synchronous:lattice-deck-audio \
+          "Audio" "$body"
+
+        # Whatever came back brings its own mute state, and both faces draw one.
+        sync mute mic
         ;;
 
       profile)
@@ -1137,6 +1242,7 @@ let
         sync [--wait] [reading...]   repaint the live keys; everything, by default
         page <index>                 switch page and light its rail key
         play | mute | mic | audio    media and audio, with the key repainted after
+        audio-restart                restart PipeWire when the speakers vanish
         profile                      cycle the power profile, as the bar's bubble does
         dim | wake                   the deck's own backlight
         arm | rebuild                the two halves of the rebuild key

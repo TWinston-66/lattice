@@ -14,6 +14,27 @@ let
   # hyprlang writes colours bare, without the leading '#'.
   hex = lib.removePrefix "#";
 
+  # Blend two palette colours channelwise; `keep` is how much of the first survives. Only
+  # the lock screen needs this, to sit the input field's outline between the wallpaper's
+  # accent and the surface behind it -- see the hyprlock block at the bottom of this file.
+  mixHex =
+    keep: a: b:
+    let
+      channel = s: n: lib.fromHexString (builtins.substring n 2 (hex s));
+      blend =
+        n:
+        let
+          v = builtins.floor ((keep * channel a n) + ((1.0 - keep) * channel b n) + 0.5);
+          h = lib.toLower (lib.toHexString (lib.min 255 v));
+        in
+        if builtins.stringLength h < 2 then "0" + h else h;
+    in
+    lib.concatMapStrings blend [
+      0
+      2
+      4
+    ];
+
   # The pool the session picks from. Every entry is its own PNG in the store and
   # `lattice-wallpaper random` draws one per login, so the desktop is a different member of
   # one family each session rather than the same image forever.
@@ -136,6 +157,32 @@ let
   panelWallpapers = wallpapersFor screens.panel;
   deskWallpapers = wallpapersFor screens.desk;
 
+  # What the pool's members are called, for `lattice-wallpaper list` and for the picker.
+  # An entry carries colours rather than a name -- the generator is only ever handed the
+  # nine roles it draws with -- so the name is read back out of the palette the hex came
+  # from instead of being written beside each entry, which would be a second place to edit
+  # when one is re-tinted. Entry 0 names no accent at all, being the live accent drawn
+  # plain, so it resolves through accentHex and lands on that colour's name like the rest.
+  poolAccents = map (
+    entry:
+    let
+      value = entry.accent or theme.accentHex;
+    in
+    {
+      hex = value;
+      name = lib.findFirst (n: palette.${n} == value) "accent" (lib.attrNames palette);
+
+      # What the lock screen's input field takes from this entry. `outer` is the resting
+      # outline, half of the entry's own accent and half the surface it sits on: the full
+      # accent matches the mark exactly and then competes with it for the one bright thing
+      # on the screen, and a flat grey matches nothing. `check` is the flash while the
+      # password is being verified, and stays at full strength because a moment of feedback
+      # should read as one.
+      outer = mixHex 0.5 value palette.surface0;
+      check = entry.accentAlt or theme.accentAltHex;
+    }
+  ) pool;
+
   # What hyprpaper.conf and the boot-time default name: the plain drawing at desk size.
   wallpaper = lib.head deskWallpapers;
 
@@ -148,6 +195,18 @@ let
   currentDir = "${config.users.users.winston.home}/.cache/lattice";
   currentPanel = "${currentDir}/wallpaper-panel.png";
   currentDesk = "${currentDir}/wallpaper-desk.png";
+  currentLockAccent = "${currentDir}/lock-accent.conf";
+
+  # What that file holds before the first pick of the session has landed. The pool's entry
+  # 0 is the live accent drawn plain, so this is that entry's pair and not a fourteenth
+  # colour: the lock screen before a pick looks like the lock screen after picking the
+  # plain one. Shipped through tmpfiles rather than left to hyprlock's own default so that
+  # the file always exists -- a `source` with nothing behind it is not fatal, hyprlock
+  # carries on and uses the definition above it, but it logs a config error on every lock.
+  defaultLockAccent = pkgs.writeText "lattice-lock-accent.conf" ''
+    $lockOuter = rgb(${hex (mixHex 0.5 theme.accentHex palette.surface0)})
+    $lockCheck = rgb(${hex theme.accentAltHex})
+  '';
 
   # Switching between them, for a bind in ~/.dotfiles and for the login pick below.
   # hyprpaper 0.8 loads an image when it is asked for -- `preload` is gone -- so the pool
@@ -170,6 +229,9 @@ let
     text = ''
       panel=(${lib.concatStringsSep " " panelWallpapers})
       desk=(${lib.concatStringsSep " " deskWallpapers})
+      names=(${lib.concatMapStringsSep " " (accent: accent.name) poolAccents})
+      outers=(${lib.concatMapStringsSep " " (accent: hex accent.outer) poolAccents})
+      checks=(${lib.concatMapStringsSep " " (accent: hex accent.check) poolAccents})
       state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-wallpaper"
       count=''${#desk[@]}
 
@@ -195,12 +257,20 @@ let
         ;;
       list)
         for i in $(seq 0 $((count - 1))); do
-          printf '%s\t%s\t%s\n' "$i" "''${desk[i]}" "''${panel[i]}"
+          printf '%s\t%s\t%s\t%s\n' "$i" "''${names[i]}" "''${desk[i]}" "''${panel[i]}"
         done
         exit 0
         ;;
+      # What is up, as the index the verbs above count in, or -1 before the login pick has
+      # landed. The state file is this script's own business -- the picker in
+      # lattice-wallpaper-menu needs the answer to mark the row that is already set, and a
+      # second reader of the path would be a second thing to change if it ever moves.
+      current)
+        echo "$current"
+        exit 0
+        ;;
       *[!0-9]*)
-        echo "usage: lattice-wallpaper [next|prev|random|list|<index>]" >&2
+        echo "usage: lattice-wallpaper [next|prev|random|list|current|<index>]" >&2
         exit 2
         ;;
       *) index=$(($1 % count)) ;;
@@ -212,6 +282,19 @@ let
       install -d "${currentDir}"
       ln -sfn "''${panel[index]}" "${currentPanel}"
       ln -sfn "''${desk[index]}" "${currentDesk}"
+
+      # And the two colours the lock screen takes from the pick. hyprlock has no way to run
+      # a command for a colour -- cmd[] is for label text only -- but its parser is
+      # hyprlang, so the config below defines these two and then sources this file, where a
+      # second definition wins. Same fact as the symlinks above, written the same moment.
+      # A heredoc rather than printf because the names have to reach the file with their
+      # dollars intact, and shellcheck reads a '$' inside single quotes as a mistake (SC2016)
+      # -- which writeShellApplication treats as fatal. \$ is literal here and the array
+      # expansions still run.
+      cat > "${currentLockAccent}" <<EOF
+      \$lockOuter = rgb(''${outers[index]})
+      \$lockCheck = rgb(''${checks[index]})
+      EOF
 
       # An internal panel is a small screen a forearm away and gets the drawing sized for
       # one; anything else is taken for a monitor across a desk. Matching on the connector
@@ -813,6 +896,523 @@ let
     '';
   };
 
+  # The power-profile pill, as a custom module rather than waybar's own
+  # power-profiles-daemon. What the swap buys is the tooltip: four sparklines over a
+  # two-minute window -- load, each core cluster's clock and the package's own draw in watts
+  # -- under the profile's name, and below them the fans, the hottest sensor that names
+  # itself and what the battery is doing. None of that could hang off the built-in module,
+  # whose tooltip-format takes exactly one placeholder, {profile}.
+  #
+  # What it costs is the D-Bus subscription: the built-in module watched
+  # net.hadess.PowerProfiles and repainted the instant anything else set a profile, where
+  # this polls. At the pill's 2s interval a press on the deck's profile key, or a
+  # `powerprofilesctl set` in a shell, lands within one tick -- close enough not to read as
+  # a lag, and the reason the click below goes through lattice-deck rather than at busctl.
+  #
+  # The sampling has to run whether or not anyone is hovering, because a graph that only
+  # started when the tooltip opened would be an empty one. So a tick is built to be cheap:
+  # sysfs through bash's `read` rather than $(cat), the slow-moving readouts cached between
+  # ticks, and one fork in the whole script -- busctl, for the profile. That measures ~15ms
+  # per tick on this Mac, most of it bash's own startup. The window lives in
+  # XDG_RUNTIME_DIR, so it is per-boot and never on disk.
+  powerProfile = pkgs.writeShellApplication {
+    name = "lattice-power-profile";
+    runtimeInputs = [
+      pkgs.systemd # busctl, for the profile the pill names
+      pkgs.procps # pkill, to signal the bar after a click
+    ];
+    text = ''
+      # The tooltip's palette, interpolated from lattice.theme so a re-accent reaches it too.
+      # The three profile colours are the ones style.css gives the pill, so the name in the
+      # tooltip and the glyph on the bar are the same colour; the series each get their own.
+      c_dim='${palette.overlay1}'
+      c_text='${palette.text}'
+      c_load='${palette.blue}'
+      c_pcore='${palette.lavender}'
+      c_ecore='${palette.teal}'
+      c_watt='${palette.peach}'
+      c_saver='${palette.green}'
+      c_balanced='${palette.mauve}'
+      c_perf='${palette.peach}'
+      c_none='${palette.overlay0}'
+      # The graph is `width` samples of the waybar interval, so these two are the window: 60 at
+      # 2s is the last two minutes. Keep `period` in step with "interval" on custom/power-profile
+      # in ~/.dotfiles/waybar/config.jsonc -- it is only used to say how long the window is.
+      width=60
+      period=2
+      extras_every=10
+
+      state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-power-profile"
+      history="$state/history"
+      extras="$state/extras"
+
+      bars=(▁ ▂ ▃ ▄ ▅ ▆ ▇ █)
+
+      case "''${1:-status}" in
+      status) ;;
+      cycle)
+        # The cycle itself belongs to lattice-deck: it already walks saver -> balanced ->
+        # performance through only the profiles this machine's daemon offers, and repaints the
+        # deck's key afterwards. Going through it rather than straight at busctl is what keeps the
+        # bar and the deck from disagreeing about which profile is on -- the same reason both
+        # audio pills mute through lattice-deck.
+        lattice-deck profile
+        # RTMIN+6 matches the "signal" of custom/power-profile in ~/.dotfiles/waybar. 1 to 5 are
+        # sunset, tailscale, weather, dnd and idle.
+        pkill -RTMIN+6 waybar 2>/dev/null || true
+        exit 0
+        ;;
+      *)
+        echo "usage: lattice-power-profile [status|cycle]" >&2
+        exit 2
+        ;;
+      esac
+
+      # Every reading here is a one-line sysfs file, and $(cat) would fork for each -- twenty-odd
+      # of them per tick, every two seconds, all day. `read` into a global is the same thing with
+      # no process: `rd path` leaves the value in $val, and a file that is missing, empty or
+      # unreadable leaves it empty rather than failing the script.
+      val=""
+      rd() {
+        val=""
+        [ -r "$1" ] || return 0
+        read -r val < "$1" 2>/dev/null || val=""
+      }
+
+      # Guards for everything that reaches arithmetic. sysfs gives unsigned; the state files carry
+      # -1 for "this machine has no such sensor", and `sane` is the one test that covers a whole
+      # series at once -- a line of digits, spaces and minus signs is safe to do sums on, and
+      # anything else (a half-written file from a tick that was killed) starts the window again.
+      uint() { case "''${1-}" in "" | *[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+      sane() { case "''${1-}" in *[!0-9\ -]*) return 1 ;; *) return 0 ;; esac; }
+
+      ### SAMPLE ###
+
+      [ -d "$state" ] || mkdir -p "$state"
+
+      now=''${EPOCHREALTIME/./}
+
+      # CPU busy fraction, as the jiffy counters' delta against the previous sample.
+      read -r _ u n s idle iow irq sirq steal _ < /proc/stat
+      busy=$((u + n + s + irq + sirq + steal))
+      total=$((busy + idle + iow))
+
+      # cpufreq, grouped by the ceiling each policy reports: one group on a machine whose cores
+      # are all alike, two where the clusters differ -- this Mac's 4 E-cores and 8 P-cores, or an
+      # Alder Lake. A third ceiling, if one ever turns up, folds into the fastest and the slowest.
+      p_max=0 p_min=0 p_sum=0 p_n=0 p_gov=""
+      e_max=0 e_min=0 e_sum=0 e_n=0
+      for policy in /sys/devices/system/cpu/cpufreq/policy*; do
+        rd "$policy/cpuinfo_max_freq"
+        uint "$val" || continue
+        hi=$val
+        rd "$policy/scaling_cur_freq"
+        uint "$val" || continue
+        cur=$val
+        rd "$policy/cpuinfo_min_freq"
+        if uint "$val"; then lo=$val; else lo=0; fi
+
+        if [ "$hi" -gt "$p_max" ]; then
+          # A faster group than anything seen so far. What was the fastest becomes the slowest,
+          # unless something slower has already claimed that.
+          if [ "$p_max" -gt 0 ] && { [ "$e_max" -eq 0 ] || [ "$p_max" -lt "$e_max" ]; }; then
+            e_max=$p_max e_min=$p_min e_sum=$p_sum e_n=$p_n
+          fi
+          p_max=$hi p_min=$lo p_sum=$cur p_n=1
+          rd "$policy/scaling_governor"
+          p_gov=$val
+        elif [ "$hi" -eq "$p_max" ]; then
+          p_sum=$((p_sum + cur)) p_n=$((p_n + 1))
+        elif [ "$e_max" -eq 0 ] || [ "$hi" -lt "$e_max" ]; then
+          e_max=$hi e_min=$lo e_sum=$cur e_n=1
+        elif [ "$hi" -eq "$e_max" ]; then
+          e_sum=$((e_sum + cur)) e_n=$((e_n + 1))
+        fi
+      done
+      if [ "$p_n" -gt 0 ]; then p_cur=$((p_sum / p_n)); else p_cur=0; fi
+      if [ "$e_n" -gt 0 ]; then e_cur=$((e_sum / e_n)); else e_cur=0; fi
+
+      # Draw, in milliwatts, from whichever of three sources this machine has. macsmc's "Total
+      # System Power" is the whole-package figure and the reason this row is worth graphing at
+      # all: it is the number a power profile is actually chosen for. The other two are what the
+      # Dell has instead, and neither has been run there yet.
+      power_mw=-1
+      energy_uj=-1
+      power_src=""
+      for hwmon in /sys/class/hwmon/hwmon*; do
+        for lbl in "$hwmon"/power*_label; do
+          [ -e "$lbl" ] || continue
+          rd "$lbl"
+          [ "$val" = "Total System Power" ] || continue
+          rd "''${lbl%_label}_input"
+          uint "$val" || continue
+          power_mw=$((val / 1000))
+          power_src=smc
+        done
+      done
+      if [ -z "$power_src" ]; then
+        # Intel's RAPL package counter is microjoules since boot, so it needs the previous reading
+        # and the interval between the two -- the same delta the jiffies take above.
+        rd /sys/class/powercap/intel-rapl:0/energy_uj
+        if uint "$val"; then
+          energy_uj=$val
+          power_src=rapl
+        fi
+      fi
+      if [ -z "$power_src" ]; then
+        # Last resort: what the battery is passing. Only true while discharging -- on AC most
+        # laptops report the charge rate here, or zero -- so the row it draws is the honest one
+        # for a machine on battery and not much otherwise.
+        for supply in /sys/class/power_supply/*; do
+          rd "$supply/scope"
+          [ "$val" = Device ] && continue
+          rd "$supply/status"
+          [ "$val" = Discharging ] || continue
+          rd "$supply/power_now"
+          uint "$val" || continue
+          power_mw=$((val / 1000))
+          power_src=battery
+          break
+        done
+      fi
+
+      ### HISTORY ###
+
+      # Five lines: the counters the next tick differences against, then one line per series. The
+      # series are stored across rather than down -- a line of numbers each, trimmed to the
+      # graph's width -- so the render below reads its four graphs with four `read -a` and never
+      # parses a sample. It lives in XDG_RUNTIME_DIR, so a reboot starts a fresh window.
+      hist=()
+      [ -r "$history" ] && mapfile -t hist < "$history"
+
+      prev=()
+      cpus=() pfreqs=() efreqs=() watts=()
+      if [ "''${#hist[@]}" -ge 5 ] && sane "''${hist[0]}" && sane "''${hist[1]}" &&
+        sane "''${hist[2]}" && sane "''${hist[3]}" && sane "''${hist[4]}"; then
+        read -r -a prev <<<"''${hist[0]}"
+        read -r -a cpus <<<"''${hist[1]}"
+        read -r -a pfreqs <<<"''${hist[2]}"
+        read -r -a efreqs <<<"''${hist[3]}"
+        read -r -a watts <<<"''${hist[4]}"
+      fi
+
+      prev_ts=0 prev_busy=0 prev_total=0 prev_energy=-1
+      uint "''${prev[0]-}" && prev_ts=''${prev[0]}
+      uint "''${prev[1]-}" && prev_busy=''${prev[1]}
+      uint "''${prev[2]-}" && prev_total=''${prev[2]}
+      uint "''${prev[3]-}" && prev_energy=''${prev[3]}
+
+      d_busy=$((busy - prev_busy))
+      d_total=$((total - prev_total))
+      if [ "$prev_total" -gt 0 ] && [ "$d_total" -gt 0 ] && [ "$d_busy" -ge 0 ]; then
+        cpu=$((d_busy * 100 / d_total))
+      else
+        # First sample after a boot, or after a window that did not survive its sanity check. The
+        # counters' lifetime average is not what this pill is for, so the graph starts at the floor
+        # and the next tick is the first real reading.
+        cpu=0
+      fi
+      [ "$cpu" -gt 100 ] && cpu=100
+
+      if [ "$power_src" = rapl ] && [ "$prev_energy" -ge 0 ] && [ "$prev_ts" -gt 0 ]; then
+        d_us=$((now - prev_ts))
+        d_uj=$((energy_uj - prev_energy))
+        # The counter wraps at max_energy_range_uj, which shows up as a negative delta. Dropping
+        # that one sample is cheaper than carrying the range around to correct it.
+        if [ "$d_us" -gt 0 ] && [ "$d_uj" -ge 0 ]; then power_mw=$((d_uj * 1000 / d_us)); fi
+      fi
+
+      cpus+=("$cpu")
+      pfreqs+=("$p_cur")
+      efreqs+=("$e_cur")
+      watts+=("$power_mw")
+      [ "''${#cpus[@]}" -gt "$width" ] && cpus=("''${cpus[@]: -$width}")
+      [ "''${#pfreqs[@]}" -gt "$width" ] && pfreqs=("''${pfreqs[@]: -$width}")
+      [ "''${#efreqs[@]}" -gt "$width" ] && efreqs=("''${efreqs[@]: -$width}")
+      [ "''${#watts[@]}" -gt "$width" ] && watts=("''${watts[@]: -$width}")
+
+      printf '%s\n' \
+        "$now $busy $total $energy_uj" \
+        "''${cpus[*]}" \
+        "''${pfreqs[*]}" \
+        "''${efreqs[*]}" \
+        "''${watts[*]}" > "$history"
+
+      ### EXTRAS ###
+
+      # Fans, temperatures and the battery are readouts rather than series, and on this Mac every
+      # one of them is an SMC round trip. They also move slowly, so they are re-read on their own
+      # cadence and cached in between; the sampling above is the part that has to happen on every
+      # tick. Line 1 is the stamp that says when this last ran, and a sensor the machine does not
+      # have writes an empty line rather than a number -- so the render tests for emptiness and
+      # never does arithmetic on a guess.
+      ex=()
+      [ -r "$extras" ] && mapfile -t ex < "$extras"
+      stamp=0
+      uint "''${ex[0]-}" && stamp=''${ex[0]}
+
+      if [ $((now / 1000000 - stamp)) -ge "$extras_every" ]; then
+        fan_rpm=() heat_mw="" hot_c="" hot_label=""
+        for hwmon in /sys/class/hwmon/hwmon*; do
+          for f in "$hwmon"/fan*_input; do
+            [ -e "$f" ] || continue
+            rd "$f"
+            # A zero is kept: on this Mac the fans are off most of the time, and "off" is a
+            # reading. The row goes missing only on a machine with no tachometer at all, rather
+            # than appearing and disappearing under the other rows as the fans come and go.
+            uint "$val" && fan_rpm+=("$val")
+          done
+
+          for lbl in "$hwmon"/power*_label; do
+            [ -e "$lbl" ] || continue
+            rd "$lbl"
+            [ "$val" = "Heatpipe Power" ] || continue
+            rd "''${lbl%_label}_input"
+            uint "$val" && heat_mw=$((val / 1000))
+          done
+
+          # The hottest sensor that names itself. Unlabelled ones are skipped deliberately: on
+          # this Mac they are the six speaker amplifiers, which say nothing about the SoC -- and
+          # there is no die temperature to prefer over them, because Asahi's SMC does not expose
+          # one. So the row names the sensor it used rather than claiming to be a CPU temperature.
+          for lbl in "$hwmon"/temp*_label; do
+            [ -e "$lbl" ] || continue
+            rd "$lbl"
+            [ -n "$val" ] || continue
+            label=$val
+            rd "''${lbl%_label}_input"
+            uint "$val" || continue
+            if [ -z "$hot_c" ] || [ "$((val / 1000))" -gt "$hot_c" ]; then
+              hot_c=$((val / 1000))
+              hot_label=$label
+            fi
+          done
+        done
+
+        batt_state="" batt_mw="" batt_pct="" batt_min=""
+        for supply in /sys/class/power_supply/*; do
+          rd "$supply/type"
+          [ "$val" = Battery ] || continue
+          # The Logitech mouse is a power supply too, and says so with scope=Device.
+          rd "$supply/scope"
+          [ "$val" = Device ] && continue
+          rd "$supply/status"
+          batt_state=$val
+          rd "$supply/capacity"
+          uint "$val" && batt_pct=$val
+          rd "$supply/power_now"
+          uint "$val" && batt_mw=$((val / 1000))
+          rd "$supply/energy_now"
+          if uint "$val" && [ -n "$batt_mw" ] && [ "$batt_mw" -gt 0 ]; then
+            # Microwatt-hours over milliwatts, in minutes.
+            batt_min=$((val * 60 / 1000 / batt_mw))
+          fi
+          break
+        done
+
+        ex=(
+          "$((now / 1000000))"
+          "''${fan_rpm[*]-}"
+          "$heat_mw"
+          "$hot_c"
+          "$hot_label"
+          "$batt_state"
+          "$batt_mw"
+          "$batt_pct"
+          "$batt_min"
+        )
+        printf '%s\n' "''${ex[@]}" > "$extras"
+      fi
+
+      ### RENDER ###
+
+      # The active profile, off the same interface the deck's key reads: net.hadess.PowerProfiles,
+      # which power-profiles-daemon serves on the Dell and tuned-ppd on this Mac, so neither end
+      # has to know which daemon is behind it. --json=short rather than jq, because the whole reply
+      # is {"type":"s","data":"balanced"} and two trims take that apart -- this runs every two
+      # seconds, and the busctl is already the one fork it cannot do without.
+      profile=""
+      reply=$(busctl --json=short get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles \
+        net.hadess.PowerProfiles ActiveProfile 2>/dev/null) || reply=""
+      case "$reply" in
+      *'"data":"'*)
+        reply=''${reply##*'"data":"'}
+        profile=''${reply%%'"'*}
+        ;;
+      esac
+
+      case "$profile" in
+      power-saver) glyph=󰾆 name="Power saver" colour=$c_saver ;;
+      balanced) glyph=󰾅 name="Balanced" colour=$c_balanced ;;
+      performance) glyph=󰓅 name="Performance" colour=$c_perf ;;
+      *)
+        # No daemon on the bus, or a profile none of the three names matches. The graphs are still
+        # worth drawing -- they come from sysfs, not from the daemon -- so the pill greys out and
+        # says what is missing instead of going blank.
+        glyph=󰾉 name="No power profile daemon" colour=$c_none profile=unknown
+        ;;
+      esac
+
+      # Scale a series into the block glyphs. A zero draws the shortest bar rather than a gap, so
+      # an idle stretch reads as a flat line along the bottom instead of a hole in the graph.
+      spark=""
+      sparkline() {
+        local max=$1 v i pad
+        shift
+        spark=""
+        # Until the window has filled -- the first two minutes after a boot, and again after any
+        # tick that had to start it over -- there are fewer than `width` samples to draw. Blanking
+        # the ones that are missing is what makes the graph scroll rather than grow: the newest
+        # sample sits at the right edge from the very first tick, so the reading beside it holds
+        # its column instead of being pushed right once every two seconds. A space is the same
+        # advance as a block glyph in a monospaced font, and printf's `*` width pads without a
+        # fork -- the same reason the rows are built with printf -v rather than echoed.
+        pad=$((width - $#))
+        [ "$pad" -gt 0 ] && printf -v spark '%*s' "$pad" ""
+        [ "$max" -gt 0 ] || max=1
+        for v in "$@"; do
+          i=$((v * 8 / max))
+          [ "$i" -gt 7 ] && i=7
+          [ "$i" -lt 0 ] && i=0
+          spark+=''${bars[$i]}
+        done
+      }
+
+      # bash has no floats, and printf cannot round one it never had: fixed point by hand, to the
+      # one decimal every reading on this tooltip is quoted at.
+      dec=""
+      tenths() {
+        dec=$((($1 * 10 + $2 / 2) / $2))
+        dec="''${dec%?}.''${dec: -1}"
+        [ "''${dec:0:1}" = . ] && dec="0$dec"
+        return 0
+      }
+
+      # One row of the tooltip, appended in place. A function that echoed instead would be a
+      # subshell per row, and the point of the reading loops above is that a tick costs one fork.
+      # The label column is eight wide, so every graph starts on the same column.
+      tip=""
+      row() { # label, graph colour, graph, reading, trailing dim note
+        local line=""
+        printf -v line "<span foreground='%s'>%-8s</span>" "$c_dim" "$1"
+        # A readout row has no graph, and an empty span in its place is markup for nothing.
+        [ -n "$3" ] && printf -v line "%s<span foreground='%s'>%s</span>" "$line" "$2" "$3"
+        printf -v line "%s  <span foreground='%s'>%s</span>" "$line" "$c_text" "$4"
+        [ -n "''${5-}" ] && printf -v line "%s<span foreground='%s'>   %s</span>" "$line" "$c_dim" "$5"
+        tip+="$line"'\n'
+        return 0
+      }
+
+      tip="<span foreground='$colour'>$glyph  $name</span>"
+      [ -n "$p_gov" ] && tip+="<span foreground='$c_dim'>  ·  $p_gov</span>"
+      tip+='\n\n'
+
+      sparkline 100 "''${cpus[@]}"
+      row "CPU" "$c_load" "$spark" "$cpu%"
+
+      # Both frequency rows are scaled to their own cluster's floor and ceiling rather than to a
+      # shared axis. What a frequency graph is asked is "how much of what this core can do is it
+      # doing", and on this Mac the E-cores' ceiling is barely above the P-cores' idle.
+      freqrow() { # label, colour, floor, ceiling, current, series...
+        local label=$1 colour=$2 lo=$3 hi=$4 cur=$5 span f
+        local scaled=()
+        shift 5
+        span=$((hi - lo))
+        [ "$span" -gt 0 ] || span=1
+        for f in "$@"; do scaled+=("$(((f - lo) * 100 / span))"); done
+        sparkline 100 "''${scaled[@]}"
+        tenths "$cur" 1000000
+        row "$label" "$colour" "$spark" "$dec GHz"
+      }
+
+      if [ "$p_max" -gt 0 ]; then
+        # "Freq" rather than "P-core" on a machine with only the one kind of core.
+        if [ "$e_max" -gt 0 ]; then p_label=P-core; else p_label=Freq; fi
+        freqrow "$p_label" "$c_pcore" "$p_min" "$p_max" "$p_cur" "''${pfreqs[@]}"
+      fi
+      if [ "$e_max" -gt 0 ]; then
+        freqrow E-core "$c_ecore" "$e_min" "$e_max" "$e_cur" "''${efreqs[@]}"
+      fi
+
+      if [ "$power_mw" -ge 0 ]; then
+        peak_mw=0
+        drawn=()
+        for mw in "''${watts[@]}"; do
+          # A -1 is a tick that had no power source; it plots as the floor rather than breaking the
+          # run of the graph.
+          if [ "$mw" -lt 0 ]; then mw=0; fi
+          drawn+=("$mw")
+          [ "$mw" -gt "$peak_mw" ] && peak_mw=$mw
+        done
+        # A 10 W floor under the scale: an idle machine's draw wanders by a few hundred milliwatts,
+        # and a graph scaled to its own noise reads as though something is happening.
+        scale=$peak_mw
+        [ "$scale" -lt 10000 ] && scale=10000
+        sparkline "$scale" "''${drawn[@]}"
+        tenths "$power_mw" 1000
+        reading="$dec W"
+        tenths "$peak_mw" 1000
+        row "Power" "$c_watt" "$spark" "$reading" "peak $dec W"
+      fi
+
+      # The readouts, from the cached block. Each is drawn only if this machine has the sensor.
+      fans=''${ex[1]-} heat_mw=''${ex[2]-} hot_c=''${ex[3]-} hot_label=''${ex[4]-}
+      batt_state=''${ex[5]-} batt_mw=''${ex[6]-} batt_pct=''${ex[7]-} batt_min=''${ex[8]-}
+
+      tip+='\n'
+
+      if [ -n "$batt_state" ]; then
+        batt="''${batt_pct:-?}%"
+        case "$batt_state" in
+        Discharging)
+          if uint "$batt_mw"; then
+            tenths "$batt_mw" 1000
+            batt+="  ·  $dec W out"
+          fi
+          if uint "$batt_min" && [ "$batt_min" -gt 0 ]; then
+            batt+="  ·  $((batt_min / 60))h $((batt_min % 60))m left"
+          fi
+          ;;
+        Charging)
+          batt+="  ·  charging"
+          if uint "$batt_mw" && [ "$batt_mw" -gt 0 ]; then
+            tenths "$batt_mw" 1000
+            batt+=" at $dec W"
+          fi
+          ;;
+        *) batt+="  ·  ''${batt_state,,}" ;;
+        esac
+        row Battery "$c_text" "" "$batt"
+      fi
+
+      if [ -n "$fans" ]; then
+        case "$fans" in
+        *[1-9]*) row Fans "$c_text" "" "''${fans// / \/ } rpm" ;;
+        *) row Fans "$c_text" "" "off" ;;
+        esac
+      fi
+
+      heat=""
+      if uint "$heat_mw"; then
+        tenths "$heat_mw" 1000
+        heat="$dec W heatpipe"
+      fi
+      if [ -n "$hot_c" ] && [ -n "$hot_label" ]; then
+        [ -n "$heat" ] && heat+="  ·  "
+        heat+="$hot_c°C $hot_label"
+      fi
+      [ -n "$heat" ] && row Heat "$c_text" "" "$heat"
+
+      tip+="\n<span foreground='$c_dim'>last $((width * period / 60)) min  ·  click to cycle</span>"
+
+      # waybar reads one JSON object per run of the exec. The tooltip is pango markup -- single
+      # quotes on the attributes, because a double one would end the JSON string -- the class is
+      # what style.css colours the pill by, and the \n are JSON escapes rather than real newlines:
+      # %s passes them through, and waybar's parser turns them into line breaks.
+      printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' "$glyph" "$tip" "$profile"
+    '';
+  };
+
   # rofi with the calculator mode compiled in. A rofi plugin is a shared object loaded from
   # rofi's own -plugin-path, so `rofi-calc` on its own in systemPackages would be a file
   # nothing ever opens: the nixpkgs wrapper is what joins the plugin into $out/lib/rofi and
@@ -1114,6 +1714,341 @@ let
     '';
   };
 
+  # The output and input pickers, behind the volume and microphone pills. Same shape as
+  # lattice-wifi above and for the same reason: what a bar pill wants is the short list of
+  # devices to switch between, and rofi is already themed, already the launcher, and lets
+  # one be found by typing rather than hunted down a list.
+  #
+  # One script for both. The two menus differ only in which nodes they list and which pactl
+  # verbs move them; the theme, the rendering and the loop are the same, and two copies of
+  # that would drift.
+  #
+  # Picking a device moves what is already playing over with the default rather than only
+  # redirecting the next stream to start -- `pactl set-default-sink` on its own leaves the
+  # current song on the old speakers, which is not what picking speakers from a menu means.
+  # That is the pairing `lattice-deck audio` already makes for the deck's round-robin key.
+  audioMenu = pkgs.writeShellApplication {
+    name = "lattice-audio";
+    runtimeInputs = [
+      rofiWithCalc
+      # pactl, for the listing, the default and moving live streams. wpctl can set a
+      # default but has no equivalent of move-sink-input, and `pactl -f json` is a document
+      # to query rather than a table to scrape -- the same reason lattice-deck takes it.
+      pkgs.pulseaudio
+      pkgs.jq
+      # swayosd-client for the mute row, so muting from the menu raises the same pill the
+      # mute key does. Nothing here calls wpctl.
+      pkgs.swayosd
+      pkgs.libnotify
+    ];
+    text = ''
+            case "''${1:-}" in
+            output)
+              noun=Output; nodes=sinks; streams=sink-inputs; get_default="get-default-sink"
+              set_default="set-default-sink"; move="move-sink-input"
+              osd=--output-volume; topic=mute; fallback=󰓃
+              ;;
+            input)
+              noun=Input; nodes=sources; streams=source-outputs; get_default="get-default-source"
+              set_default="set-default-source"; move="move-source-output"
+              osd=--input-volume; topic=mic; fallback=󰍬
+              ;;
+            *)
+              echo "usage: lattice-audio output|input" >&2
+              exit 2
+              ;;
+            esac
+
+            # Anchored and sized exactly like lattice-wifi's menu -- the long note on the theme
+            # there says what each offset is counted from. It is not hung under the pill that
+            # opened it for the reason that one isn't either: everything to the right of both is
+            # variable width, so no fixed offset stays under them.
+            #
+            # Wider than that menu's 340px, because these labels are longer than an SSID:
+            # "Built-in Audio Headset Microphone" is 33 characters, and a device list that
+            # truncates the word saying which device it is has lost the plot. A glyph, a
+            # 34-column description and a right-aligned reading come to 43 columns of JetBrains
+            # Mono 10 -- ~345px, against the ~412px this leaves once config.rasi's 12px window
+            # padding, its 2px border and the element padding above are taken off. 400px was not
+            # enough and rofi answered by ellipsising the reading off the end of every row.
+            theme='
+              window { location: north east; anchor: north east; x-offset: -10px; y-offset: 5px; width: 460px; }
+              * { font: "JetBrains Mono 10"; }
+              inputbar { padding: 7px 10px; }
+              element { padding: 5px 10px; }
+              listview { lines: 12; }
+
+              /* The device in use, marked with rofi -a, in the same green lattice-wifi gives the
+                 network in use -- config.rasi draws an active row in lavender, which reads as a
+                 shade of the ordinary text rather than as a state. */
+              element normal.active, element alternate.active { text-color: @green; }
+              element selected.active { background-color: @green; text-color: @crust; }
+            '
+
+            # One click accepts, as on every other bar surface; see lattice-wifi.
+            click=(-me-select-entry "" -me-accept-entry MousePrimary)
+
+            # -mesg is the one string rofi renders as pango markup, and a device description is
+            # free text -- "Family & Friends Dock" would take the whole message down otherwise.
+            pango() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g'; }
+
+            # PipeWire names the hardware, not the shape of it, so the glyph is guessed from what
+            # the device says about itself: device.icon_name first, since that is the field meant
+            # for this, then the form factor, then the node name for what neither covers. Order
+            # matters -- a Bluetooth headset is both, and the bus is the more useful of the two
+            # to draw.
+            #
+            # Anything unrecognised keeps the per-menu fallback rather than drawing nothing:
+            # speakers for an output, a microphone for an input. Also a guess, but the right one
+            # more often than not, and a blank column would take the row out of line.
+            glyph_for() {
+              case "$1|$2|$3" in
+              *bluez* | *luetooth*)   printf '󰂯' ;;
+              *headset*)              printf '󰋎' ;;
+              *headphone*)            printf '󰋋' ;;
+              *hdmi* | *isplayport*)  printf '󰡁' ;;
+              *speaker*)              printf '󰓃' ;;
+              *)                      printf '%s' "$fallback" ;;
+              esac
+            }
+
+            # A monitor is the loopback of a sink and is a source only as an accident of the
+            # PulseAudio model: there is nothing to record from, and listing them would fill the
+            # input menu with a second copy of the output one. device.class marks them, and the
+            # name suffix is checked as well because a node that sets neither is still a monitor
+            # if it is called one. Both are no-ops on the sink side, which has none.
+            #
+            # value_percent arrives as "100%" and the row builds its own reading, so it is
+            # stripped to digits here and the parsing stays in one place. Channels can differ and
+            # the first is taken -- a balance that is not centred is not what this menu is for.
+            #
+            # Every column is emitted non-empty, "-" standing in for a property the node does not
+            # set. That is load-bearing rather than tidiness: the reader below splits on tab, tab
+            # is IFS whitespace, and `read` collapses a run of IFS whitespace into one delimiter
+            # -- so one empty field in the middle silently shifts every column after it left by
+            # one. A device with no icon name read its form factor as its mute state, and every
+            # output in the menu drew as muted. "-" matches none of the glyph patterns, so an
+            # unknown lands on the fallback, which is where it belongs anyway.
+            read_nodes() {
+              pactl -f json list "$nodes" | jq -r --arg default "$default" '
+                def dash: if (. // "") == "" then "-" else . end;
+
+                # An ALSA jack is a node whether or not anything is in it, and its active port is
+                # what says which. Listing the ones that are empty is worse than not listing them:
+                # picking the headphone socket with nothing plugged into it sets the default,
+                # WirePlumber sees an unavailable port and puts it straight back, and the menu
+                # looks broken rather than honest. Ports that report "unknown" -- which is most
+                # of them, and every USB device -- are kept; only an explicit no is a no.
+                #
+                # A node with no ports at all is kept too. The MacBook speakers are one: they are
+                # a virtual node in front of the convolver, not a jack, so there is nothing to
+                # ask. And the device in use is always listed whatever it claims, because a menu
+                # that hides what you are listening through is not one worth opening.
+                def available:
+                  (.active_port // "") as $port
+                  | .name == $default
+                    or $port == ""
+                    or (([.ports[]? | select(.name == $port) | .availability] | first) // "unknown")
+                       != "not available";
+
+                .[]
+                | select((.properties["device.class"] // "") != "monitor")
+                | select(.name | endswith(".monitor") | not)
+                | select(available)
+                | [ .name,
+                    .description,
+                    (.volume | to_entries | .[0].value.value_percent | gsub("[^0-9]"; "")),
+                    (if .mute then "muted" else "live" end),
+                    (.properties["device.icon_name"] | dash),
+                    (.properties["device.form_factor"] | dash)
+                  ] | @tsv'
+            }
+
+            while true; do
+              default=$(pactl "$get_default" 2>/dev/null || true)
+
+              names=(); rows=(); selected=(); mesg=""; default_muted=""; gone_desc=""
+              while IFS=$'\t' read -r name desc vol muted icon ff; do
+                [ -n "$name" ] || continue
+
+                # The per-row reading is the level, or the muted glyph in its place -- a device
+                # that is muted at 60% is muted, and the number would read as the live state.
+                if [ "$muted" = muted ]; then reading=󰝟; else reading="$vol%"; fi
+
+                if [ "$name" = "$default" ]; then
+                  selected=(-a "''${#rows[@]}")
+                  default_muted=$muted
+                  # Kept for the note below, which has to name a device that no longer exists.
+                  gone_desc=$desc
+                  if [ "$muted" = muted ]; then
+                    mesg="$(pango "$desc")  ·  muted at $vol%"
+                  else
+                    mesg="$(pango "$desc")  ·  $vol%"
+                  fi
+                fi
+
+                names+=("$name")
+                rows+=("$(printf '%s  %-34.34s %5s' "$(glyph_for "$icon" "$ff" "$name")" "$desc" "$reading")")
+              done < <(read_nodes)
+
+              if [ "''${#names[@]}" -eq 0 ]; then
+                notify-send -a lattice-audio -i audio-card \
+                  -h string:x-canonical-private-synchronous:lattice-audio \
+                  "No $noun device" "PipeWire is reporting nothing to switch to"
+                exit 0
+              fi
+
+              if [ "$default_muted" = muted ]; then action="󰕾  Unmute"; else action="󰝟  Mute"; fi
+
+              # -a indexes the rendered list, so the mark moves down by the action row about to be
+              # put above it.
+              [ "''${#selected[@]}" -eq 2 ] && selected=(-a "$((selected[1] + 1))")
+
+              # The cursor starts on the first device rather than on the action, the way
+              # lattice-wifi starts below its own: Enter should act on a device, and mute is
+              # reached by scrolling up or by typing it.
+              choice=$(printf '%s\n' "$action" "''${rows[@]}" |
+                rofi -dmenu -i -no-cycle -format i -p "$noun" -mesg "''${mesg:-no default device}" \
+                  -theme-str "$theme" "''${click[@]}" "''${selected[@]}" -selected-row 1 || true)
+              [ -n "''${choice:-}" ] || exit 0
+
+              if [ "$choice" -eq 0 ]; then
+                swayosd-client "$osd" mute-toggle
+                # The deck's key draws this device's mute state and only knows what it is told.
+                # `|| true` for the reason lattice-sunset gives: an unplugged deck, or a
+                # lattice-deck that is not on this caller's PATH, must not fail a mute that has
+                # already happened.
+                lattice-deck sync "$topic" || true
+                continue
+              fi
+
+              target=''${names[$((choice - 1))]}
+              # Picking the device already in use should do nothing, rather than set a default it
+              # already has and walk every live stream across to where it already is.
+              [ "$target" = "$default" ] && exit 0
+
+              pactl "$set_default" "$target"
+              while read -r stream; do
+                [ -n "$stream" ] || continue
+                pactl "$move" "$stream" "$target" 2>/dev/null || true
+              done < <(pactl list short "$streams" | cut -f1)
+
+              # Moving a live stream off the MacBook's speakers takes the speakers away with it:
+              # the ALSA node behind asahi-audio's convolver hangs up ("poll fd error/hangup
+              # (card removed?)" in wireplumber's journal), the software-dsp filter in front of it
+              # goes with it, and neither comes back until pipewire is restarted -- restarting
+              # wireplumber alone is not enough, because the node that died belongs to the daemon.
+              # Nothing here causes it: `lattice-deck audio` has always done the same two steps
+              # and has always had the same effect. Setting the default alone does not do it, and
+              # ordinary playback stopping does not either; it takes the unlink.
+              #
+              # swayosd is in the restart because it is collateral: swayosd-server resolves the
+              # default sink once and holds it, so a pipewire that came back underneath it leaves
+              # every --output-volume call a silent no-op until it is restarted too.
+              #
+              # So the menu says so rather than leaving someone to find the speakers missing from
+              # it later and conclude the picker is broken. Only when it actually happens: the
+              # node list is read back, and this is silent unless what was just switched away from
+              # has genuinely gone. The second is for the teardown, which is not instant.
+              #
+              # The fix is a verb rather than the four-unit systemctl line it wraps, because the
+              # Stream Deck's media page has a key for it and a banner that names the same command
+              # the key runs is one thing to remember instead of two. See modules/nixos/
+              # streamdeck.nix, which is also where the why is written down.
+              sleep 1
+              if [ -n "$default" ] && ! read_nodes | cut -f1 | grep -qxF "$default"; then
+                notify-send -a lattice-audio -i audio-card \
+                  -h string:x-canonical-private-synchronous:lattice-audio \
+                  "$noun switched" \
+                  "$gone_desc is gone from the list -- an Asahi quirk. \
+      The deck's restart key, or <tt>lattice-deck audio-restart</tt>, brings it back."
+              fi
+
+              # The new device brings its own mute state with it, which is what the deck draws.
+              lattice-deck sync "$topic" || true
+              exit 0
+            done
+    '';
+  };
+
+  # The wallpaper picker, behind a right-click on the bar's wallpaper pill. Same shape as
+  # the two menus above and for the same reason: `next` is a fine way to move one along --
+  # it is all the Stream Deck's key does -- and a poor way to reach the ninth of fourteen.
+  #
+  # The rows are baked in here rather than read back out of `lattice-wallpaper list`,
+  # because the one thing this menu has to show is the colour, and a colour never reaches
+  # the CLI -- the pool's hexes are a build-time fact. Both sides come off `poolAccents`,
+  # so the list and the menu cannot disagree about what is in the pool or what it is called.
+  #
+  # The swatch is the wallpaper's own glyph in the wallpaper's own accent, which is what
+  # makes this worth being a menu at all: the names are the palette's, and "sapphire"
+  # against "sky" is a distinction the eye makes instantly in colour and slowly in words.
+  # The glyph is md-wallpaper, the one the pill that opens this wears and the one on the
+  # deck's key for `next` -- see ~/.dotfiles/waybar/config.jsonc and streamdeck.nix.
+  wallpaperMenu = pkgs.writeShellApplication {
+    name = "lattice-wallpaper-menu";
+    runtimeInputs = [
+      rofiWithCalc
+      cycleWallpaper
+    ];
+    text = ''
+      rows=(
+        ${lib.concatMapStringsSep "\n  " (
+          accent: "'<span color=\"${accent.hex}\">󰸉</span>  ${accent.name}'"
+        ) poolAccents}
+      )
+
+      # Anchored north *west*, unlike lattice-wifi and lattice-audio: this pill lives in the
+      # left group, so the fixed edge to hang from is the other one. 10px is waybar's own
+      # margin-left and lines the menu's left edge up with the bar's; y-offset is the 5px
+      # gap between pills, counted from the bar's bottom edge because waybar's exclusive
+      # zone is where a north anchor already starts. The long note in lattice-wifi has the
+      # measurements. It is not hung under the pill itself for that menu's reason in
+      # mirror image -- everything to this one's left is variable width, since the
+      # workspace pills carry a glyph per open window and the privacy pill appears from
+      # nothing when something starts capturing.
+      #
+      # 240px against that menu's 340: a swatch and a palette name is 12 columns, where an
+      # SSID can be anything. lines is the whole pool, so the list never scrolls -- it is a
+      # fixed set of fourteen, not a listing of whatever happens to be in range.
+      theme='
+        window { location: north west; anchor: north west; x-offset: 10px; y-offset: 5px; width: 240px; }
+        * { font: "JetBrains Mono 10"; }
+        inputbar { padding: 7px 10px; }
+        element { padding: 5px 10px; }
+        listview { lines: 14; }
+
+        /* The one already up, marked with rofi -a, in the same green lattice-wifi gives the
+           network in use. It colours the name only -- the swatch carries its own colour in
+           markup and keeps it -- which is what is wanted: the mark says "this one", the
+           swatch says which one. */
+        element normal.active, element alternate.active { text-color: @green; }
+        element selected.active { background-color: @green; text-color: @crust; }
+      '
+
+      # One click accepts, as on every other bar surface; see lattice-wifi.
+      click=(-me-select-entry "" -me-accept-entry MousePrimary)
+
+      # -1 before the session's own pick has landed, which is a real state and not an error:
+      # hyprpaper is up on hyprpaper.conf's default and nothing has chosen yet. Nothing gets
+      # marked, rather than the first row being marked on a guess.
+      current=$(lattice-wallpaper current)
+      selected=()
+      ((current >= 0)) && selected=(-a "$current")
+
+      # -markup-rows for the swatch. The rows are generated from the palette, so there is
+      # no free text in them to escape.
+      choice=$(printf '%s\n' "''${rows[@]}" |
+        rofi -dmenu -i -no-cycle -markup-rows -format i -p Wallpaper \
+          -theme-str "$theme" "''${click[@]}" "''${selected[@]}" || true)
+      [ -n "''${choice:-}" ] || exit 0
+
+      # Re-picking the one already up costs a redraw of two outputs and nothing else, so it
+      # is left to fall through rather than special-cased into a no-op.
+      lattice-wallpaper "$choice"
+    '';
+  };
+
   # Resuming needs somewhere to resume from, so a host without a resume device has no
   # business offering hibernation.
   canHibernate = config.boot.resumeDevice != "";
@@ -1380,6 +2315,7 @@ let
       config.programs.hyprlock.package
       pkgs.procps
       pkgs.systemd
+      pkgs.jq # the focused screen's height, for the margin below
     ];
     text = ''
       # Clicking the bar pill a second time should close the menu, not stack another
@@ -1389,9 +2325,44 @@ let
         exit 0
       fi
 
+      # How tall a button comes out, and the only lever there is for it. wlogout gives every
+      # button vexpand, so a button is exactly its share of the grid's height -- no padding,
+      # min-height or margin in style.css can make it shorter than that, they only ever raise
+      # the floor. What the grid gets is the screen minus wlogout's own margin, so the margin
+      # is the thing to set: take the height the buttons should have out of the middle of the
+      # screen and give the rest away.
+      #
+      # It is measured rather than written down because one number is a different button on
+      # every screen -- this menu is a single row of five here and two rows of three on a host
+      # that hibernates, and the Mac's 840 logical rows are not the Dell's.
+      #
+      # The measurement is the *shortest* screen attached, not the focused one. wlogout draws
+      # the grid on every output and has only one set of margins for all of them, so a margin
+      # taken from a tall docked screen is more than a laptop panel has to give -- the band it
+      # asks to keep clear is taller than the panel, and the menu lands off the bottom of it.
+      # The shortest screen is the one that fits everywhere.
+      rows=${toString (if canHibernate then 2 else 1)}
+      height=140
+      # The button's own margin in /etc/xdg/wlogout/style.css, which is outside the height
+      # above -- so a change there wants the same change here.
+      gap=14
+
+      margin=()
+      if screen=$(hyprctl monitors -j 2>/dev/null |
+        jq -e -r '[.[] | .height / .scale] | min | floor'); then
+        v=$(((screen - rows * (height + 2 * gap)) / 2))
+        # A screen too short to seat the menu at that height keeps a thin band top and bottom
+        # rather than a negative margin, and the buttons come out shorter than asked for.
+        [ "$v" -lt 40 ] && v=40
+        margin=(--margin-top "$v" --margin-bottom "$v")
+      fi
+
+      # No margin flags if the query failed, which leaves wlogout's own 230 on every side --
+      # the full-height buttons this replaced, rather than no menu at all.
       exec wlogout \
         --layout /etc/xdg/wlogout/layout \
         --css /etc/xdg/wlogout/style.css \
+        "''${margin[@]}" \
         --buttons-per-row ${toString (if canHibernate then 3 else lib.length powerButtons)}
     '';
   };
@@ -1727,10 +2698,13 @@ in
     catppuccin-cursors."${theme.flavor}Dark"
 
     cycleWallpaper
+    wallpaperMenu
     sunset
     idleInhibit
     tailscale
+    powerProfile
     wifiMenu
+    audioMenu
     powerMenu
     notifyHistory
     dnd
@@ -1767,7 +2741,8 @@ in
     # drops, which on the Dell includes every hibernate -- see the btintel_pcie unload
     # in hosts/dell. The CLI alone would hold only until the next reconnect; the
     # user service is what makes it stick, reapplying ~/.config/solaar/config.yaml each
-    # time the device comes back. It starts hidden, to the waybar tray.
+    # time the device comes back. It runs with no window and no tray icon at all -- see
+    # the note on the package override below.
     #
     # That config.yaml is a symlink into the dotfiles repo (the solaar stow package), so
     # the DPI is shared rather than re-set per machine. Solaar rewrites it with a plain
@@ -1798,9 +2773,30 @@ in
     # feeds the SUPER+scroll and SUPER+drag binds already in hyprland.lua, and workspaces
     # cycle continuously under the wheel. The cost is that a button is diverted as Mouse
     # Gestures or as a plain key, never both, so the four directional gestures are gone.
+    #
+    # The tray icon is built out rather than hidden. Solaar draws the mouse's battery
+    # level into it, which put a second battery readout on the bar next to blueman's
+    # bluetooth icon -- both live in waybar's one `tray` pill, and waybar's tray has no
+    # per-item filter to drop one of them with. Solaar's own `--window only` switches the
+    # icon off but also makes closing the window quit the process, which is the one thing
+    # this service must not do: it is what reapplies the DPI and serves rules.yaml.
+    #
+    # So the indicator is removed at the source. Solaar asks gobject-introspection for
+    # AyatanaAppIndicator3, then AppIndicator3, and falls back to Gtk.StatusIcon when
+    # neither typelib is on GI_TYPELIB_PATH -- and GtkStatusIcon is X11 XEmbed, so under
+    # Wayland it registers nothing. Dropping libappindicator from buildInputs is what
+    # takes the typelib out of the wrapper; the fallback is upstream's own code path, and
+    # it costs five Gtk-CRITICAL lines in the journal at start-up and nothing after.
+    #
+    # The window is still reachable -- solaar.desktop is still installed, and Solaar is a
+    # single-instance GApplication, so launching it again pops the running process's
+    # window rather than starting a second one.
     solaar = {
       enable = true;
       userService.enable = true;
+      package = pkgs.solaar.overrideAttrs (old: {
+        buildInputs = lib.filter (p: p != pkgs.libappindicator) old.buildInputs;
+      });
     };
 
     appimage = {
@@ -1991,8 +2987,17 @@ in
       idleInhibit
       tailscale
       weather
+      # Both ends of the power-profile pill: waybar runs `status` on the interval and
+      # `cycle` on a click, and the script's own runtimeInputs cover everything it calls
+      # except lattice-deck, which streamdeck.nix puts on this same PATH.
+      powerProfile
       wifiMenu
+      audioMenu
       powerMenu
+      # Both of the wallpaper pill's buttons: left click runs `lattice-wallpaper next`
+      # straight, right click opens the menu, which in turn calls it by name again.
+      cycleWallpaper
+      wallpaperMenu
       pkgs.wireplumber
       config.programs.firefox.finalPackage
     ];
@@ -2065,6 +3070,17 @@ in
   };
 
   ### DEFAULT APPS ###
+  #
+  # Only the exact type is ever consulted. xdg-open's open_generic asks `xdg-mime query
+  # default` for the detected type and does not walk the subclass chain, so a type absent
+  # here does not fall back to its parent -- it falls off the end of the script into the
+  # hardcoded browser list, which is why an unassigned .md, .py or .json opened as a
+  # Firefox tab rather than failing. Silent and wrong, so anything worth opening needs its
+  # own line.
+  #
+  # What is left out is decided by mimeinfo.cache order, which is arbitrary and moves when
+  # a package does. So the rule for being on this list is: either two installed apps claim
+  # the type, or nothing claimed it at all.
   xdg.mime.defaultApplications =
     let
       assign = app: types: lib.genAttrs types (_: app);
@@ -2073,10 +3089,49 @@ in
       "text/html"
       "x-scheme-handler/http"
       "x-scheme-handler/https"
+      # Both of these resolved to ungoogled-chromium, which is on the machine for the
+      # Halo65's WebHID configurator alone -- see the note on the package above. Firefox
+      # renders XML and XHTML perfectly well, and nothing should reach the other browser
+      # by accident.
+      "application/xml"
+      "application/xhtml+xml"
     ]
-    // assign "thunderbird.desktop" [ "x-scheme-handler/mailto" ]
+    // assign "thunderbird.desktop" [
+      "x-scheme-handler/mailto"
+      "x-scheme-handler/mid"
+      "message/rfc822"
+      "text/calendar"
+      # Thunderbird registers these itself, by writing a userapp-Thunderbird-*.desktop
+      # into ~/.local/share/applications and pointing ~/.config/mimeapps.list at it. That
+      # is also how it broke them: three of those generated files are gone and the entries
+      # naming them are still there, so webcal had no working handler at all. A system
+      # assignment to the real thunderbird.desktop is the stable spelling -- but the user
+      # list still outranks /etc/xdg, so these only take effect once its stale entries are
+      # cleared.
+      "x-scheme-handler/webcal"
+      "x-scheme-handler/webcals"
+      # What Firefox hands off when a calendar invite is downloaded rather than followed as
+      # a link, so it needs naming separately from text/calendar above.
+      "application/x-extension-ics"
+    ]
+    # Also claimed by org.pwmt.zathura-cb.desktop, which declares inode/directory,
+    # application/zip, x-tar and x-7z-compressed on its way to the comic formats. Pinning
+    # the file manager and the archiver is what keeps a folder or a .zip from opening in a
+    # comic reader.
     // assign "thunar.desktop" [ "inode/directory" ]
     // assign "org.pwmt.zathura.desktop" [ "application/pdf" ]
+    # .cbz is detected as application/vnd.comicbook+zip; zathura-cb only declares the
+    # older application/x-cbz, so every real comic went to xarchiver instead -- the reader
+    # was installed and unreachable.
+    // assign "org.pwmt.zathura-cb.desktop" [
+      "application/vnd.comicbook+zip"
+      "application/x-cbz"
+    ]
+    # imv.desktop and imv-dir.desktop declare an identical MimeType list, and imv-dir
+    # opens the whole containing directory as a playlist. Whichever of the two the cache
+    # happens to return first is not a choice, so every type imv declares and we care
+    # about is named here. image/x-icon deliberately is not: imv has no .ico loader, and
+    # an assignment to an app that cannot open the file is worse than none.
     // assign "imv.desktop" [
       "image/png"
       "image/jpeg"
@@ -2085,17 +3140,42 @@ in
       "image/avif"
       "image/bmp"
       "image/tiff"
+      "image/svg+xml"
+      "image/heif"
+      "image/jxl"
+    ]
+    # The editor for everything that is text and had no handler. vim, gvim and neovim all
+    # ship entries claiming text/plain as well, and gvim -- X11 only, so XWayland and
+    # blurry -- was the one winning application/x-shellscript. The two Terminal=true
+    # entries among them could not have worked from xdg-open anyway: nothing here provides
+    # a terminal for them to open in.
+    // assign "dev.zed.Zed.desktop" [
+      "text/plain"
+      "text/markdown"
+      "application/json"
+      "text/x-python"
+      "text/x-nix"
+      "application/x-shellscript"
+      "text/x-shellscript"
     ]
     // assign "mpv.desktop" [
       "video/mp4"
       "video/webm"
       "video/x-matroska"
       "video/quicktime"
+      "video/x-msvideo"
       "audio/mpeg"
       "audio/flac"
       "audio/ogg"
       "audio/wav"
+      "audio/mp4"
+      "audio/aac"
+      "audio/x-m4a"
+      "audio/opus"
     ]
+    # The compound types are the ones a .tar.gz or .tar.zst actually detects as -- the
+    # plain application/gzip below only matches a bare .gz. They already resolved here,
+    # but by cache order rather than by decision.
     // assign "xarchiver.desktop" [
       "application/zip"
       "application/x-tar"
@@ -2104,6 +3184,11 @@ in
       "application/zstd"
       "application/x-7z-compressed"
       "application/vnd.rar"
+      "application/x-compressed-tar"
+      "application/x-xz-compressed-tar"
+      "application/x-bzip-compressed-tar"
+      "application/x-zstd-compressed-tar"
+      "application/x-bzip2"
     ];
 
   ### THEME ###
@@ -2289,6 +3374,7 @@ in
       background-color: alpha(${palette.base}, ${toString theme.opacity});
       border: 2px solid ${palette.surface0};
       border-radius: 14px;
+      /* Outside the height lattice-power sizes the grid to -- keep `gap` there in step. */
       margin: 14px;
       padding: 28px;
       outline-style: none;
@@ -2319,6 +3405,13 @@ in
 
   ### IDLE/LOCK ###
   programs.hyprlock.enable = true;
+
+  # `C` copies only when the target is absent, so this seeds the file on a fresh home and
+  # then never touches it again -- every later write is lattice-wallpaper's.
+  systemd.user.tmpfiles.rules = [
+    "d ${currentDir} 0755 - - -"
+    "C ${currentLockAccent} 0644 - - - ${defaultLockAccent}"
+  ];
 
   environment.etc = {
     "xdg/hypr/hypridle.conf".text = ''
@@ -2355,6 +3448,16 @@ in
     '';
 
     "xdg/hypr/hyprlock.conf".text = ''
+      # The two colours that follow the wallpaper. These are the fallback -- entry 0's pair,
+      # the live accent -- and lattice-wallpaper rewrites the sourced file on every pick with
+      # the pair belonging to the member it set. hyprlang takes the last definition of a
+      # variable, so the source has to come after these and both have to come before the
+      # block that reads them. A missing file is survivable: hyprlock logs the error and
+      # falls through to these, which is the right answer anyway.
+      $lockOuter = rgb(${hex (mixHex 0.5 theme.accentHex palette.surface0)})
+      $lockCheck = rgb(${hex theme.accentAltHex})
+      source = ${currentLockAccent}
+
       general {
         hide_cursor = true
       }
@@ -2374,13 +3477,30 @@ in
         color = rgb(${hex palette.base})
       }
 
+      # Positions are absolute output pixels measured from the centre of the screen, positive
+      # upwards -- not logical pixels, so the monitor scale does not enter into them, and not
+      # a fraction of the screen either, so one set of numbers has to clear the mark on every
+      # display it can land on.
+      #
+      # What they have to clear is the lattice mark in the middle of the wallpaper, and the
+      # panel is the binding constraint: the same drawing is sized for the screen it is drawn
+      # for, so on the panel canvas the mark covers y 640..1250 of 1890 (+/-305px, 16.1% of
+      # the height either side of centre) while on the desk canvas it is only +/-203 of 2160
+      # (9.4%). Clear 305 and the desk monitor is clear with room to spare.
+      #
+      # The old 360/260/-320 were tuned against the desk drawing and so put the date inside
+      # the panel's mark and the clock and password field across its top and bottom rows --
+      # three bright things on a bright hexagon, which is what made it unreadable. Measured
+      # off headless renders at both canvas sizes, these land at y 396..491 (clock),
+      # 558..580 (date) and 1342..1374 (field) on the panel: 60px clear above the mark and
+      # 92 below.
       label {
         monitor =
         text = $TIME
         color = rgb(${hex palette.text})
         font_size = 96
         font_family = ${theme.fonts.monospace} ExtraBold
-        position = 0, 360
+        position = 0, 500
         halign = center
         valign = center
       }
@@ -2391,7 +3511,7 @@ in
         color = rgb(${hex palette.subtext0})
         font_size = 22
         font_family = ${theme.fonts.monospace}
-        position = 0, 260
+        position = 0, 375
         halign = center
         valign = center
       }
@@ -2399,16 +3519,16 @@ in
       input-field {
         monitor =
         size = 320, 56
-        position = 0, -320
+        position = 0, -400
         halign = center
         valign = center
         rounding = 14
         outline_thickness = 2
-        outer_color = rgb(${hex theme.accentHex})
+        outer_color = $lockOuter
         inner_color = rgb(${hex palette.mantle})
         font_color = rgb(${hex palette.text})
         font_family = ${theme.fonts.monospace}
-        check_color = rgb(${hex theme.accentAltHex})
+        check_color = $lockCheck
         fail_color = rgb(${hex palette.red})
         capslock_color = rgb(${hex palette.yellow})
         placeholder_text = <span foreground="#${palette.overlay0}">password</span>

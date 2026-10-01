@@ -52,6 +52,26 @@ let
         exit 1
       }
 
+      # Read the deck's device keys back after something that moved the house.
+      #
+      # Twice, because a service call returning is not the same as the house reporting: a
+      # bulb told to come on is not yet saying that it has, and a scene that ramps or a
+      # device answering over the radio can still be reporting its old state a moment later.
+      # The first pass is what makes the press feel answered; the second, in the background,
+      # catches whatever was still in flight. Three GETs each, so neither is worth economising.
+      #
+      # `&` rather than anything cleverer for the same reason `lattice-deck arm` uses one:
+      # the deck runs these with no one waiting on them, so a backgrounded child outlives
+      # the press without holding it up.
+      resync() {
+        sleep 0.3
+        lattice-deck sync home || true
+        (
+          sleep 4
+          lattice-deck sync home || true
+        ) &
+      }
+
       # One service call, with the entity as its only target. The service is written the way
       # Home Assistant writes it -- domain.service -- and the path wants a slash.
       call() {
@@ -99,19 +119,19 @@ let
         off) service=homeassistant.turn_off ;;
         esac
         call "$service" "$entity" || fail "Could not reach $entity"
-        # The deck flipped the key's face the moment it was pressed; this is what corrects
-        # it from the house a moment later, the same way lattice-dnd repaints its own key.
-        # A little sleep first, because a bulb that has been told to come on is not yet
-        # reporting that it has.
-        sleep 0.3
-        lattice-deck sync home || true
+        resync
         ;;
 
       activate)
-        # Scenes and scripts leave no face to flip, so the banner is the only thing that
-        # says the press landed.
+        # A scene or a script has no face of its own to flip -- the banner is what says the
+        # press landed -- but it is very much allowed to move the devices that *do*. Bed
+        # time turns the fan on, so the fan's key has to be read back here exactly as it is
+        # after a toggle; without this it sits wrong until the five-minute timer comes
+        # round. resync before the banner, so the keys settle while notify-send is busy
+        # looking the friendly name up.
         entity="''${2:?usage: lattice-ha activate <entity>}"
         call "$(service_for "$entity")" "$entity" || fail "Could not run $entity"
+        resync
         notify-send -a lattice-ha -i dialog-information "Home Assistant" "$(friendly "$entity")"
         ;;
 
@@ -180,17 +200,26 @@ in
     };
 
     entities = {
+      # The two light groups rather than any of the bulbs inside them: `light.bedroom` is
+      # ceiling + lamp + hex panel, `light.bathroom_lights` is the four over the mirror. A
+      # group reports `on` when any member is, which is the reading the key wants -- one
+      # bulb left on is not a key that should be showing off.
       bedroomLights = entity "light.bedroom" "The bedroom's lights, as a toggle key.";
-      bathroomLights = entity "light.bathroom" "The bathroom's lights, as a toggle key.";
-      bedroomFan = entity "fan.bedroom" "The bedroom fan, as a toggle key.";
+      bathroomLights = entity "light.bathroom_lights" "The bathroom's lights, as a toggle key.";
 
-      # The four below are pressed through `activate`, which reads the domain and picks the
-      # service -- so whether one of these turns out to be a scene, a script or an
-      # automation is settled by the id alone and not by anything else here.
-      bedTime = entity "script.bed_time" "Bed time: the whole house, set for sleep.";
-      calm = entity "scene.calm" "Calm.";
+      # The same physical fan is on the bus twice -- `fan.fan` and `switch.fan`, one device
+      # named Fan in the Bedroom area. The fan domain is the honest one of the two, and it
+      # is what a speed would hang off if this ever grows one; `switch.fan` is the outlet
+      # underneath it.
+      bedroomFan = entity "fan.fan" "The bedroom fan, as a toggle key.";
+
+      # All four are scenes today. They are pressed through `activate`, which reads the
+      # domain and picks the service -- so one that later becomes a script, or an
+      # automation, is a changed id here and nothing else.
+      bedTime = entity "scene.bed_time" "Bed time: the whole house, set for sleep.";
+      calm = entity "scene.calm_work" "Calm.";
       focus = entity "scene.focus" "Focus.";
-      windDown = entity "script.wind_down" "Wind down: the hour before bed time.";
+      windDown = entity "scene.wind_down" "Wind down: the hour before bed time.";
     };
   };
 
