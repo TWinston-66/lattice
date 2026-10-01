@@ -117,6 +117,14 @@ let
     postPatch = (old.postPatch or "") + ''
       substituteInPlace streamdeck_ui/gui.py \
         --replace-fail "main_window.tray.show()" "pass  # lattice: no tray icon"
+
+      # The SIGTERM handler only runs once the interpreter gets a turn, which is what this
+      # timer is for -- but upstream keeps it in a local, so it is collected as soon as
+      # configure_signals returns and the handler never runs while Qt idles. A stop then
+      # sits out the whole stop timeout and gets SIGKILLed, which is a failed unit and a
+      # rebuild stalled behind it. Parenting it to the app keeps it alive.
+      substituteInPlace streamdeck_ui/gui.py \
+        --replace-fail "timer = QTimer()" "timer = QTimer(app)"
     '';
   });
 
@@ -1355,6 +1363,10 @@ in
           # either, which is the intended state -- see the note on streamdeckUi.
           ExecStart = "${streamdeckUi}/bin/streamdeck -n";
           Restart = "on-failure";
+          # A clean stop takes well under a second (see the QTimer patch on streamdeckUi).
+          # Anything longer is a hang, and the default 90s holds up every other unit a
+          # switch is restarting.
+          TimeoutStopSec = 5;
         };
       };
 
