@@ -569,6 +569,14 @@ in
     };
   };
 
+  # On resume, everything waking at once resolves hostnames before the network is back,
+  # and each of those lookups holds an nsncd worker until resolved gives up on the
+  # unreachable Tailscale DNS. With the default 8 workers that starves the passwd lookups
+  # behind them, including hyprlock's PAM check, so the lock screen sits unresponsive
+  # until nsncd hits its 10s handoff timeout and restarts. Enough workers that a burst of
+  # hung DNS lookups leaves room for the account lookups queued behind it.
+  systemd.services.nscd.environment.NSNCD_WORKER_COUNT = "64";
+
   # Both notifiers are no-ops without something owning org.freedesktop.Notifications, which
   # on this host is mako, out of the graphical profile.
   #

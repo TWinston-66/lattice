@@ -2591,6 +2591,7 @@ in
     ../webapps.nix
     ../widevine.nix
     ../phone.nix
+    ../bitwarden.nix
   ];
 
   ### SESSION ###
@@ -2719,7 +2720,18 @@ in
     # reachable by the PWAsForFirefox extension, which isn't installed. Web apps are
     # Firefox's own Taskbar Tabs instead -- see modules/nixos/webapps.nix for why.
     firefox.enable = true;
-    thunderbird.enable = true;
+    # Microsoft Graph accounts, hidden behind these prefs as of 156. The CU Microsoft 365
+    # tenant 403s every EWS request ("EWS is blocked by policy") since Exchange Online's
+    # EWS retirement began on 2026-10-01, so that mailbox is a Graph account now. Both
+    # prefixes pass the policy allowlist, so they ride the module rather than the Mac's
+    # user.js.
+    thunderbird = {
+      enable = true;
+      preferences = {
+        "mail.graph.enabled" = true;
+        "calendar.graph.enabled" = true;
+      };
+    };
     thunar = {
       enable = true;
       plugins = [

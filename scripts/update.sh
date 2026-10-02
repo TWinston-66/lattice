@@ -37,7 +37,8 @@ echo "    git add flake.lock && git commit -m 'flake: update'"
 # the Mac: nixos-apple-silicon ships no binary cache, so a moved kernel is built on the
 # machine itself (see the input's comment in flake.nix). The Dell only ever pulls from cache.
 echo
-read -rp "Rebuild now? [Y/n] " reply
+# EOF (no tty, or ctrl-d) counts as a no; under set -e a bare read would abort right here.
+read -rp "Rebuild now? [Y/n] " reply || reply=n
 case "$reply" in
     "" | [yY]*) ;;
     *)
