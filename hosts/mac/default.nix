@@ -68,6 +68,15 @@ in
     configurationLimit = 3;
   };
 
+  ### VIDEO DECODE ###
+  # The Apple Video Decoder through VA-API: H.264, HEVC (8- and 10-bit) and VP9 (profiles 0
+  # and 2), with no AV1 on this generation. The kernel driver and firmware were already
+  # here; the package is the userspace half. Measured 2026-10-04 on 20s of 1080p30 with
+  # ffmpeg -hwaccel vaapi: H.264 went from 2.75s of CPU to 0.24s and VP9 from 6.86s to
+  # 0.26s, still decoding at 230-360 fps, and the first 60 frames hash identical to
+  # software decode for both. `vainfo` lists the profiles.
+  hardware.graphics.extraPackages = [ (pkgs.callPackage ./libva-v4l2-request.nix { }) ];
+
   ### DISPLAY ###
   # The panel is 3024x1890 across 302x189mm, so 254ppi. Hyprland's "auto" picks scale 2,
   # which leaves a 1512x945 logical desktop at 127 logical DPI -- and everything sized in
