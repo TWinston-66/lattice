@@ -175,8 +175,8 @@
 
 | Host | Hardware | Notes |
 | --- | --- | --- |
-| `dell` | Intel laptop | Hibernation tuned for a day of classes, Thunderbolt via bolt |
-| `mac` | MacBook Pro, M2 Max | Asahi kernel next to macOS, aarch64 Widevine, carried DRM patch |
+| `dell` | Dell laptop | Hibernation tuned for a day of classes, Thunderbolt via bolt |
+| `mac` | MacBook | Asahi kernel next to macOS, aarch64 Widevine, carried DRM patch |
 
 Each host imports a small core (`base.nix`) and layers on the `laptop`, `graphical`
 and `server` profiles plus feature modules.

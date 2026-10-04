@@ -1412,8 +1412,8 @@ let
       total=$((busy + idle + iow))
 
       # cpufreq, grouped by the ceiling each policy reports: one group on a machine whose cores
-      # are all alike, two where the clusters differ -- this Mac's 4 E-cores and 8 P-cores, or an
-      # Alder Lake. A third ceiling, if one ever turns up, folds into the fastest and the slowest.
+      # are all alike, two where the clusters differ -- this Mac's E- and P-cores, or a hybrid
+      # x86 part. A third ceiling, if one ever turns up, folds into the fastest and the slowest.
       p_max=0 p_min=0 p_sum=0 p_n=0 p_gov=""
       e_max=0 e_min=0 e_sum=0 e_n=0
       for policy in /sys/devices/system/cpu/cpufreq/policy*; do
@@ -2839,7 +2839,7 @@ let
   # ~/.dotfiles/hypr/.config/hypr/hyprland.lua, and the key comes from the external keyboard
   # (NuPhy Halo65 V2), which is remapped in firmware and so emits a real KEY_SYSRQ wherever
   # it is plugged in. The Dell's built-in keyboard has a Print key too, but the Mac's
-  # (hid-apple, 05AC:0352) lands on the magic_keyboard_2021_and_2024 fn table, which has no
+  # (hid-apple) lands on the magic_keyboard_2021_and_2024 fn table, which has no
   # KEY_SYSRQ on either fn layer -- so on the Mac with nothing plugged in, the launcher
   # entry below is the only way in. (evtest-style dumps do show KEY_SYSRQ on the internal
   # keyboard; that comes from the generic HID boot-keyboard descriptor, not from a key that
@@ -3538,7 +3538,7 @@ let
     # an edit -- change it there.
 
     # 7pt is measured, not picked. fbcon's TER16x32 cell is 32px tall; foot reads the panel
-    # as `eDP-1: 3024x1890+0x0@120Hz 14.03" scale=3, DPI=254.24/338.99 (physical/scaled)`;
+    # as `eDP-1: 3024x1890+0x0@120Hz scale=3, DPI=254.24/338.99 (physical/scaled)`;
     # and JetBrains Mono's cell comes out 1.345x its pixel size (28.25px of font -> 38px of
     # cell). So 32px of cell is 23.8px of font is 6.74pt, and 7pt rounds up rather than down.
     # Measured back, it lands a 15x34 cell against fbcon's 16x32 -- 0.134" a row against
@@ -3766,8 +3766,8 @@ in
     # reachable by the PWAsForFirefox extension, which isn't installed. Web apps are
     # Firefox's own Taskbar Tabs instead -- see modules/nixos/webapps.nix for why.
     firefox.enable = true;
-    # Microsoft Graph accounts, hidden behind these prefs as of 156. The CU Microsoft 365
-    # tenant 403s every EWS request ("EWS is blocked by policy") since Exchange Online's
+    # Microsoft Graph accounts, hidden behind these prefs as of 156. The university's Microsoft
+    # 365 tenant 403s every EWS request ("EWS is blocked by policy") since Exchange Online's
     # EWS retirement began on 2026-10-01, so that mailbox is a Graph account now. Both
     # prefixes pass the policy allowlist, so they ride the module rather than the Mac's
     # user.js.

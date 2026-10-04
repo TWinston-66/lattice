@@ -307,7 +307,7 @@ let
   # ~/.dotfiles/hypr call.
   #
   # On the Mac there is genuinely no such key to find: hid-apple picks its fn translation
-  # table by bus and product, and this keyboard (BUS_SPI, 05AC:0352) is not one of the two
+  # table by bus and product, and this keyboard (on BUS_SPI) is not one of the two
   # special-cased MacBook Pro 13s, so it lands on magic_keyboard_2021_and_2024_fn_keys --
   # where F5 is MICMUTE, F6 is SLEEP, and nothing at all maps to KEY_KBDILLUM*. That
   # matches the legends Apple prints on the 2021+ function row, which has no backlight key

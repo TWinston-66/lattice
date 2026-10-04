@@ -958,9 +958,9 @@ let
         esac
       }
 
-      # A sink's description rather than its node name, for the banners: "MacBook Pro J414
-      # Speakers" is what the key changed, `audio_effect.j414-convolver` is only how it is
-      # spelled. `pactl list` is the listing that carries both, and the pairing is
+      # A sink's description rather than its node name, for the banners: the MacBook's
+      # "... Speakers" is what the key changed, `audio_effect.<board>-convolver` is only how
+      # it is spelled. `pactl list` is the listing that carries both, and the pairing is
       # positional -- Description follows the Name it belongs to -- so the name is held
       # until its description arrives. Falls back to the node name, which is better than an
       # empty banner if the sink went away between the switch and the read.

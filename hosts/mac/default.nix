@@ -361,8 +361,8 @@ in
     { palette, ... }:
     let
       calendars = {
-        "262193a3-8f90-4cc1-a7af-ad483a5c01bc" = palette.blue; # winstonbthompson@gmail.com
-        "bf0f94d8-2ec2-4e58-aae8-51872d804284" = palette.lavender; # Winston Thompson
+        "262193a3-8f90-4cc1-a7af-ad483a5c01bc" = palette.blue; # Gmail
+        "bf0f94d8-2ec2-4e58-aae8-51872d804284" = palette.lavender; # Personal
         "53d36323-e22a-4766-bf98-ca03ed141c5f" = palette.yellow; # Work
         "5dd1668b-1a09-4ea4-b1a8-a92deda57d8c" = palette.teal; # School
         "a005c774-a761-4e47-947d-400e057738a4" = palette.green; # Tasks (local)
@@ -396,7 +396,7 @@ in
   ];
 
   ### KEYBOARD ###
-  # The built-in keyboard is bound to hid-apple (HID 05AC:0352), which can swap the two
+  # The built-in keyboard is bound to hid-apple, which can swap the two
   # modifiers in the driver itself: the Cmd key beside the space bar then reports Ctrl, and
   # the Ctrl key in the corner reports Super. Cmd+C/V/X/A/Z/S/F/T/W/Q land under the thumb
   # where macOS puts them, in every application, while Hyprland keeps all of its SUPER
