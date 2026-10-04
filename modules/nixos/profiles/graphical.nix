@@ -874,13 +874,17 @@ let
   # second switch disagreeing with the first -- press one and the other still shows the
   # opposite, both of them telling the truth about their own lock.
   #
-  # hypridle is what actually locks the session, blanks the screens and dims the deck, so
-  # stopping it is the honest way to say "stay awake" -- and it stops all three rather than
-  # only the blank, which is what the inhibit lock did too. `systemctl is-active` is then a
-  # state both surfaces can read, and neither owns.
+  # So "stay awake" is a logind idle inhibitor held by a transient user unit, and
+  # `systemctl is-active` on that unit is a state both surfaces can read and neither owns.
+  # hypridle honours logind idle inhibitors (ignore_systemd_inhibit defaults to false), so
+  # every listener pauses -- the lock, the blank and the deck dim alike.
   #
-  # `on` means staying awake, matching the bar's old activated/deactivated. That it stops a
-  # unit to do so is the sort of inversion worth saying out loud.
+  # This used to stop hypridle outright, which also took out its before_sleep_cmd: with
+  # keep-awake left on, a lid close suspended and resumed straight to an unlocked desktop
+  # (2026-10-04). Keeping hypridle running keeps the lock-before-sleep, and its
+  # inhibit_sleep still holds the suspend until hyprlock is up.
+  #
+  # `on` means staying awake, matching the bar's old activated/deactivated.
   idleInhibit = pkgs.writeShellApplication {
     name = "lattice-idle";
     runtimeInputs = [
@@ -888,18 +892,23 @@ let
       pkgs.procps
     ];
     text = ''
-      unit=hypridle.service
+      unit=lattice-awake.service
 
-      awake() { ! systemctl --user is-active --quiet "$unit"; }
+      awake() { systemctl --user is-active --quiet "$unit"; }
+
+      stay_awake() {
+        awake || systemd-run --user --unit="$unit" --quiet \
+          systemd-inhibit --what=idle --who=lattice-idle --why="Keep awake" sleep infinity
+      }
 
       case "''${1:-toggle}" in
-      on)  systemctl --user stop "$unit" ;;
-      off) systemctl --user start "$unit" ;;
+      on)  stay_awake ;;
+      off) systemctl --user stop "$unit" ;;
       toggle)
         if awake; then
-          systemctl --user start "$unit"
-        else
           systemctl --user stop "$unit"
+        else
+          stay_awake
         fi
         ;;
       status)
@@ -4090,14 +4099,21 @@ in
       config.programs.firefox.finalPackage
     ];
 
+    # No start limit: lattice-theme restarts this on every theme.css change, so a few picks
+    # in quick succession are five starts inside ten seconds, and systemd's default limit
+    # then leaves it failed -- where try-restart does nothing, and every volume, brightness
+    # and Solaar mouse binding (all swayosd-client) goes silently dead until someone runs
+    # reset-failed (2026-10-04). RestartSec keeps a real crash loop to one try a second.
     swayosd = {
       description = "Volume and brightness OSD";
       partOf = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
       wantedBy = [ "graphical-session.target" ];
+      startLimitIntervalSec = 0;
       serviceConfig = {
         ExecStart = "${pkgs.swayosd}/bin/swayosd-server";
         Restart = "on-failure";
+        RestartSec = 1;
       };
     };
 

@@ -942,7 +942,7 @@ let
 
       # Read from lattice-idle rather than from systemctl, so the key and the bar's pill
       # cannot disagree about what "awake" means: both ask the one script, and it is the one
-      # that knows stopping hypridle is how this is done.
+      # that knows a logind idle inhibitor is how this is done.
       sync_awake() {
         if [ "$(lattice-idle status | class)" = awake ]; then
           face ${at "awake"} 1
