@@ -549,7 +549,7 @@ in
   # the Mac's sleep guard uses -- a failure in instrumentation must never be the reason a
   # laptop declined to sleep.
   #
-  # onFailure reaches the session through the bridge in the graphical profile, and this is
+  # onFailure reaches the session through the bridge in desktop/notifications.nix, and this is
   # the system unit that most needs it: a suspend accounting unit that has stopped recording
   # looks exactly like a laptop that has not slept. Guarded on the desktop being there at
   # all, since the template only exists alongside a notifier to deliver it.

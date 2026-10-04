@@ -1,0 +1,1225 @@
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  inherit (import ./lib.nix { inherit config lib pkgs; })
+    theme
+    readColours
+    rofiWithCalc
+    ;
+
+  # Tailscale has no Linux GUI, so the bar pill is the interface: the tooltip carries the
+  # connection report and a click brings the tunnel up or down. `tailscale status --json`
+  # exposes the daemon's own view, so there is no separate session state to keep in step --
+  # the same reason lattice-sunset asks hyprsunset rather than tracking the temperature.
+  #
+  # Peer counts skip exit nodes: this tailnet has the Mullvad integration on, so 533 of its
+  # 539 peers are exit nodes and counting them would hide the six real devices. Health is
+  # reported as a second CSS class, so a running-but-warning node doesn't read as a
+  # healthy green pill. The glyphs are Material Design Icons from Nerd Fonts 3.5.0;
+  # there is no Tailscale mark in the set, and these are recoloured by style.css anyway.
+  tailscale = pkgs.writeShellApplication {
+    name = "lattice-tailscale";
+    runtimeInputs = [
+      pkgs.tailscale
+      pkgs.jq
+      pkgs.procps
+      pkgs.xdg-utils
+      pkgs.coreutils # sleep, while waiting on the sign-in URL
+    ];
+    text = ''
+      glyph_connected=$'\U000F0582' # md-vpn
+      glyph_stopped=$'\U000F0319'   # md-lan_disconnect
+      glyph_login=$'\U000F08EE'     # md-lock_alert
+      glyph_alert=$'\U000F0ECC'     # md-shield_alert
+
+      # Waybar's custom-module JSON. `class` is an array, so a state and a warning can both
+      # apply; style.css keys off the names. Built through jq rather than printf so newlines
+      # and any awkward character in a hostname or health line are escaped, not trusted.
+      emit() {
+        local text="$1" tooltip="$2"
+        shift 2
+        jq -cn \
+          --arg text "$text" \
+          --arg tooltip "$tooltip" \
+          --argjson class "$(jq -cn --args '$ARGS.positional' "$@")" \
+          '{text: $text, tooltip: $tooltip, class: $class}'
+      }
+
+      status() {
+        local json
+        if ! json="$(tailscale status --json 2>/dev/null)" || [ -z "$json" ]; then
+          emit "$glyph_stopped" $'Tailscale is not responding\ntailscaled may be stopped' stopped
+          return 0
+        fi
+
+        local backend text
+        local -a classes lines
+
+        backend="$(jq -r '.BackendState // "NoState"' <<<"$json")"
+
+        case "$backend" in
+        Running)
+          local host ip tailnet dns advertise online devs exit_id exit_name health
+          host="$(jq -r '.Self.HostName // "this device"' <<<"$json")"
+          ip="$(jq -r '.Self.TailscaleIPs[0] // ""' <<<"$json")"
+          dns="$(jq -r '.Self.DNSName // "" | sub("\\.$"; "")' <<<"$json")"
+          tailnet="$(jq -r '.CurrentTailnet.Name // ""' <<<"$json")"
+          advertise="$(jq -r '.Self.ExitNode // false' <<<"$json")"
+
+          read -r online devs <<<"$(jq -r '[([.Peer[] | select((.ExitNodeOption | not) and .Online)] | length), ([.Peer[] | select(.ExitNodeOption | not)] | length)] | @tsv' <<<"$json")"
+
+          lines=("Tailscale: Connected" "$host  $ip")
+          if [ -n "$tailnet" ]; then lines+=("tailnet: $tailnet"); fi
+          lines+=("devices: $online/$devs online")
+
+          # Using an exit node is the difference between "the tunnel is up" and "traffic
+          # is actually going through Mullvad", so it gets its own class for style.css to
+          # colour on: teal with one, red without. ExitNodeStatus is null unless this node
+          # is routing through one; its ID names the peer to show in the tooltip.
+          exit_id="$(jq -r '.ExitNodeStatus.ID // empty' <<<"$json")"
+          local exit_class
+          if [ -n "$exit_id" ]; then
+            exit_name="$(jq -r --arg id "$exit_id" '[.Peer[] | select(.ID == $id)][0].HostName // $id' <<<"$json")"
+            lines+=("exit node: $exit_name")
+            exit_class=exit-node
+          else
+            lines+=("exit node: none")
+            exit_class=no-exit-node
+          fi
+          if [ "$advertise" = true ]; then
+            lines+=("advertising as an exit node")
+          fi
+          if [ -n "$dns" ]; then lines+=("$dns"); fi
+
+          # Health is where tailscaled reports route conflicts and the like. Showing it as
+          # a second class is the whole reason the running state isn't just the vpn glyph.
+          health="$(jq -r '.Health // [] | .[]' <<<"$json")"
+          if [ -n "$health" ]; then
+            text="$glyph_alert"
+            classes=(running warning)
+            while IFS= read -r line; do lines+=("warning: $line"); done <<<"$health"
+          else
+            text="$glyph_connected"
+            classes=(running "$exit_class")
+          fi
+          ;;
+
+        Starting)
+          text="$glyph_connected"
+          classes=(starting)
+          lines=("Tailscale: starting")
+          ;;
+
+        NeedsLogin | NeedsMachineAuth)
+          local authurl
+          text="$glyph_login"
+          classes=(needs-login)
+          authurl="$(jq -r '.AuthURL // empty' <<<"$json")"
+          if [ "$backend" = NeedsMachineAuth ]; then
+            lines=("Tailscale: waiting for approval")
+          else
+            lines=("Tailscale: signed out" "click to sign in")
+          fi
+          if [ -n "$authurl" ]; then lines+=("$authurl"); fi
+          ;;
+
+        *)
+          text="$glyph_stopped"
+          classes=(stopped)
+          lines=("Tailscale: disconnected" "click to connect")
+          ;;
+        esac
+
+        local tooltip
+        printf -v tooltip '%s\n' "''${lines[@]}"
+        emit "$text" "''${tooltip%$'\n'}" "''${classes[@]}"
+      }
+
+      toggle() {
+        local json backend
+        json="$(tailscale status --json 2>/dev/null || true)"
+        backend="$(jq -r '.BackendState // "NoState"' <<<"$json" 2>/dev/null || echo NoState)"
+
+        case "$backend" in
+        Running)
+          tailscale down
+          ;;
+
+        # Signed out, so there is no tunnel to raise -- there is a sign-in to finish, and
+        # that needs a browser. `tailscale up` cannot be the whole answer here: it prints
+        # the sign-in URL on its own stdout and then blocks until the browser leg
+        # completes, and it has to be detached or the click would hang forever, which
+        # threw the URL away and left the pill sitting at "signed out" with nothing on
+        # screen. tailscaled publishes the same URL in its status once a flow exists --
+        # the copy the tooltip already shows -- so take it from there and open it.
+        NeedsLogin | NeedsMachineAuth)
+          local authurl n=0
+          authurl="$(jq -r '.AuthURL // empty' <<<"$json" 2>/dev/null || true)"
+
+          # No flow yet: ask for one. The URL is minted by the control plane, so it lands
+          # a beat after the request rather than with it. 10s is a generous round trip and
+          # still short enough that an unreachable control plane doesn't leave this
+          # spinning behind the bar.
+          if [ -z "$authurl" ]; then
+            tailscale up >/dev/null 2>&1 &
+            disown || true
+
+            while [ -z "$authurl" ] && [ "$n" -lt 40 ]; do
+              sleep 0.25
+              n=$((n + 1))
+              authurl="$(tailscale status --json 2>/dev/null | jq -r '.AuthURL // empty' 2>/dev/null || true)"
+            done
+          fi
+
+          if [ -n "$authurl" ]; then
+            xdg-open "$authurl" >/dev/null 2>&1 &
+            disown || true
+          fi
+          ;;
+
+        *)
+          # Authenticated and merely down, or the daemon has no opinion yet: `up` returns
+          # at once, so the signal below lands on the new state.
+          tailscale up >/dev/null 2>&1 &
+          disown || true
+          ;;
+        esac
+
+        # RTMIN+2 matches the "signal" of custom/tailscale in ~/.dotfiles/waybar. After a
+        # sign-in it only repaints the pill as "signed out" again -- the browser leg is
+        # still in progress at this point -- so the switch to connected arrives with the
+        # module's 30s interval.
+        pkill -RTMIN+2 waybar 2>/dev/null || true
+      }
+
+      web() {
+        xdg-open "https://login.tailscale.com/admin/machines" >/dev/null 2>&1 &
+        disown || true
+      }
+
+      case "''${1:-status}" in
+      status) status ;;
+      toggle) toggle ;;
+      web) web ;;
+      *)
+        echo "usage: lattice-tailscale [status|toggle|web]" >&2
+        exit 2
+        ;;
+      esac
+    '';
+  };
+
+  # Weather, from Open-Meteo: no API key, no account, and -- the reason it is this rather
+  # than the usual wttr.in one-liner -- it takes explicit coordinates. Anything that
+  # geolocates by IP reads the Tailscale exit node instead of the laptop, and this tailnet
+  # has the Mullvad integration on (see lattice-tailscale above), so the pill would quietly
+  # report another country's weather most of the time. The coordinates are
+  # lattice.weather.* in modules/nixos/weather.nix.
+  #
+  # The pill is glyph + temperature + apparent temperature, the last dimmed with Pango
+  # markup rather than split into a second module, so the whole reading stays one bubble on
+  # a bar whose right side is already full. Conditions are carried by the glyph and the
+  # colour, which is why the text spells out neither: the script emits a class per
+  # temperature band and style.css colours it, the same contract lattice-sunset and
+  # lattice-tailscale use.
+  #
+  # The last good payload is cached in XDG_RUNTIME_DIR, so a resume with the Wi-Fi still
+  # associating re-renders the previous reading greyed (.stale) instead of blanking the
+  # pill. Runtime dir rather than /var/lib: a reading that survived a reboot would be too
+  # old to show anyway.
+  weather = pkgs.writeShellApplication {
+    name = "lattice-weather";
+    runtimeInputs = [
+      pkgs.curl
+      pkgs.jq
+      pkgs.procps
+      pkgs.coreutils # mktemp
+    ];
+    text = ''
+      lat=${config.lattice.weather.latitude}
+      lon=${config.lattice.weather.longitude}
+      label=${lib.escapeShellArg config.lattice.weather.label}
+
+      cache="''${XDG_RUNTIME_DIR:-/tmp}/lattice-weather.json"
+
+      # forecast_days=1 because the tooltip only shows today's high, low and sunset; the
+      # hourly block is left off for the same reason. `timezone=auto` resolves from the
+      # coordinates, so the sunset timestamp is already local and needs no conversion.
+      api="https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day&daily=temperature_2m_max,temperature_2m_min,sunset&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1"
+
+      # Written to a temp file and moved into place only once jq confirms the body parses,
+      # so a captive portal's login page or a truncated response can't overwrite a good
+      # cache with something that renders as an empty pill.
+      fetch() {
+        local tmp
+        tmp=$(mktemp)
+        if curl -fsS --max-time 10 "$api" -o "$tmp" && jq -e '.current.temperature_2m' "$tmp" >/dev/null 2>&1; then
+          mv "$tmp" "$cache"
+          return 0
+        fi
+        rm -f "$tmp"
+        return 1
+      }
+
+      # 16 points of 22.5 degrees each. Integer arithmetic, so the half-degree is carried by
+      # scaling both sides by 10: index = (deg * 10 + 112) / 225, which rounds to the
+      # nearest point rather than truncating toward N.
+      compass() {
+        local points=(N NNE NE ENE E ESE SE SSE S SSW SW WSW W WNW NW NNW)
+        echo "''${points[$((($1 * 10 + 112) / 225 % 16))]}"
+      }
+
+      # WMO 4677, as Open-Meteo documents it. Codes are grouped to the glyphs the Material
+      # Design range actually has -- there is no "slight vs moderate drizzle" mark -- and
+      # the day/night split only exists for the three clear-ish codes, which are the only
+      # ones that look wrong with a sun in them at midnight.
+      icon_for() {
+        case "$1" in
+        0)        if [ "$2" = 1 ]; then echo "󰖙 Clear"; else echo "󰖔 Clear"; fi ;;
+        1)        if [ "$2" = 1 ]; then echo "󰖙 Mainly clear"; else echo "󰖔 Mainly clear"; fi ;;
+        2)        if [ "$2" = 1 ]; then echo "󰖕 Partly cloudy"; else echo "󰼱 Partly cloudy"; fi ;;
+        3)        echo "󰖐 Overcast" ;;
+        45 | 48)  echo "󰖑 Fog" ;;
+        51 | 53 | 55) echo "󰼳 Drizzle" ;;
+        56 | 57)  echo "󰙿 Freezing drizzle" ;;
+        61 | 63)  echo "󰖖 Rain" ;;
+        65)       echo "󰖗 Heavy rain" ;;
+        66 | 67)  echo "󰙿 Freezing rain" ;;
+        71 | 73)  echo "󰖘 Snow" ;;
+        75)       echo "󰼶 Heavy snow" ;;
+        77)       echo "󰖘 Snow grains" ;;
+        80 | 81)  echo "󰖖 Rain showers" ;;
+        82)       echo "󰖗 Violent rain showers" ;;
+        85 | 86)  echo "󰖘 Snow showers" ;;
+        95)       echo "󰖓 Thunderstorm" ;;
+        96 | 99)  echo "󰼯 Thunderstorm with hail" ;;
+        *)        echo "󰼮 WMO $1" ;;
+        esac
+      }
+
+      # Fahrenheit bands. The glyph says what is falling out of the sky; the colour says
+      # whether to put a coat on, which is the part a forecast usually gets consulted for.
+      band_for() {
+        if   [ "$1" -lt 32 ]; then echo freezing
+        elif [ "$1" -lt 50 ]; then echo cold
+        elif [ "$1" -lt 75 ]; then echo mild
+        elif [ "$1" -lt 90 ]; then echo warm
+        else echo hot
+        fi
+      }
+
+      render() {
+        local stale="$1"
+        local code isday temp feels hum wind wdir hi lo sunset
+        local icon desc band classes text tooltip
+
+        # One jq pass into positional fields rather than ten invocations. round() gives
+        # integers, which is what the [ -lt ] comparisons in band_for need and what the
+        # pill should show -- a tenth of a degree is noise at this size.
+        IFS=$'\t' read -r code isday temp feels hum wind wdir hi lo sunset < <(
+          jq -r '[
+            .current.weather_code,
+            .current.is_day,
+            (.current.temperature_2m | round),
+            (.current.apparent_temperature | round),
+            .current.relative_humidity_2m,
+            (.current.wind_speed_10m | round),
+            (.current.wind_direction_10m | round),
+            (.daily.temperature_2m_max[0] | round),
+            (.daily.temperature_2m_min[0] | round),
+            (.daily.sunset[0] | split("T")[1])
+          ] | @tsv' "$cache"
+        )
+
+        read -r icon desc <<<"$(icon_for "$code" "$isday")"
+        band=$(band_for "$temp")
+
+        classes=$(jq -cn --arg b "$band" --argjson s "$stale" \
+          'if $s then [$b, "stale"] else [$b] end')
+
+        # Pango markup: the apparent temperature is the same size but dimmed, so it reads
+        # as a qualifier on the number beside it rather than as a second reading competing
+        # with it. waybar runs a custom module's text through set_markup, so this is parsed
+        # rather than shown literally.
+        #
+        # Both temperatures are right-aligned in a three-character field. The bar font is
+        # JetBrains Mono, so that makes the pill a fixed width whatever the reading is --
+        # which is what lets the centre group's counterweight be a constant. Without it the
+        # pill would be two characters narrower at 73° than at -5°, and the clock beside it
+        # would wander off centre as the temperature changed. Three characters covers
+        # -99..999; a reading outside that widens the pill, and the clock drifts by half the
+        # difference until it comes back.
+        text=$(printf '%s %3s° <span alpha="55%%">%3s°</span>' "$icon" "$temp" "$feels")
+
+        tooltip=$(printf '<b>%s</b>\n%s\nH %s°  L %s°\nWind %s mph %s · Humidity %s%%\nSunset %s' \
+          "$label" "$desc" "$hi" "$lo" "$wind" "$(compass "$wdir")" "$hum" "$sunset")
+
+        if [ "$stale" = true ]; then
+          tooltip=$(printf '%s\n<i>Offline - last known reading</i>' "$tooltip")
+        fi
+
+        jq -cn --arg text "$text" --arg tooltip "$tooltip" --argjson class "$classes" \
+          '{text: $text, tooltip: $tooltip, class: $class}'
+      }
+
+      status() {
+        local stale=false
+        fetch || stale=true
+
+        # Nothing cached and nothing fetched -- a cold boot with no network yet. A muted
+        # glyph rather than an empty module, which waybar would collapse to a bare pill.
+        if [ ! -s "$cache" ]; then
+          printf '{"text":"󰅤","tooltip":"Weather unavailable","class":["unavailable"]}\n'
+          return
+        fi
+
+        render "$stale"
+      }
+
+      case "''${1:-status}" in
+      status) status ;;
+      # The signal is the whole of it: waybar re-runs `status` on receipt, and that is what
+      # re-fetches. Doing the fetch here as well would make every click two round trips.
+      # RTMIN+3 matches the "signal" of custom/weather in ~/.dotfiles/waybar.
+      refresh) pkill -RTMIN+3 waybar 2>/dev/null || true ;;
+      *)
+        echo "usage: lattice-weather [status|refresh]" >&2
+        exit 2
+        ;;
+      esac
+    '';
+  };
+
+  # The power-profile pill, as a custom module rather than waybar's own
+  # power-profiles-daemon. What the swap buys is the tooltip: four sparklines over a
+  # two-minute window -- load, each core cluster's clock and the package's own draw in watts
+  # -- under the profile's name, and below them the fans, the hottest sensor that names
+  # itself and what the battery is doing. None of that could hang off the built-in module,
+  # whose tooltip-format takes exactly one placeholder, {profile}.
+  #
+  # What it costs is the D-Bus subscription: the built-in module watched
+  # net.hadess.PowerProfiles and repainted the instant anything else set a profile, where
+  # this polls. At the pill's 2s interval a press on the deck's profile key, or a
+  # `powerprofilesctl set` in a shell, lands within one tick -- close enough not to read as
+  # a lag, and the reason the click below goes through lattice-deck rather than at busctl.
+  #
+  # The sampling has to run whether or not anyone is hovering, because a graph that only
+  # started when the tooltip opened would be an empty one. So a tick is built to be cheap:
+  # sysfs through bash's `read` rather than $(cat), the slow-moving readouts cached between
+  # ticks, and one fork in the whole script -- busctl, for the profile. That measures ~15ms
+  # per tick on this Mac, most of it bash's own startup. The window lives in
+  # XDG_RUNTIME_DIR, so it is per-boot and never on disk.
+  powerProfile = pkgs.writeShellApplication {
+    name = "lattice-power-profile";
+    runtimeInputs = [
+      pkgs.systemd # busctl, for the profile the pill names
+      pkgs.procps # pkill, to signal the bar after a click
+    ];
+    text = ''
+      # The tooltip's palette, read from the run-time theme on every tick so a theme switch
+      # reaches it too.
+      # The three profile colours are the ones style.css gives the pill, so the name in the
+      # tooltip and the glyph on the bar are the same colour; the series each get their own.
+      ${readColours}
+      c_dim=''${c[overlay1]}
+      c_text=''${c[text]}
+      c_load=''${c[blue]}
+      c_pcore=''${c[lavender]}
+      c_ecore=''${c[teal]}
+      c_watt=''${c[peach]}
+      c_saver=''${c[green]}
+      c_balanced=''${c[mauve]}
+      c_perf=''${c[peach]}
+      c_none=''${c[overlay0]}
+      # The graph is `width` samples of the waybar interval, so these two are the window: 60 at
+      # 2s is the last two minutes. Keep `period` in step with "interval" on custom/power-profile
+      # in ~/.dotfiles/waybar/config.jsonc -- it is only used to say how long the window is.
+      width=60
+      period=2
+      extras_every=10
+
+      state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-power-profile"
+      history="$state/history"
+      extras="$state/extras"
+
+      bars=(▁ ▂ ▃ ▄ ▅ ▆ ▇ █)
+
+      case "''${1:-status}" in
+      status) ;;
+      cycle)
+        # The cycle itself belongs to lattice-deck: it already walks saver -> balanced ->
+        # performance through only the profiles this machine's daemon offers, and repaints the
+        # deck's key afterwards. Going through it rather than straight at busctl is what keeps the
+        # bar and the deck from disagreeing about which profile is on -- the same reason both
+        # audio pills mute through lattice-deck.
+        lattice-deck profile
+        # RTMIN+6 matches the "signal" of custom/power-profile in ~/.dotfiles/waybar. 1 to 5 are
+        # sunset, tailscale, weather, dnd and idle.
+        pkill -RTMIN+6 waybar 2>/dev/null || true
+        exit 0
+        ;;
+      *)
+        echo "usage: lattice-power-profile [status|cycle]" >&2
+        exit 2
+        ;;
+      esac
+
+      # Every reading here is a one-line sysfs file, and $(cat) would fork for each -- twenty-odd
+      # of them per tick, every two seconds, all day. `read` into a global is the same thing with
+      # no process: `rd path` leaves the value in $val, and a file that is missing, empty or
+      # unreadable leaves it empty rather than failing the script.
+      val=""
+      rd() {
+        val=""
+        [ -r "$1" ] || return 0
+        read -r val < "$1" 2>/dev/null || val=""
+      }
+
+      # Guards for everything that reaches arithmetic. sysfs gives unsigned; the state files carry
+      # -1 for "this machine has no such sensor", and `sane` is the one test that covers a whole
+      # series at once -- a line of digits, spaces and minus signs is safe to do sums on, and
+      # anything else (a half-written file from a tick that was killed) starts the window again.
+      uint() { case "''${1-}" in "" | *[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+      sane() { case "''${1-}" in *[!0-9\ -]*) return 1 ;; *) return 0 ;; esac; }
+
+      ### SAMPLE ###
+
+      [ -d "$state" ] || mkdir -p "$state"
+
+      now=''${EPOCHREALTIME/./}
+
+      # CPU busy fraction, as the jiffy counters' delta against the previous sample.
+      read -r _ u n s idle iow irq sirq steal _ < /proc/stat
+      busy=$((u + n + s + irq + sirq + steal))
+      total=$((busy + idle + iow))
+
+      # cpufreq, grouped by the ceiling each policy reports: one group on a machine whose cores
+      # are all alike, two where the clusters differ -- this Mac's E- and P-cores, or a hybrid
+      # x86 part. A third ceiling, if one ever turns up, folds into the fastest and the slowest.
+      p_max=0 p_min=0 p_sum=0 p_n=0 p_gov=""
+      e_max=0 e_min=0 e_sum=0 e_n=0
+      for policy in /sys/devices/system/cpu/cpufreq/policy*; do
+        rd "$policy/cpuinfo_max_freq"
+        uint "$val" || continue
+        hi=$val
+        rd "$policy/scaling_cur_freq"
+        uint "$val" || continue
+        cur=$val
+        rd "$policy/cpuinfo_min_freq"
+        if uint "$val"; then lo=$val; else lo=0; fi
+
+        if [ "$hi" -gt "$p_max" ]; then
+          # A faster group than anything seen so far. What was the fastest becomes the slowest,
+          # unless something slower has already claimed that.
+          if [ "$p_max" -gt 0 ] && { [ "$e_max" -eq 0 ] || [ "$p_max" -lt "$e_max" ]; }; then
+            e_max=$p_max e_min=$p_min e_sum=$p_sum e_n=$p_n
+          fi
+          p_max=$hi p_min=$lo p_sum=$cur p_n=1
+          rd "$policy/scaling_governor"
+          p_gov=$val
+        elif [ "$hi" -eq "$p_max" ]; then
+          p_sum=$((p_sum + cur)) p_n=$((p_n + 1))
+        elif [ "$e_max" -eq 0 ] || [ "$hi" -lt "$e_max" ]; then
+          e_max=$hi e_min=$lo e_sum=$cur e_n=1
+        elif [ "$hi" -eq "$e_max" ]; then
+          e_sum=$((e_sum + cur)) e_n=$((e_n + 1))
+        fi
+      done
+      if [ "$p_n" -gt 0 ]; then p_cur=$((p_sum / p_n)); else p_cur=0; fi
+      if [ "$e_n" -gt 0 ]; then e_cur=$((e_sum / e_n)); else e_cur=0; fi
+
+      # Draw, in milliwatts, from whichever of three sources this machine has. macsmc's "Total
+      # System Power" is the whole-package figure and the reason this row is worth graphing at
+      # all: it is the number a power profile is actually chosen for. The other two are what the
+      # Dell has instead, and neither has been run there yet.
+      power_mw=-1
+      energy_uj=-1
+      power_src=""
+      for hwmon in /sys/class/hwmon/hwmon*; do
+        for lbl in "$hwmon"/power*_label; do
+          [ -e "$lbl" ] || continue
+          rd "$lbl"
+          [ "$val" = "Total System Power" ] || continue
+          rd "''${lbl%_label}_input"
+          uint "$val" || continue
+          power_mw=$((val / 1000))
+          power_src=smc
+        done
+      done
+      if [ -z "$power_src" ]; then
+        # Intel's RAPL package counter is microjoules since boot, so it needs the previous reading
+        # and the interval between the two -- the same delta the jiffies take above.
+        rd /sys/class/powercap/intel-rapl:0/energy_uj
+        if uint "$val"; then
+          energy_uj=$val
+          power_src=rapl
+        fi
+      fi
+      if [ -z "$power_src" ]; then
+        # Last resort: what the battery is passing. Only true while discharging -- on AC most
+        # laptops report the charge rate here, or zero -- so the row it draws is the honest one
+        # for a machine on battery and not much otherwise.
+        for supply in /sys/class/power_supply/*; do
+          rd "$supply/scope"
+          [ "$val" = Device ] && continue
+          rd "$supply/status"
+          [ "$val" = Discharging ] || continue
+          rd "$supply/power_now"
+          uint "$val" || continue
+          power_mw=$((val / 1000))
+          power_src=battery
+          break
+        done
+      fi
+
+      ### HISTORY ###
+
+      # Five lines: the counters the next tick differences against, then one line per series. The
+      # series are stored across rather than down -- a line of numbers each, trimmed to the
+      # graph's width -- so the render below reads its four graphs with four `read -a` and never
+      # parses a sample. It lives in XDG_RUNTIME_DIR, so a reboot starts a fresh window.
+      hist=()
+      [ -r "$history" ] && mapfile -t hist < "$history"
+
+      prev=()
+      cpus=() pfreqs=() efreqs=() watts=()
+      if [ "''${#hist[@]}" -ge 5 ] && sane "''${hist[0]}" && sane "''${hist[1]}" &&
+        sane "''${hist[2]}" && sane "''${hist[3]}" && sane "''${hist[4]}"; then
+        read -r -a prev <<<"''${hist[0]}"
+        read -r -a cpus <<<"''${hist[1]}"
+        read -r -a pfreqs <<<"''${hist[2]}"
+        read -r -a efreqs <<<"''${hist[3]}"
+        read -r -a watts <<<"''${hist[4]}"
+      fi
+
+      prev_ts=0 prev_busy=0 prev_total=0 prev_energy=-1
+      uint "''${prev[0]-}" && prev_ts=''${prev[0]}
+      uint "''${prev[1]-}" && prev_busy=''${prev[1]}
+      uint "''${prev[2]-}" && prev_total=''${prev[2]}
+      uint "''${prev[3]-}" && prev_energy=''${prev[3]}
+
+      d_busy=$((busy - prev_busy))
+      d_total=$((total - prev_total))
+      if [ "$prev_total" -gt 0 ] && [ "$d_total" -gt 0 ] && [ "$d_busy" -ge 0 ]; then
+        cpu=$((d_busy * 100 / d_total))
+      else
+        # First sample after a boot, or after a window that did not survive its sanity check. The
+        # counters' lifetime average is not what this pill is for, so the graph starts at the floor
+        # and the next tick is the first real reading.
+        cpu=0
+      fi
+      [ "$cpu" -gt 100 ] && cpu=100
+
+      if [ "$power_src" = rapl ] && [ "$prev_energy" -ge 0 ] && [ "$prev_ts" -gt 0 ]; then
+        d_us=$((now - prev_ts))
+        d_uj=$((energy_uj - prev_energy))
+        # The counter wraps at max_energy_range_uj, which shows up as a negative delta. Dropping
+        # that one sample is cheaper than carrying the range around to correct it.
+        if [ "$d_us" -gt 0 ] && [ "$d_uj" -ge 0 ]; then power_mw=$((d_uj * 1000 / d_us)); fi
+      fi
+
+      cpus+=("$cpu")
+      pfreqs+=("$p_cur")
+      efreqs+=("$e_cur")
+      watts+=("$power_mw")
+      [ "''${#cpus[@]}" -gt "$width" ] && cpus=("''${cpus[@]: -$width}")
+      [ "''${#pfreqs[@]}" -gt "$width" ] && pfreqs=("''${pfreqs[@]: -$width}")
+      [ "''${#efreqs[@]}" -gt "$width" ] && efreqs=("''${efreqs[@]: -$width}")
+      [ "''${#watts[@]}" -gt "$width" ] && watts=("''${watts[@]: -$width}")
+
+      printf '%s\n' \
+        "$now $busy $total $energy_uj" \
+        "''${cpus[*]}" \
+        "''${pfreqs[*]}" \
+        "''${efreqs[*]}" \
+        "''${watts[*]}" > "$history"
+
+      ### EXTRAS ###
+
+      # Fans, temperatures and the battery are readouts rather than series, and on this Mac every
+      # one of them is an SMC round trip. They also move slowly, so they are re-read on their own
+      # cadence and cached in between; the sampling above is the part that has to happen on every
+      # tick. Line 1 is the stamp that says when this last ran, and a sensor the machine does not
+      # have writes an empty line rather than a number -- so the render tests for emptiness and
+      # never does arithmetic on a guess.
+      ex=()
+      [ -r "$extras" ] && mapfile -t ex < "$extras"
+      stamp=0
+      uint "''${ex[0]-}" && stamp=''${ex[0]}
+
+      if [ $((now / 1000000 - stamp)) -ge "$extras_every" ]; then
+        fan_rpm=() heat_mw="" hot_c="" hot_label=""
+        for hwmon in /sys/class/hwmon/hwmon*; do
+          for f in "$hwmon"/fan*_input; do
+            [ -e "$f" ] || continue
+            rd "$f"
+            # A zero is kept: on this Mac the fans are off most of the time, and "off" is a
+            # reading. The row goes missing only on a machine with no tachometer at all, rather
+            # than appearing and disappearing under the other rows as the fans come and go.
+            uint "$val" && fan_rpm+=("$val")
+          done
+
+          for lbl in "$hwmon"/power*_label; do
+            [ -e "$lbl" ] || continue
+            rd "$lbl"
+            [ "$val" = "Heatpipe Power" ] || continue
+            rd "''${lbl%_label}_input"
+            uint "$val" && heat_mw=$((val / 1000))
+          done
+
+          # The hottest sensor that names itself. Unlabelled ones are skipped deliberately: on
+          # this Mac they are the six speaker amplifiers, which say nothing about the SoC -- and
+          # there is no die temperature to prefer over them, because Asahi's SMC does not expose
+          # one. So the row names the sensor it used rather than claiming to be a CPU temperature.
+          for lbl in "$hwmon"/temp*_label; do
+            [ -e "$lbl" ] || continue
+            rd "$lbl"
+            [ -n "$val" ] || continue
+            label=$val
+            rd "''${lbl%_label}_input"
+            uint "$val" || continue
+            if [ -z "$hot_c" ] || [ "$((val / 1000))" -gt "$hot_c" ]; then
+              hot_c=$((val / 1000))
+              hot_label=$label
+            fi
+          done
+        done
+
+        batt_state="" batt_mw="" batt_pct="" batt_min=""
+        for supply in /sys/class/power_supply/*; do
+          rd "$supply/type"
+          [ "$val" = Battery ] || continue
+          # The Logitech mouse is a power supply too, and says so with scope=Device.
+          rd "$supply/scope"
+          [ "$val" = Device ] && continue
+          rd "$supply/status"
+          batt_state=$val
+          rd "$supply/capacity"
+          uint "$val" && batt_pct=$val
+          rd "$supply/power_now"
+          uint "$val" && batt_mw=$((val / 1000))
+          rd "$supply/energy_now"
+          if uint "$val" && [ -n "$batt_mw" ] && [ "$batt_mw" -gt 0 ]; then
+            # Microwatt-hours over milliwatts, in minutes.
+            batt_min=$((val * 60 / 1000 / batt_mw))
+          fi
+          break
+        done
+
+        ex=(
+          "$((now / 1000000))"
+          "''${fan_rpm[*]-}"
+          "$heat_mw"
+          "$hot_c"
+          "$hot_label"
+          "$batt_state"
+          "$batt_mw"
+          "$batt_pct"
+          "$batt_min"
+        )
+        printf '%s\n' "''${ex[@]}" > "$extras"
+      fi
+
+      ### RENDER ###
+
+      # The active profile, off the same interface the deck's key reads: net.hadess.PowerProfiles,
+      # which power-profiles-daemon serves on the Dell and tuned-ppd on this Mac, so neither end
+      # has to know which daemon is behind it. --json=short rather than jq, because the whole reply
+      # is {"type":"s","data":"balanced"} and two trims take that apart -- this runs every two
+      # seconds, and the busctl is already the one fork it cannot do without.
+      profile=""
+      reply=$(busctl --json=short get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles \
+        net.hadess.PowerProfiles ActiveProfile 2>/dev/null) || reply=""
+      case "$reply" in
+      *'"data":"'*)
+        reply=''${reply##*'"data":"'}
+        profile=''${reply%%'"'*}
+        ;;
+      esac
+
+      case "$profile" in
+      power-saver) glyph=󰾆 name="Power saver" colour=$c_saver ;;
+      balanced) glyph=󰾅 name="Balanced" colour=$c_balanced ;;
+      performance) glyph=󰓅 name="Performance" colour=$c_perf ;;
+      *)
+        # No daemon on the bus, or a profile none of the three names matches. The graphs are still
+        # worth drawing -- they come from sysfs, not from the daemon -- so the pill greys out and
+        # says what is missing instead of going blank.
+        glyph=󰾉 name="No power profile daemon" colour=$c_none profile=unknown
+        ;;
+      esac
+
+      # Scale a series into the block glyphs. A zero draws the shortest bar rather than a gap, so
+      # an idle stretch reads as a flat line along the bottom instead of a hole in the graph.
+      spark=""
+      sparkline() {
+        local max=$1 v i pad
+        shift
+        spark=""
+        # Until the window has filled -- the first two minutes after a boot, and again after any
+        # tick that had to start it over -- there are fewer than `width` samples to draw. Blanking
+        # the ones that are missing is what makes the graph scroll rather than grow: the newest
+        # sample sits at the right edge from the very first tick, so the reading beside it holds
+        # its column instead of being pushed right once every two seconds. A space is the same
+        # advance as a block glyph in a monospaced font, and printf's `*` width pads without a
+        # fork -- the same reason the rows are built with printf -v rather than echoed.
+        pad=$((width - $#))
+        [ "$pad" -gt 0 ] && printf -v spark '%*s' "$pad" ""
+        [ "$max" -gt 0 ] || max=1
+        for v in "$@"; do
+          i=$((v * 8 / max))
+          [ "$i" -gt 7 ] && i=7
+          [ "$i" -lt 0 ] && i=0
+          spark+=''${bars[$i]}
+        done
+      }
+
+      # bash has no floats, and printf cannot round one it never had: fixed point by hand, to the
+      # one decimal every reading on this tooltip is quoted at.
+      dec=""
+      tenths() {
+        dec=$((($1 * 10 + $2 / 2) / $2))
+        dec="''${dec%?}.''${dec: -1}"
+        [ "''${dec:0:1}" = . ] && dec="0$dec"
+        return 0
+      }
+
+      # One row of the tooltip, appended in place. A function that echoed instead would be a
+      # subshell per row, and the point of the reading loops above is that a tick costs one fork.
+      # The label column is eight wide, so every graph starts on the same column.
+      tip=""
+      row() { # label, graph colour, graph, reading, trailing dim note
+        local line=""
+        printf -v line "<span foreground='%s'>%-8s</span>" "$c_dim" "$1"
+        # A readout row has no graph, and an empty span in its place is markup for nothing.
+        [ -n "$3" ] && printf -v line "%s<span foreground='%s'>%s</span>" "$line" "$2" "$3"
+        printf -v line "%s  <span foreground='%s'>%s</span>" "$line" "$c_text" "$4"
+        [ -n "''${5-}" ] && printf -v line "%s<span foreground='%s'>   %s</span>" "$line" "$c_dim" "$5"
+        tip+="$line"'\n'
+        return 0
+      }
+
+      tip="<span foreground='$colour'>$glyph  $name</span>"
+      [ -n "$p_gov" ] && tip+="<span foreground='$c_dim'>  ·  $p_gov</span>"
+      tip+='\n\n'
+
+      sparkline 100 "''${cpus[@]}"
+      row "CPU" "$c_load" "$spark" "$cpu%"
+
+      # Both frequency rows are scaled to their own cluster's floor and ceiling rather than to a
+      # shared axis. What a frequency graph is asked is "how much of what this core can do is it
+      # doing", and on this Mac the E-cores' ceiling is barely above the P-cores' idle.
+      freqrow() { # label, colour, floor, ceiling, current, series...
+        local label=$1 colour=$2 lo=$3 hi=$4 cur=$5 span f
+        local scaled=()
+        shift 5
+        span=$((hi - lo))
+        [ "$span" -gt 0 ] || span=1
+        for f in "$@"; do scaled+=("$(((f - lo) * 100 / span))"); done
+        sparkline 100 "''${scaled[@]}"
+        tenths "$cur" 1000000
+        row "$label" "$colour" "$spark" "$dec GHz"
+      }
+
+      if [ "$p_max" -gt 0 ]; then
+        # "Freq" rather than "P-core" on a machine with only the one kind of core.
+        if [ "$e_max" -gt 0 ]; then p_label=P-core; else p_label=Freq; fi
+        freqrow "$p_label" "$c_pcore" "$p_min" "$p_max" "$p_cur" "''${pfreqs[@]}"
+      fi
+      if [ "$e_max" -gt 0 ]; then
+        freqrow E-core "$c_ecore" "$e_min" "$e_max" "$e_cur" "''${efreqs[@]}"
+      fi
+
+      if [ "$power_mw" -ge 0 ]; then
+        peak_mw=0
+        drawn=()
+        for mw in "''${watts[@]}"; do
+          # A -1 is a tick that had no power source; it plots as the floor rather than breaking the
+          # run of the graph.
+          if [ "$mw" -lt 0 ]; then mw=0; fi
+          drawn+=("$mw")
+          [ "$mw" -gt "$peak_mw" ] && peak_mw=$mw
+        done
+        # A 10 W floor under the scale: an idle machine's draw wanders by a few hundred milliwatts,
+        # and a graph scaled to its own noise reads as though something is happening.
+        scale=$peak_mw
+        [ "$scale" -lt 10000 ] && scale=10000
+        sparkline "$scale" "''${drawn[@]}"
+        tenths "$power_mw" 1000
+        reading="$dec W"
+        tenths "$peak_mw" 1000
+        row "Power" "$c_watt" "$spark" "$reading" "peak $dec W"
+      fi
+
+      # The readouts, from the cached block. Each is drawn only if this machine has the sensor.
+      fans=''${ex[1]-} heat_mw=''${ex[2]-} hot_c=''${ex[3]-} hot_label=''${ex[4]-}
+      batt_state=''${ex[5]-} batt_mw=''${ex[6]-} batt_pct=''${ex[7]-} batt_min=''${ex[8]-}
+
+      tip+='\n'
+
+      if [ -n "$batt_state" ]; then
+        batt="''${batt_pct:-?}%"
+        case "$batt_state" in
+        Discharging)
+          if uint "$batt_mw"; then
+            tenths "$batt_mw" 1000
+            batt+="  ·  $dec W out"
+          fi
+          if uint "$batt_min" && [ "$batt_min" -gt 0 ]; then
+            batt+="  ·  $((batt_min / 60))h $((batt_min % 60))m left"
+          fi
+          ;;
+        Charging)
+          batt+="  ·  charging"
+          if uint "$batt_mw" && [ "$batt_mw" -gt 0 ]; then
+            tenths "$batt_mw" 1000
+            batt+=" at $dec W"
+          fi
+          ;;
+        *) batt+="  ·  ''${batt_state,,}" ;;
+        esac
+        row Battery "$c_text" "" "$batt"
+      fi
+
+      if [ -n "$fans" ]; then
+        case "$fans" in
+        *[1-9]*) row Fans "$c_text" "" "''${fans// / \/ } rpm" ;;
+        *) row Fans "$c_text" "" "off" ;;
+        esac
+      fi
+
+      heat=""
+      if uint "$heat_mw"; then
+        tenths "$heat_mw" 1000
+        heat="$dec W heatpipe"
+      fi
+      if [ -n "$hot_c" ] && [ -n "$hot_label" ]; then
+        [ -n "$heat" ] && heat+="  ·  "
+        heat+="$hot_c°C $hot_label"
+      fi
+      [ -n "$heat" ] && row Heat "$c_text" "" "$heat"
+
+      tip+="\n<span foreground='$c_dim'>last $((width * period / 60)) min  ·  click to cycle</span>"
+
+      # waybar reads one JSON object per run of the exec. The tooltip is pango markup -- single
+      # quotes on the attributes, because a double one would end the JSON string -- the class is
+      # what style.css colours the pill by, and the \n are JSON escapes rather than real newlines:
+      # %s passes them through, and waybar's parser turns them into line breaks.
+      printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' "$glyph" "$tip" "$profile"
+    '';
+  };
+
+  # The bar's clock and calendar, replacing waybar's built-in clock module, whose calendar
+  # colours could only be literals in config.jsonc -- and waybar re-reads its config only on
+  # a full reload, the one that was crashing it (see lattice-palette). These draw from the
+  # run-time theme instead.
+  #
+  # `markup [offset]` is one month as Pango markup, the month `offset` away from this one:
+  # a title, the weekday row and the grid, every line padded to the same 20 columns so a
+  # centred box keeps the columns straight. Today is in the accent. Sunday first, as the
+  # en_US locale and the old module had it.
+  #
+  # With no argument it is the calendar menu behind a click on the clock: the month as the
+  # menu's message and three buttons under it, previous, today and next, each a rofi row
+  # laid out as columns. A button reopens the menu on the new month -- rofi has no way to
+  # rewrite its message in place -- and keeps that button selected, so paging is repeated
+  # clicks on one spot. Anchored north, under the clock, for the reason lattice-wifi gives.
+  calendar = pkgs.writeShellApplication {
+    name = "lattice-calendar";
+    runtimeInputs = [
+      pkgs.coreutils
+      rofiWithCalc
+    ];
+    text = ''
+      ${readColours}
+
+      month() {
+        local offset=$1 first title start days today="" pad line d cell col
+        first=$(date -d "$(date +%Y-%m-01) $offset month" +%F)
+        title=$(date -d "$first" '+%B %Y')
+        start=$(date -d "$first" +%w)
+        days=$(date -d "$first +1 month -1 day" +%-d)
+        if ((offset == 0)); then
+          today=$(date +%-d)
+        fi
+
+        pad=$(((20 - ''${#title}) / 2))
+        printf '%*s<span foreground="%s"><b>%s</b></span>%*s\n' "$pad" "" "''${c[text]}" "$title" \
+          $((20 - pad - ''${#title})) ""
+        printf '<span foreground="%s">Su Mo Tu We Th Fr Sa</span>\n' "''${c[subtext0]}"
+
+        printf -v line '%*s' $((start * 3)) ""
+        col=$start
+        for ((d = 1; d <= days; d++)); do
+          printf -v cell '%2d' "$d"
+          if [[ $d == "$today" ]]; then
+            line+="<span foreground=\"''${c[accent]}\"><b><u>$cell</u></b></span>"
+          else
+            line+="<span foreground=\"''${c[subtext1]}\">$cell</span>"
+          fi
+          col=$((col + 1))
+          if ((col == 7)); then
+            printf '%s\n' "$line"
+            line="" col=0
+          else
+            line+=" "
+          fi
+        done
+        if ((col > 0)); then
+          printf '%s%*s\n' "$line" $(((7 - col) * 3 - 1)) ""
+        fi
+      }
+
+      if [[ ''${1:-} == markup ]]; then
+        month "''${2:-0}"
+        exit 0
+      fi
+
+      theme='
+        window { location: north; anchor: north; y-offset: 5px; width: 250px; }
+        * { font: "JetBrains Mono 10"; }
+        inputbar { enabled: false; }
+        message { padding: 8px 10px 4px; border: 0; }
+        textbox { horizontal-align: 0.5; }
+        listview { columns: 3; lines: 1; padding: 4px 6px 6px; }
+        element { padding: 5px 0; }
+        element-text { horizontal-align: 0.5; }
+      '
+      click=(-me-select-entry "" -me-accept-entry MousePrimary)
+
+      offset=0
+      selected=1
+      while true; do
+        choice=$(printf '%s\n' "󰅁" "Today" "󰅂" |
+          rofi -dmenu -no-custom -format i -p Calendar -markup \
+            -mesg "<tt>$(month "$offset")</tt>" -selected-row "$selected" \
+            -theme-str "$theme" "''${click[@]}" || true)
+        case "$choice" in
+        0) offset=$((offset - 1)) ;;
+        1) offset=0 ;;
+        2) offset=$((offset + 1)) ;;
+        *) exit 0 ;;
+        esac
+        selected=$choice
+      done
+    '';
+  };
+
+  # The clock pill: the time, and this month's calendar as its tooltip. A long-running exec
+  # rather than an interval, so the minute turns over on the minute: it sleeps to the next
+  # one, and a USR1 -- from lattice-palette when the theme changes -- cuts the sleep short
+  # and redraws at once. Its pid is kept in XDG_RUNTIME_DIR for that.
+  clock = pkgs.writeShellApplication {
+    name = "lattice-clock";
+    runtimeInputs = [
+      pkgs.coreutils
+      calendar
+    ];
+    text = ''
+      pidfile="''${XDG_RUNTIME_DIR:-/tmp}/lattice-clock.pid"
+      echo $$ >"$pidfile"
+      trap ':' USR1
+
+      while true; do
+        # As one JSON string: newlines escaped, and the markup's double-quoted attributes
+        # turned single so they do not end it.
+        tip=$(lattice-calendar markup 0)
+        tip=''${tip//$'\n'/\\n}
+        tip=''${tip//\"/\'}
+        printf '{"text": "%s", "tooltip": "<tt>%s</tt>"}\n' "$(date '+%a %b %d  %H:%M')" "$tip"
+
+        sleep $((60 - 10#$(date +%S))) &
+        sleeper=$!
+        wait "$sleeper" || true
+        kill "$sleeper" 2>/dev/null || true
+      done
+    '';
+  };
+
+  # The caps-lock pill, which is only on the bar while caps lock is: the Mac's keyboard has
+  # an LED for it and the NuPhy does not. Read from the keyboards' LED nodes in sysfs, which
+  # are world-readable, rather than waybar's keyboard-state module -- that one opens
+  # /dev/input itself and so wants the input group, which is every keystroke on the seat
+  # handed to anything running as this user. Hyprland drives every keyboard's LED from the
+  # one shared lock state, so any of them being lit is the answer.
+  #
+  # sysfs attributes do not raise inotify events, so it polls; five reads of a few bytes a
+  # second is nothing, and it only prints when the state flips. The glob is expanded on
+  # every pass so a keyboard plugged in later is picked up. Empty text hides the pill.
+  capsLock = pkgs.writeShellApplication {
+    name = "lattice-capslock";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      last=
+      while true; do
+        state=off
+        for led in /sys/class/leds/*::capslock/brightness; do
+          [[ -r $led ]] || continue
+          read -r v <"$led" || continue
+          if [[ $v != 0 ]]; then
+            state=on
+            break
+          fi
+        done
+
+        if [[ $state != "$last" ]]; then
+          if [[ $state == on ]]; then
+            printf '{"text": "󰘲 CAPS", "class": "on", "tooltip": "Caps lock is on"}\n'
+          else
+            printf '{"text": ""}\n'
+          fi
+          last=$state
+        fi
+        sleep 0.2
+      done
+    '';
+  };
+
+  # The battery pill, replacing waybar's built-in battery module. That module never reads
+  # the kernel's `capacity` attribute: it works the percentage out itself from
+  # energy_now / energy_full. On the Mac those disagree -- macsmc-battery's capacity is the
+  # SMC's own state of charge, the number macOS shows, and it read 80% while the energy
+  # ratio read 77% (47.2 / 61.4 Wh) -- and neither `bat` nor `weighted-average` changes
+  # which one the module uses. upower reports `capacity`, and so do fastfetch, the
+  # power-profile tooltip, lattice-battery-notify's ladder and the 80% charge cap, so the
+  # bar was the one reading out of step with everything else.
+  #
+  # The battery is picked by role the way lattice-battery-notify picks it, so the mouse
+  # and headphones are skipped. `upower --monitor` prints a line whenever any device
+  # changes, which is the redraw trigger; the read timeout is a backstop for the minutes
+  # where upower publishes nothing. Empty text hides the pill on a host with no battery.
+  batteryPill = pkgs.writeShellApplication {
+    name = "lattice-battery-pill";
+    runtimeInputs = [
+      pkgs.upower
+      pkgs.gawk
+      pkgs.gnugrep
+      pkgs.coreutils
+    ];
+    text = ''
+      device=""
+      for candidate in $(upower -e | grep /battery_); do
+        if upower -i "$candidate" | grep 'power supply: *yes' >/dev/null; then
+          device=$candidate
+          break
+        fi
+      done
+      if [[ -z $device ]]; then
+        printf '{"text": ""}\n'
+        exec sleep infinity
+      fi
+
+      # The same ten glyphs, empty to full, that the built-in module's format-icons held.
+      icons=(󰁺 󰁻 󰁼 󰁽 󰁾 󰁿 󰂀 󰂁 󰂂 󰁹)
+
+      render() {
+        local info state level time icon class tooltip
+        info=$(upower -i "$device")
+        state=$(awk '/^ *state:/ { print $2; exit }' <<<"$info")
+        level=$(awk '/^ *percentage:/ { gsub(/%/, "", $2); print int($2 + 0.5); exit }' <<<"$info")
+        [[ -n $level ]] || return 0
+
+        case $state in
+        charging)
+          icon=󰂄
+          class='"charging"'
+          time=$(awk -F'time to full: *' 'NF > 1 { print $2; exit }' <<<"$info")
+          tooltip="Charging''${time:+, $time to full}"
+          ;;
+        discharging)
+          icon=''${icons[level * 9 / 100]}
+          class='"discharging"'
+          time=$(awk -F'time to empty: *' 'NF > 1 { print $2; exit }' <<<"$info")
+          tooltip="On battery''${time:+, $time left}"
+          ;;
+        fully-charged)
+          icon=󰚥
+          class='"plugged"'
+          tooltip="Fully charged"
+          ;;
+        *)
+          # pending-charge: on the charger but held, which on the Mac is the charge cap.
+          icon=󰚥
+          class='"plugged"'
+          tooltip="Plugged in, not charging"
+          ;;
+        esac
+
+        # The thresholds the built-in module's `states` had; the stylesheet only colours
+        # them while not charging.
+        if ((level <= 10)); then
+          class+=', "critical"'
+        elif ((level <= 25)); then
+          class+=', "warning"'
+        fi
+
+        printf '{"text": "%s %s%%", "tooltip": "%s", "class": [%s]}\n' \
+          "$icon" "$level" "$tooltip" "$class"
+      }
+
+      coproc MONITOR { upower --monitor; }
+      # Its first line is a "Monitoring activity" banner, not a change.
+      read -r -t 5 -u "''${MONITOR[0]:-}" _ || true
+      while true; do
+        render
+        # A timeout is a status over 128. Anything else means upower --monitor has gone
+        # away, and without the sleep the loop would spin.
+        read -r -t 60 -u "''${MONITOR[0]:-}" _ || { (($? > 128)) || sleep 60; }
+      done
+    '';
+  };
+in
+{
+  programs.waybar.enable = true;
+
+  environment.systemPackages = [
+    tailscale
+    powerProfile
+  ];
+
+  systemd.user.services = {
+    # systemd user services get a bare default PATH -- coreutils, findutils, grep, sed,
+    # systemd -- and notably *not* /run/current-system/sw/bin. Waybar runs its module
+    # commands through `sh -c` with that environment, so anything they call has to be
+    # named here or it fails with "command not found" and the module silently renders
+    # empty. Keep this in step with the on-click/on-scroll/exec commands in
+    # ~/.dotfiles/waybar/config.jsonc.
+    #
+    # Each desktop module appends the scripts it owns (theming.nix the wallpaper and theme
+    # pills, menus.nix the menus, and so on); what is here is the bar's own share.
+    #
+    # That reaches one step further than the commands themselves. The lattice scripts are
+    # writeShellApplications, so each prepends its own runtimeInputs and finds its own
+    # tools regardless of this list -- but a tool that in turn execs something by *name*
+    # is back to this PATH. xdg-open is the one that does: it resolves
+    # x-scheme-handler/https to firefox.desktop from the assignment in apps.nix and then
+    # runs `firefox`, so without the browser here lattice-tailscale's sign-in click and
+    # its right-click to the admin console both resolved a URL and then opened nothing.
+    # xdg-open does say so -- it walks its whole fallback list of browser names, reports
+    # "no method available", and exits 3 -- but both call it with output on /dev/null
+    # (they must: it is detached), so the complaint went nowhere and the pill just sat
+    # there.
+    waybar.path = [
+      tailscale
+      weather
+      # Both ends of the power-profile pill: waybar runs `status` on the interval and
+      # `cycle` on a click, and the script's own runtimeInputs cover everything it calls
+      # except lattice-deck, which streamdeck.nix puts on this same PATH.
+      powerProfile
+      # The clock, and the calendar menu a click on it opens.
+      clock
+      calendar
+      # The caps-lock pill's exec.
+      capsLock
+      # The battery pill's.
+      batteryPill
+      pkgs.wireplumber
+      config.programs.firefox.finalPackage
+    ];
+  };
+
+}

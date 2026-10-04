@@ -204,7 +204,7 @@ in
     gcc
 
     # Zed, the GUI editor, kept next to neovim rather than with the windowed apps in
-    # profiles/graphical.nix: everything it drives is in this file -- clang-tools, nixd,
+    # desktop/apps.nix: everything it drives is in this file -- clang-tools, nixd,
     # nixfmt, neocmakelsp, node, go -- and nix-ld above is what lets the language servers
     # and the node runtime Zed downloads for itself under ~/.local/share/zed run at all.
     # Both hosts import this module and graphical.nix, so the choice only decides where it

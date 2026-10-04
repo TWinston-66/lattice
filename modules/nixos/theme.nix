@@ -492,7 +492,7 @@ let
   # What `lattice-theme` swaps at run time, one directory per flavour: every file a consumer
   # reads from runtimeTheme, written out in full for that flavour. The accent is the one
   # thing a flavour does not decide -- it follows the wallpaper -- so it is left as tokens
-  # that the run-time writer (lattice-palette, in profiles/graphical.nix) fills in:
+  # that the run-time writer (lattice-palette, in desktop/theming.nix) fills in:
   #
   #   %ACCENT% %ALT%                the pair, as #rrggbb
   #   %ACCENT_BARE% %ALT_BARE%      the same without the '#', for hyprlang and Hyprland
@@ -615,7 +615,7 @@ let
       '';
 
       # GTK, through the named colours adw-gtk3 and libadwaita draw everything from. Imported
-      # by the user GTK3 theme in profiles/graphical.nix and by ~/.dotfiles gtk-4.0/gtk.css.
+      # by the user GTK3 theme in desktop/theming.nix and by ~/.dotfiles gtk-4.0/gtk.css.
       "theme.gtk.css" = ''
         @define-color accent_color %ACCENT%;
         @define-color accent_bg_color %ACCENT%;

@@ -19,7 +19,7 @@
       url = "github:nix-community/nixos-apple-silicon";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # The screenshot overlay, used from the launcher entry in profiles/graphical.nix.
+    # The screenshot overlay, used from the launcher entry in desktop/screenshot.nix.
     # Carried as an input rather than a fetchFromGitHub because upstream already ships a
     # flake whose package does the quickshell wrapping and covers aarch64; the derivation
     # is only the QML tree, and quickshell itself comes from nixpkgs.

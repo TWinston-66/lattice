@@ -126,7 +126,7 @@ let
       # fixed, what decides how much of the screen the mark covers. Sizing a canvas to a
       # screen's *logical* resolution is what puts the mark in the same relation to the UI
       # on every screen, which is the only sense in which two very different displays can
-      # show the same wallpaper. See the `screens` attrset in profiles/graphical.nix.
+      # show the same wallpaper. See the `screens` attrset in desktop/lib.nix.
       width ? 1920,
       height ? 1200,
       # The SVG is drawn at `width`x`height` and rasterised at a multiple of it, so the

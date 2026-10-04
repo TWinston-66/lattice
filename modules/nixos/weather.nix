@@ -16,7 +16,7 @@
 
         Fixed coordinates, rather than the IP geolocation a wttr.in-style widget would do,
         because this tailnet has the Mullvad exit nodes on: see lattice-tailscale in
-        profiles/graphical.nix. With an exit node up, every IP lookup places the machine
+        desktop/bar.nix. With an exit node up, every IP lookup places the machine
         wherever that endpoint is, so the pill would quietly report the weather in another
         country. The cost is that this is wrong while travelling, which is the rarer case
         and the obvious one when it happens.

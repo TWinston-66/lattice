@@ -282,7 +282,7 @@ let
     }
     {
       # Thunderbird rather than a web app: programs.thunderbird is on in
-      # profiles/graphical.nix, so the same bare name works on either host.
+      # desktop/apps.nix, so the same bare name works on either host.
       index = 6;
       cmd = "thunderbird";
       faces = [
@@ -794,7 +794,7 @@ let
           # 0 disables streamdeck-ui's own dimmer, on purpose. With it on, the first press
           # after the deck has dimmed is swallowed to wake it and does nothing else -- and the
           # deck should go dark with the screen anyway, which is hypridle's business and not a
-          # timer of its own. See the listener in profiles/graphical.nix.
+          # timer of its own. See the listener in desktop/lock.nix.
           display_timeout = 0;
           rotation = 0;
           page = 0;
@@ -861,7 +861,7 @@ let
       toString (lib.head pagesWith);
 
   # What both units below run their children with. A launcher's PATH is the session's, and
-  # that is the whole difference between this and waybar.path in profiles/graphical.nix:
+  # that is the whole difference between this and waybar.path in desktop/bar.nix:
   # waybar calls a fixed handful of commands that can be listed, while the deck's keys open
   # apps -- ghostty, thunar, rofi, the lattice-* scripts -- and listing the system profile's
   # contents here would be a second copy of the app list, drifting from the first. Anything
@@ -1375,7 +1375,7 @@ in
     # The rules ship with the package: TAG+="uaccess" on Elgato's whole vendor id, at
     # 70-streamdeck.rules. The number is the load-bearing part and it is already right --
     # uaccess is applied by systemd's 73-seat-late.rules, so a tag set after that does
-    # nothing at all. See the note on nuphyHidAccess in profiles/graphical.nix, which is the
+    # nothing at all. See the note on nuphyHidAccess in desktop/apps.nix, which is the
     # same trap the other way round.
     services.udev.packages = [ streamdeckUi ];
 
@@ -1434,12 +1434,12 @@ in
 
     # waybar clicks lattice-dnd and lattice-sunset, and both now repaint the deck's key for
     # it as well as signalling the bar. Those scripts find lattice-deck on the PATH of
-    # whoever ran them, and waybar's is the fixed list in profiles/graphical.nix -- so it is
+    # whoever ran them, and waybar's is the fixed list the desktop modules build -- so it is
     # handed the one command it did not have before.
     systemd.user.services.waybar.path = [ deck ];
 
     # hypridle's PATH is a fixed list inside its own NixOS module -- hyprland, hyprlock,
-    # procps -- so the listener in profiles/graphical.nix that dims the deck with the screen
+    # procps -- so the listener in desktop/lock.nix that dims the deck with the screen
     # has to be handed the command it names. It goes here rather than there because this is
     # the module that has lattice-deck in scope.
     systemd.user.services.hypridle.path = lib.mkIf config.services.hypridle.enable [ deck ];

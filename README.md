@@ -187,7 +187,8 @@ and `server` profiles plus feature modules.
 | --- | --- |
 | `hosts/<host>/` | Per-host config and its generated `hardware-configuration.nix` |
 | `modules/nixos/` | The core, branding, theme, artwork, Plymouth, display, Stream Deck, Home Assistant, web apps, dotfiles |
-| `modules/nixos/profiles/` | `laptop`, `graphical` and `server`, plus the patches they carry |
+| `modules/nixos/desktop/` | The desktop by surface: session, apps, theming, bar, menus, notifications, lock, screenshot, greeter, plus the patches they carry |
+| `modules/nixos/profiles/` | `laptop`, `graphical` and `server`; `graphical` is the desktop modules and the hardware ones they need |
 | `secrets/` | [sops](https://github.com/getsops/sops)-encrypted secrets |
 | `scripts/` | Deploy, rebuild, update and password helpers |
 | `assets/lattice-art.py` | Draws the wallpapers, the splash, its widgets and the Stream Deck keys |

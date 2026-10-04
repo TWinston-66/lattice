@@ -165,7 +165,7 @@ in
   };
 
   # The wallpaper is drawn to a canvas, not to a screen, and this is the canvas. The rule
-  # the drawing depends on is in profiles/graphical.nix: the canvas is sized at the screen's
+  # the drawing depends on is in desktop/lib.nix: the canvas is sized at the screen's
   # *logical* resolution, so the mark comes out the same size against the UI on every
   # display, whatever each one's pixel count and scale. A canvas smaller than the logical
   # screen is not cropped or letterboxed -- hyprpaper scales it to cover -- it is magnified,
@@ -258,7 +258,7 @@ in
     example = 3000;
     description = ''
       Colour temperature, in kelvin, that lattice-sunset switches the screen to -- the
-      "on" end of the night-light toggle in modules/nixos/profiles/graphical.nix. The
+      "on" end of the night-light toggle in modules/nixos/desktop/session.nix. The
       "off" end is hyprsunset's own 6000K, which is no filter at all.
 
       Per-host for the same reason the scales above are: the strength of the shift is a
