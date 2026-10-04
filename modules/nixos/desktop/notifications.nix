@@ -207,10 +207,12 @@ in
     # on screen instead of in the journal nobody reads. %i is the failing unit's full
     # name, handed over by `OnFailure=lattice-notify-failure@%n.service` at each use site.
     #
-    # It fires once per failure, not once per restart attempt: OnFailure= triggers on
-    # entry to the failed state, and an automatic restart is not that -- a unit with
-    # Restart=on-failure reports when it exhausts its start limit and gives up, not five
-    # times on the way there.
+    # It fires on every failed attempt, not only when the unit gives up. On systemd 261 a
+    # unit with Restart=on-failure triggers OnFailure= before each scheduled restart and
+    # again when it hits its start limit: lattice-network-notify's five-restart crash loop
+    # on 2026-10-04 raised six reports. The synchronous tag in the reporter keeps those to
+    # one banner per unit, so a crash loop shows up as one banner being replaced rather
+    # than a stack of them.
     #
     # Nothing sets OnFailure= on this unit, deliberately. A reporter that cannot report
     # has nothing left to report with, and a self-reference would only spin.
