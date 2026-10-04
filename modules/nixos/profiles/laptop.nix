@@ -217,10 +217,14 @@ let
       portalSignIn
     ];
     text = ''
+      # `|| true` because a banner that can't be shown is no reason to stop watching. With
+      # errexit, one notify-send failing while mako was down at login killed the monitor,
+      # and Restart= went through all five tries in half a second against the same dead
+      # daemon, so network banners stayed off for the rest of the session.
       notify() {
         notify-send -a lattice-network -u "$1" -i "$2" \
           -h string:x-canonical-private-synchronous:lattice-network \
-          "$3" "''${4:-}"
+          "$3" "''${4:-}" || true
       }
 
       # The one notification here that is not purely a report. `notify-send -A` implies

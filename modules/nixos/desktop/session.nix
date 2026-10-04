@@ -171,7 +171,17 @@ in
 
   systemd.user.services = {
     hyprpaper.wantedBy = [ "graphical-session.target" ];
-    mako.wantedBy = [ "graphical-session.target" ];
+    # No start limit, for the same reason as swayosd below. On logout every OnFailure=
+    # reporter and notifier D-Bus-activates mako against a compositor that is already
+    # gone, which uses up the default five starts in ten seconds. A quick relogin then lands
+    # inside that window, so mako refuses to start and every banner from the first half-
+    # minute of the session is lost. lattice-network-notify died that way (2026-10-04).
+    # Nothing sets Restart= here, so with no limit a broken mako costs one failed start
+    # per notification and cannot spin.
+    mako = {
+      wantedBy = [ "graphical-session.target" ];
+      startLimitIntervalSec = 0;
+    };
     hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
     hyprsunset.wantedBy = [ "graphical-session.target" ];
 

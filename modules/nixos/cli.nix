@@ -461,7 +461,29 @@ in
           section "Failed units"
           system=$(systemctl --failed --no-legend --plain | awk '{ print "  system  " $1 }')
           user=$(systemctl --user --failed --no-legend --plain | awk '{ print "  user    " $1 }')
-          if [[ -n $system$user ]]; then
+          # Daemons that died with an error but are no longer marked failed. A reset-failed
+          # clears the failed state, as happened to lattice-network-notify at login on
+          # 2026-10-04, but ExecMainStatus keeps the exit status, so they are still listed.
+          # Only units with a Restart= policy, which are meant to stay up. A oneshot such as
+          # a lattice-notify-failure@ instance keeps its last status until it runs again,
+          # and would stay listed for the rest of the boot.
+          # Records from `systemctl show` come in its own property order, not the order
+          # asked for, so each one is read in full before it is judged.
+          exited() {
+            systemctl "$1" list-units --type=service --all --state=inactive --no-legend --plain \
+              | awk '{ print $1 }' \
+              | xargs -r systemctl "$1" show -p Id -p ExecMainStatus -p Restart 2>/dev/null \
+              | awk -v scope="$2" '
+                  function judge() { if (id != "" && status != 0 && restart != "no") printf "  %-7s %s (exited %s, not running)\n", scope, id, status; id = status = restart = "" }
+                  /^$/ { judge(); next }
+                  /^Id=/ { id = substr($0, 4) }
+                  /^ExecMainStatus=/ { status = substr($0, 16) }
+                  /^Restart=/ { restart = substr($0, 9) }
+                  END { judge() }'
+          }
+          system+=$'\n'$(exited --system system)
+          user+=$'\n'$(exited --user user)
+          if [[ -n ''${system//$'\n'/}''${user//$'\n'/} ]]; then
             printf '%s\n' "$system" "$user" | grep . || true
             echo "  systemctl [--user] status <unit> for why; lattice-notify-failure has already said so on screen"
             problems=1
