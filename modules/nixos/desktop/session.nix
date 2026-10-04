@@ -97,6 +97,24 @@ in
     withUWSM = true;
   };
 
+  # Apps get their own scopes. The launcher and the app binds in hyprland.lua start
+  # everything through `uwsm app --`, which puts each one in its own scope under
+  # app-graphical.slice. Before that, every app was a child of the compositor's own unit,
+  # wayland-wm@hyprland.desktop.service. So the only thing systemd-oomd could have killed
+  # for a runaway Firefox was Hyprland and the whole session with it, and it was set to
+  # watch nothing at all, which left it idle.
+  #
+  # It watches app-graphical.slice only, and not app.slice above it. That slice holds the
+  # session's own services too: waybar, mako, and tmux, whose loss would take every pane
+  # down with it. Terminal workloads stay with the kernel's OOM killer, which kills a
+  # process rather than a whole unit. The numbers are Omarchy's: half of each ten-second
+  # window stalled on reclaim, held for 20s, by which point the desktop is already unusable.
+  systemd.user.slices.app-graphical.sliceConfig = {
+    ManagedOOMMemoryPressure = "kill";
+    ManagedOOMMemoryPressureLimit = "50%";
+  };
+  systemd.oomd.settings.OOM.DefaultMemoryPressureDurationSec = "20s";
+
   # GTK file-chooser portal; xdg-desktop-portal-hyprland doesn't implement it.
   xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
 
@@ -116,6 +134,8 @@ in
     playerctl
     wl-clipboard
     cliphist
+    # For udiskie-umount; the automounter itself runs as the udiskie unit below.
+    udiskie
     grim
     satty
     swayosd
@@ -203,6 +223,10 @@ in
       };
     };
 
+    # Passwords stay out of the history without a filter here. wl-paste sets
+    # CLIPBOARD_STATE=sensitive when the offer carries x-kde-passwordManagerHint, and
+    # cliphist store drops those; Bitwarden desktop's native clipboard module sets the hint.
+    # Copies from the Firefox extension carry no hint and are stored like anything else.
     cliphist = {
       description = "Clipboard history";
       partOf = [ "graphical-session.target" ];
@@ -210,6 +234,21 @@ in
       wantedBy = [ "graphical-session.target" ];
       serviceConfig = {
         ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --watch ${pkgs.cliphist}/bin/cliphist store";
+        Restart = "on-failure";
+      };
+    };
+
+    # Mounts USB drives as they arrive, under /run/media/winston, with a notification through
+    # mako. udiskie ignores anything udisks reports as internal, so the macOS APFS partitions
+    # on the Mac are never touched. No tray icon: the eject buttons in Thunar's sidebar
+    # unmount, as does `udiskie-umount -a`.
+    udiskie = {
+      description = "Automount removable drives";
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      serviceConfig = {
+        ExecStart = "${pkgs.udiskie}/bin/udiskie --automount --notify --no-tray";
         Restart = "on-failure";
       };
     };
