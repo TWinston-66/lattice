@@ -551,6 +551,75 @@ in
           if [[ -n $ahead && $ahead != 0 ]]; then
             echo "  $ahead commit(s) not pushed"
           fi
+          # How far the running system's nixpkgs trails today. This matters most for Firefox,
+          # whose media decoder runs unsandboxed on the Mac (hosts/mac): what protects it is
+          # mostly how soon a fixed release arrives. nixpkgs-unstable picks those up within a
+          # day or two, so anything past a week means `lattice update` is overdue.
+          nixpkgsDate=$(nixos-version | sed -nE 's/^[0-9]+\.[0-9]+\.([0-9]{8})\..*/\1/p')
+          if [[ -n $nixpkgsDate ]]; then
+            age=$(( ($(date +%s) - $(date -d "$nixpkgsDate" +%s)) / 86400 ))
+            echo "  nixpkgs is $age day(s) old"
+            if (( age > 7 )); then
+              echo "  Firefox is probably missing security fixes; lattice update"
+              problems=1
+            fi
+          fi
+
+          section "Persistence"
+          # Where code running as winston would hide to survive a reboot, which matters
+          # because Firefox's media decoder runs unsandboxed on the Mac (hosts/mac). Every
+          # unit comes from the flake and every config from ~/.dotfiles, so anything else
+          # is worth looking at. Detection, not prevention: it only shows up here.
+          clean=1
+          extra=$(find "$HOME/.config/systemd" "$HOME/.config/environment.d" -mindepth 1 \( -type f -o -type l \) 2>/dev/null || true)
+          if [[ -n $extra ]]; then
+            echo "  user units or environment from outside the flake:"
+            awk '{ print "    " $0 }' <<< "$extra"
+            problems=1 clean=0
+          fi
+          # Bitwarden writes its own entry, with a store path that changes on every
+          # update, so it is matched by shape.
+          for entry in "$HOME"/.config/autostart/*.desktop; do
+            [[ -e $entry ]] || continue
+            exec=$(grep -m1 '^Exec=' "$entry" || true)
+            case "''${entry##*/} $exec" in
+              "bitwarden.desktop Exec=/nix/store/"*"-bitwarden-desktop-"*"/bin/bitwarden --autostart") ;;
+              *)
+                echo "  autostart ''${entry##*/}: ''${exec#Exec=}"
+                problems=1 clean=0
+                ;;
+            esac
+          done
+          # Shell startup files are symlinks into ~/.dotfiles or absent.
+          for rc in .zshrc .zshenv .zprofile .zlogin .zlogout .profile .bashrc .bash_profile .bash_login .pam_environment; do
+            f="$HOME/$rc"
+            [[ -e $f || -L $f ]] || continue
+            if [[ $(readlink -f "$f") != "$HOME/.dotfiles/"* ]]; then
+              echo "  ~/$rc is not from ~/.dotfiles"
+              problems=1 clean=0
+            fi
+          done
+          # A git hook runs on the next commit in that repo.
+          for repo in ${lib.escapeShellArg flake} "$HOME/.dotfiles"; do
+            hooks=$(find "$repo/.git/hooks" -type f ! -name '*.sample' 2>/dev/null || true)
+            if [[ -n $hooks ]]; then
+              echo "  git hooks in $repo:"
+              awk '{ print "    " $0 }' <<< "$hooks"
+              problems=1 clean=0
+            fi
+          done
+          # Every config in ~/.dotfiles can run code (hyprland.lua, zshrc, gitconfig and so
+          # on), so uncommitted changes are listed for review. They don't count as a problem
+          # on their own, since they are usually just work in progress.
+          changes=$(git -C "$HOME/.dotfiles" status --porcelain 2>/dev/null || true)
+          if [[ -n $changes ]]; then
+            echo "  uncommitted in ~/.dotfiles (review anything you didn't change yourself):"
+            head -n 10 <<< "$changes" | sed 's/^/    /'
+            clean=0
+          fi
+          if (( clean )); then
+            echo "  nothing from outside the flake and ~/.dotfiles"
+          fi
 
           section "Errors this boot"
           # Counted by message rather than listed in order: one chatty daemon repeating
@@ -596,7 +665,7 @@ in
 
           exit "$problems"
         '';
-        summary = "Health check: units, crashes, last shutdown, drift, boot errors, disk";
+        summary = "Health check: units, crashes, last shutdown, drift, persistence, boot errors, disk";
         group = "system";
       };
     };

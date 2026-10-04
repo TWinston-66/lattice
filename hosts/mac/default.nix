@@ -267,15 +267,37 @@ in
         "browser.uidensity" = 1;
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
 
-        # Asahi has no hardware video decode, so every video is decoded on the CPU -- an
-        # RDD process at ~80% of a core for one video, measured 2026-10-04. With
-        # AV1 off and VP9 off for MSE, YouTube falls back to H.264, the cheapest of the three
-        # to decode in software. The cost is that H.264 tops out at 1080p there. Plain
-        # <video> VP9 is left alone; it is only the streaming sites' default that matters.
+        # AV1 stays off: this generation's decoder has no AV1, so it would decode on the
+        # CPU, at about 80% of a core for one video in the RDD process (measured
+        # 2026-10-04). With it off, YouTube serves VP9, which the decoder handles (see
+        # VIDEO DECODE above).
         "media.av1.enabled" = false;
-        "media.mediasource.vp9.enabled" = false;
       };
       preferencesStatus = "default";
+
+      # Hardware decode needs the RDD sandbox off. The RDD process is where Firefox decodes
+      # media, and its broker already admits M2M /dev/video* nodes and V4L2 ioctls on
+      # aarch64 (AddV4l2Dependencies in SandboxBrokerPolicyFactory.cpp). But the request API
+      # also needs /dev/media* and the media ioctls ('|' type), and neither the broker nor
+      # the seccomp filter allows those. No pref adds paths for RDD, so the only other
+      # route is patching Firefox and building it here on every update.
+      #
+      # This is the trade, made deliberately on 2026-10-04: a bug in a media parser now runs
+      # as winston instead of in an empty sandbox. Content processes keep their sandbox. The
+      # mitigations are elsewhere: SSH keys live in Bitwarden's agent, not on disk (bitwarden.nix),
+      # and `lattice doctor` reports unexpected persistence and how old the Firefox in the
+      # flake is (cli.nix). Set on this wrapper alone, so Thunderbird keeps its sandbox.
+      #
+      # Measured the same day on 1080p30 VP9: the RDD process went from about 40% of a core
+      # to 1%, with the picture verified on screen. Firefox picks the decoder up with no
+      # pref; media.hardware-video-decoding.force-enabled made no difference.
+      package = pkgs.firefox.overrideAttrs (old: {
+        makeWrapperArgs = old.makeWrapperArgs ++ [
+          "--set"
+          "MOZ_DISABLE_RDD_SANDBOX"
+          "1"
+        ];
+      });
     };
     # The same two proportional levers as Firefox, because the absolute pin is just as wrong
     # here. Note mail.uidensity counts the other way round from browser.uidensity: its

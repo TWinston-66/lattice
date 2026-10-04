@@ -29,4 +29,17 @@ in
   environment.systemPackages = [ bitwarden ];
 
   programs.firefox.nativeMessagingHosts.packages = [ firefoxManifest ];
+
+  # SSH keys are served by the desktop app's agent, so the private key lives in the vault
+  # and not in ~/.ssh. Code running as winston can still ask an unlocked agent to sign, and
+  # Bitwarden prompts for each use, but there is no key file left to copy. This is one of
+  # the mitigations for the Mac's Firefox running its media decoder unsandboxed
+  # (hosts/mac). The app autostarts from its own XDG entry, so the socket is there from
+  # login, and only while the app runs.
+  #
+  # Two app-side steps go with this: Settings > SSH agent on, and the key imported as an
+  # SSH key item. ~/.ssh/config keeps IdentityFile ~/.ssh/id_ed25519, and with the private
+  # half gone OpenSSH offers the .pub beside it and has the agent sign.
+  programs.ssh.startAgent = false;
+  environment.sessionVariables.SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
 }

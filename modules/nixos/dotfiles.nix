@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 let
   # A bubblewrap sandbox with a populated /usr/lib, /bin and a working ldconfig, entered
   # with `fhs`. nix-ld below already covers prebuilt binaries that only need a dynamic
@@ -107,7 +107,8 @@ in
       enableGlobalCompInit = false;
       promptInit = "";
     };
-    ssh.startAgent = true;
+    # Graphical hosts hand this to Bitwarden's agent instead (bitwarden.nix).
+    ssh.startAgent = lib.mkDefault true;
     direnv = {
       enable = true;
       nix-direnv.enable = true;
