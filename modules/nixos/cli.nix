@@ -450,7 +450,13 @@ in
       };
 
       doctor = {
-        exec = script "doctor" [ pkgs.git pkgs.gawk ] ''
+        exec = script "doctor" [
+          pkgs.git
+          pkgs.gawk
+          pkgs.jq
+          pkgs.btrfs-progs
+          pkgs.util-linux
+        ] ''
           problems=0
           if [[ -t 1 ]]; then
             section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
@@ -491,9 +497,60 @@ in
             echo "  none"
           fi
 
+          section "Crashes this boot"
+          # Core dumps, grouped by program. Informational, not a problem: Hyprland 0.56.2
+          # segfaults in aquamarine's teardown on every clean exit, and takes its clients
+          # down with it, so each logout leaves a handful here.
+          booted=$(awk '/^btime/ { print $2 }' /proc/stat)
+          crashes=$(coredumpctl list --since "@$booted" --json=short --no-pager 2>/dev/null \
+            | jq -r '.[] | "\(.exe | split("/") | last | ltrimstr(".") | rtrimstr("-wrapped"))\t\(.sig)"' \
+            | sort | uniq -c | sort -rn || true)
+          # The kernel's OOM killer and systemd-oomd both end a process without a core.
+          ooms=$(journalctl -b -k -q --no-pager -o cat --grep 'Out of memory: Killed process' 2>/dev/null | wc -l || true)
+          oomd=$(journalctl -b -q --no-pager -o cat -u systemd-oomd --grep 'Killed' 2>/dev/null | wc -l || true)
+          if [[ -n $crashes ]]; then
+            while read -r n exe sig; do
+              printf '  %6dx %s (SIG%s)\n' "$n" "$exe" "$(kill -l "$sig" 2>/dev/null || echo "$sig")"
+            done <<< "$crashes"
+            echo "  coredumpctl info <program> for the backtrace"
+          fi
+          if (( ooms + oomd > 0 )); then
+            echo "  $ooms killed by the kernel OOM killer, $oomd by systemd-oomd"
+          fi
+          if [[ -z $crashes ]] && (( ooms + oomd == 0 )); then
+            echo "  none"
+          fi
+
+          section "Previous boot"
+          # A boot whose journal stops without systemd reaching its shutdown ended in a
+          # hang, a panic or a power cut, and the cause is usually only in that journal.
+          if ! last=$(journalctl -b -1 -q --no-pager -o cat -n 50 2>/dev/null) || [[ -z $last ]]; then
+            echo "  no journal for it"
+          elif grep -qE '^(Shutting down|Journal stopped)' <<< "$last"; then
+            echo "  shut down cleanly"
+          else
+            echo "  ended without a clean shutdown; journalctl -b -1 -e for its last words"
+            problems=1
+          fi
+
           section "Configuration"
           ${revisionCheck}
           echo "  $drift"
+          # A switch can change the kernel, initrd or modules without them taking effect, and
+          # the system then runs one generation's userland on another's kernel.
+          stale=()
+          for part in kernel initrd kernel-modules; do
+            if [[ $(readlink -f /run/booted-system/$part) != $(readlink -f /run/current-system/$part) ]]; then
+              stale+=("$part")
+            fi
+          done
+          if (( ''${#stale[@]} > 0 )); then
+            echo "  reboot to load the new ''${stale[*]}"
+          fi
+          ahead=$(git -C ${lib.escapeShellArg flake} rev-list --count '@{u}..HEAD' 2>/dev/null || true)
+          if [[ -n $ahead && $ahead != 0 ]]; then
+            echo "  $ahead commit(s) not pushed"
+          fi
 
           section "Errors this boot"
           # Counted by message rather than listed in order: one chatty daemon repeating
@@ -503,12 +560,43 @@ in
             | sort | uniq -c | sort -rn | head -n 5 \
             | awk 'NF > 1 { n = $1; $1 = ""; printf "  %6dx %s\n", n, substr($0, 2, 110) }' || true
 
-          section "Space"
+          section "Disk"
           df -h --output=target,avail,pcent / /nix 2>/dev/null | awk 'NR > 1 && !seen[$1]++ { print "  " $1 "  " $2 " free, " $3 " used" }'
+          if df --output=pcent / /nix 2>/dev/null | awk 'NR > 1 && $1 + 0 >= 90 { found = 1 } END { exit !found }'; then
+            echo "  under 10% free; nh clean all frees old generations"
+            problems=1
+          fi
+          # Every btrfs filesystem, once each however many subvolumes it is mounted as.
+          # Device stats are cumulative across boots and readable without root; nonzero
+          # means the disk has actually returned a bad read, write or checksum.
+          for fs in $(findmnt -t btrfs -no UUID,TARGET | awk '!seen[$1]++ { print $2 }'); do
+            errors=$(btrfs device stats -c "$fs" 2>/dev/null | awk '$2 != 0 { print "    " $0 }' || true)
+            if [[ -n $errors ]]; then
+              echo "  btrfs on $fs has recorded device errors:"
+              echo "$errors"
+              problems=1
+            else
+              echo "  btrfs on $fs: no device errors"
+            fi
+          done
+          # The last scrub's summary, from the journal. `btrfs scrub status` needs root to
+          # read the result file and prints nothing useful without it. The monthly
+          # btrfs-scrub@ timer logs the same summary there. One line for every filesystem,
+          # because each host has a single btrfs filesystem.
+          scrub=$(journalctl -q --no-pager -o cat -t btrfs --grep '^(Scrub started|Error summary):' -n 2 2>/dev/null \
+            | awk '{ value = $0; sub(/^[^:]*: */, "", value) }
+                /^Scrub started/ { started = value } /^Error summary/ { summary = value }
+                END { if (started != "") print "last scrub " started ": " summary }' || true)
+          if [[ -n $scrub ]]; then
+            echo "  $scrub"
+            if [[ $scrub != *"no errors found" ]]; then problems=1; fi
+          elif [[ -n $(findmnt -t btrfs -no TARGET) ]]; then
+            echo "  no scrub on record"
+          fi
 
           exit "$problems"
         '';
-        summary = "Health check: failed units, config drift, boot errors, disk";
+        summary = "Health check: units, crashes, last shutdown, drift, boot errors, disk";
         group = "system";
       };
     };
