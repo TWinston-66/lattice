@@ -353,6 +353,103 @@ let
       esac
     '';
   };
+  # The keyboard backlight follows the room, the inverse of auto-brightness: lit in the dark,
+  # off in daylight. Ported from Omarchy Mac's omarchy-brightness-keyboard-auto, including
+  # its override rule. Any change this script did not make (the SUPER+brightness binds, or
+  # anything else writing the LED) pauses it until the light has moved enough that the
+  # manual choice no longer fits: 20 lux, or 40% of the reading at the time, whichever is
+  # more.
+  #
+  # Two departures. Levels snap to the 10% steps of lattice-kbd-backlight, and a change is
+  # only made when that step differs. swayosd's LED watcher raises its pill on every write,
+  # so a continuous ramp would flash the OSD every few seconds as a cloud passed. And
+  # nothing is written with the lid shut: the sensor sits in the bezel and reads near 0
+  # there, which would light the keys up under a closed, docked lid.
+  #
+  # The sensor is the iio device named *als* that reports in lux (aop-sensors-als on the
+  # Mac; aop-sensors-las next to it is the lid angle). A machine without one never starts
+  # the unit, which is gated on that path below.
+  kbdBacklightAuto = pkgs.writeShellApplication {
+    name = "lattice-kbd-backlight-auto";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      # Full brightness at or below darkLux, off at or above brightLux, linear between.
+      darkLux=8
+      brightLux=180
+      step=10
+      poll=5
+
+      als=""
+      for d in /sys/bus/iio/devices/iio:device*; do
+        [ -r "$d/name" ] && [ -r "$d/in_illuminance_input" ] || continue
+        read -r name < "$d/name"
+        case "$name" in *als*) als="$d/in_illuminance_input"; break ;; esac
+      done
+      led=""
+      for candidate in /sys/class/leds/*kbd_backlight*; do
+        [ -w "$candidate/brightness" ] || continue
+        led="$candidate"
+        break
+      done
+      if [ -z "$als" ] || [ -z "$led" ]; then
+        echo "no ambient light sensor or writable keyboard backlight" >&2
+        exit 0
+      fi
+      read -r max < "$led/max_brightness"
+
+      lidClosed() {
+        [ "$(busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+          org.freedesktop.login1.Manager LidClosed 2>/dev/null)" = "b true" ]
+      }
+
+      lastSet=""
+      paused=0
+      pauseLux=0
+      while :; do
+        read -r lux < "$als" || lux=""
+        lux=''${lux%%.*}
+        read -r current < "$led/brightness" || current=""
+        case "$lux$current" in "" | *[!0-9]*) sleep "$poll"; continue ;; esac
+
+        if [ -n "$lastSet" ] && [ "$current" != "$lastSet" ]; then
+          paused=1
+          pauseLux=$lux
+          lastSet=$current
+          echo "manual change to $current at $lux lux, pausing"
+        fi
+
+        if [ "$paused" = 1 ]; then
+          delta=$(( lux > pauseLux ? lux - pauseLux : pauseLux - lux ))
+          threshold=$(( pauseLux * 40 / 100 > 20 ? pauseLux * 40 / 100 : 20 ))
+          if [ "$delta" -ge "$threshold" ]; then
+            paused=0
+            echo "light moved to $lux lux, resuming"
+          fi
+        fi
+
+        if [ "$paused" = 0 ]; then
+          if [ "$lux" -le "$darkLux" ]; then
+            percent=100
+          elif [ "$lux" -ge "$brightLux" ]; then
+            percent=0
+          else
+            percent=$(( 100 * (brightLux - lux) / (brightLux - darkLux) ))
+          fi
+          percent=$(( (percent + step / 2) / step * step ))
+          target=$(( max * percent / 100 ))
+          if [ "$(( current * 100 / max / step ))" != "$(( percent / step ))" ] && ! lidClosed; then
+            printf '%s\n' "$target" > "$led/brightness"
+            echo "$lux lux: $percent%"
+          fi
+          read -r lastSet < "$led/brightness" || lastSet=$target
+        fi
+        sleep "$poll"
+      done
+    '';
+  };
   # What each suspend actually cost, as a number in the journal rather than a feeling.
   #
   # Recovering this after the fact meant reading upower's history as root and diffing it
@@ -589,6 +686,18 @@ in
   # the units least able to announce their own absence. The template lives in the graphical
   # profile; %n hands it the failing unit's name.
   systemd.user.services = lib.mkIf config.services.graphical-desktop.enable {
+    lattice-kbd-backlight-auto = {
+      description = "Keyboard backlight from the ambient light sensor";
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      unitConfig.ConditionPathExistsGlob = "/sys/bus/iio/devices/iio:device*/in_illuminance_input";
+      serviceConfig = {
+        ExecStart = lib.getExe kbdBacklightAuto;
+        Restart = "on-failure";
+      };
+    };
+
     lattice-battery-notify = {
       description = "Battery level notifications";
       partOf = [ "graphical-session.target" ];
