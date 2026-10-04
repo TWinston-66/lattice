@@ -242,6 +242,18 @@ in
       '';
     };
 
+    runtimeAccent = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/home/winston/.cache/lattice";
+      description = ''
+        Directory holding accent.css, accent.rasi and accent.mako, which the generated
+        palettes layer over their own accent so it can change without a rebuild. Every
+        file has to exist: GTK drops a whole stylesheet over one import it cannot open,
+        and mako a whole config over one include. null keeps the build-time accent only.
+      '';
+    };
+
     alphaOf = lib.mkOption {
       type = lib.types.functionTo lib.types.str;
       readOnly = true;
@@ -333,11 +345,22 @@ in
     # Imported by the matching config in ~/.dotfiles, which keeps the layout. Each file
     # defines the full palette, because a name a config references but a file never defines
     # fails silently in GTK CSS and renders as a transparent or default colour.
+    #
+    # With runtimeAccent set, each one ends by pulling in the runtime accent, where a second
+    # definition of accent/accentAlt wins. GTK only honours @import ahead of every other rule,
+    # hence the palette's own file for the GTK pair to import first.
     environment.etc = {
-      # GTK CSS: @import url("file:///etc/xdg/waybar/lattice.css");
-      "xdg/waybar/lattice.css".text = renderNamed (name: hex: "@define-color ${name} ${hex};\n") + ''
+      "xdg/lattice/palette.css".text = renderNamed (name: hex: "@define-color ${name} ${hex};\n") + ''
         @define-color accent @${cfg.accent};
         @define-color accentAlt @${cfg.accentAlt};
+      '';
+
+      # GTK CSS: @import url("file:///etc/xdg/waybar/lattice.css");
+      "xdg/waybar/lattice.css".text = ''
+        @import url("file:///etc/xdg/lattice/palette.css");
+      ''
+      + lib.optionalString (cfg.runtimeAccent != null) ''
+        @import url("file://${cfg.runtimeAccent}/accent.css");
       '';
 
       # swayosd is GTK CSS too, so it takes the same file.
@@ -354,16 +377,21 @@ in
           highlight: bold ${cfg.accentHex};
           baseAlpha: ${alphaOf cfg.palette.base};
         }
+      ''
+      + lib.optionalString (cfg.runtimeAccent != null) ''
+        @import "${cfg.runtimeAccent}/accent.rasi"
       '';
 
       # mako ini: include=/etc/xdg/mako/lattice
       # Colours only, including the per-urgency borders; geometry, fonts and timeouts
-      # stay in ~/.dotfiles. Criteria here merge with the same criteria there.
+      # stay in ~/.dotfiles. Criteria here merge with the same criteria there. The runtime
+      # include has to come before the first section, or it would only restyle that one.
       "xdg/mako/lattice".text = ''
         background-color=${alphaOf cfg.palette.base}
         text-color=${cfg.palette.text}
         border-color=${cfg.accentHex}
         progress-color=over ${cfg.palette.surface0}
+        ${lib.optionalString (cfg.runtimeAccent != null) "include=${cfg.runtimeAccent}/accent.mako"}
 
         [urgency=low]
         border-color=${cfg.palette.surface1}

@@ -250,6 +250,11 @@ in
     # aarch64 Linux asset, unlike clangd -- but nixpkgs has the same 0.11.1 and keeps it
     # alongside the other servers the flake owns.
     neocmakelsp
+    # Debugger, for the shell and for nvim alike: nvim-dap starts this same binary as
+    # `gdb -i dap` (gdb 14+ has DAP built in), so nothing else is needed on either host --
+    # lldb-dap and codelldb would bring a second toolchain, and mason's cpptools has no
+    # aarch64 Linux build to fall back on anyway.
+    gdb
 
     unzip
     wget

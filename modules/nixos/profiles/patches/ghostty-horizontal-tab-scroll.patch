@@ -1,0 +1,101 @@
+diff --git a/src/apprt/gtk/class/surface.zig b/src/apprt/gtk/class/surface.zig
+index 179c779d7be..c101892de9e 100644
+--- a/src/apprt/gtk/class/surface.zig
++++ b/src/apprt/gtk/class/surface.zig
+@@ -2984,37 +2984,56 @@ pub const Surface = extern struct {
+     ) callconv(.c) c_int {
+         const priv: *Private = self.private();
+ 
+-        switch (ec.getUnit()) {
+-            .surface => {},
+-            .wheel => return @intFromBool(false),
+-            else => return @intFromBool(false),
+-        }
++        // Check if horizontal tab scrolling is enabled and this is a
++        // touchpad surface scroll. If not, forward to the terminal.
++        const tab_scroll_enabled = if (priv.config) |config|
++            config.get().@"gtk-horizontal-tab-scroll"
++        else
++            true;
++
++        const is_surface_scroll = ec.getUnit() == .surface;
++
++        if (tab_scroll_enabled and is_surface_scroll) {
++            priv.pending_horizontal_scroll += x;
++
++            if (@abs(priv.pending_horizontal_scroll) < 120) {
++                if (priv.pending_horizontal_scroll_reset) |v| {
++                    _ = glib.Source.remove(v);
++                    priv.pending_horizontal_scroll_reset = null;
++                }
++                priv.pending_horizontal_scroll_reset = glib.timeoutAdd(500, ecMouseScrollHorizontalReset, self);
++                return @intFromBool(true);
++            }
+ 
+-        priv.pending_horizontal_scroll += x;
++            _ = self.as(gtk.Widget).activateAction(
++                if (priv.pending_horizontal_scroll < 0.0)
++                    "tab.next-page"
++                else
++                    "tab.previous-page",
++                null,
++            );
+ 
+-        if (@abs(priv.pending_horizontal_scroll) < 120) {
+             if (priv.pending_horizontal_scroll_reset) |v| {
+                 _ = glib.Source.remove(v);
+                 priv.pending_horizontal_scroll_reset = null;
+             }
+-            priv.pending_horizontal_scroll_reset = glib.timeoutAdd(500, ecMouseScrollHorizontalReset, self);
+-            return @intFromBool(true);
+-        }
+ 
+-        _ = self.as(gtk.Widget).activateAction(
+-            if (priv.pending_horizontal_scroll < 0.0)
+-                "tab.next-page"
+-            else
+-                "tab.previous-page",
+-            null,
+-        );
++            priv.pending_horizontal_scroll = 0.0;
+ 
+-        if (priv.pending_horizontal_scroll_reset) |v| {
+-            _ = glib.Source.remove(v);
+-            priv.pending_horizontal_scroll_reset = null;
++            return @intFromBool(true);
+         }
+ 
+-        priv.pending_horizontal_scroll = 0.0;
++        // Forward horizontal scroll to the terminal (e.g. for neovim).
++        const surface = priv.core_surface orelse return @intFromBool(false);
++        const scaled = self.scaledCoordinates(x, 0);
++        surface.scrollCallback(
++            scaled.x * -1,
++            0,
++            .{},
++        ) catch |err| {
++            log.warn("error in scroll callback err={}", .{err});
++            return @intFromBool(false);
++        };
+ 
+         return @intFromBool(true);
+     }
+diff --git a/src/config/Config.zig b/src/config/Config.zig
+index 5b1d73deb6c..cb19640101b 100644
+--- a/src/config/Config.zig
++++ b/src/config/Config.zig
+@@ -3649,6 +3649,14 @@ else
+ /// which is the old style.
+ @"gtk-wide-tabs": bool = true,
+ 
++/// If `true` (default), then two-finger horizontal scrolling on a touchpad
++/// will switch between tabs. Scrolling left goes to the next tab and
++/// scrolling right goes to the previous tab. Set this to `false` to
++/// disable this behavior.
++///
++/// Available since 1.4.0.
++@"gtk-horizontal-tab-scroll": bool = true,
++
+ /// Custom CSS files to be loaded.
+ ///
+ /// GTK CSS documentation can be found at the following links:

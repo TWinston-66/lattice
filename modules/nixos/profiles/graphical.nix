@@ -55,8 +55,8 @@ let
   # this theme, and fourteen wallpapers in one hue would differ only in their seeded
   # composition. The first entry is the exception -- no accent and no seed, so it is the
   # live accent drawn plain,
-  # which keeps it the image it was before the pool existed and the right one for
-  # hyprpaper.conf to name for the moment before the pick lands.
+  # which keeps it the image it was before the pool existed and the right one to seed the
+  # wallpaper symlinks with before a home has ever picked.
   #
   # An entry is the generator's own argument set, so one only has to name what it changes;
   # the seed is its position in the list, which makes appending a wallpaper cheap and
@@ -183,7 +183,7 @@ let
     }
   ) pool;
 
-  # What hyprpaper.conf and the boot-time default name: the plain drawing at desk size.
+  # What the wallpaper symlinks are seeded with: the plain drawing at desk size.
   wallpaper = lib.head deskWallpapers;
 
   # Where the picker records what it set, for the things that cannot be told. hyprlock
@@ -208,6 +208,113 @@ let
     $lockCheck = rgb(${hex theme.accentAltHex})
   '';
 
+  # The desktop's accent at run time, so it can follow the wallpaper instead of being fixed
+  # at lattice.theme.accent until the next rebuild. Every consumer is pointed at a file in
+  # ${currentDir} rather than sent the colours, the same arrangement as the lock screen's:
+  # waybar, swayosd and wlogout through accent.css, which the palettes in /etc/xdg import
+  # last (lattice.theme.runtimeAccent); rofi and mako through their own syntax of the same
+  # two colours; Hyprland's border through accent.lua, which hyprland.lua in ~/.dotfiles
+  # loads after its own default so a `hyprctl reload` keeps the pick.
+  #
+  # Telling each one is the other half, and it is per program because none of them watches
+  # its files. waybar reloads on SIGUSR2, sent by systemd itself rather than through the
+  # unit's `reload`: upstream's ExecReload is a bare `kill`, which is not on the user
+  # manager's PATH here, so `systemctl --user reload waybar` fails with 203/EXEC. mako has
+  # `makoctl reload`; swayosd has no reload at all, so it is restarted; Hyprland takes the
+  # same Lua the file holds, through `hyprctl eval` -- `keyword` refuses a Lua config. rofi
+  # and wlogout read theirs at every launch. Every one is allowed to miss: a unit that is
+  # not up yet will read the file when it starts.
+  #
+  # The GTK theme, the Stream Deck's keys and the screenshot overlay stay on the build-time
+  # accent: all three are drawn or packaged per accent, and none can be told at run time.
+  #
+  # --write-only is for the build, which runs this same script to make the seeds below: two
+  # copies of four file formats would drift the first time either was edited.
+  latticeAccent = pkgs.writeShellApplication {
+    name = "lattice-accent";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.diffutils
+      pkgs.hyprland
+      pkgs.mako
+    ];
+    text = ''
+      usage() {
+        echo "usage: lattice-accent [--write-only <dir>] <#accent> <#accentAlt>" >&2
+        exit 2
+      }
+
+      dir="${currentDir}"
+      reload=1
+      if [[ ''${1:-} == --write-only ]]; then
+        (($# >= 2)) || usage
+        dir=$2
+        reload=0
+        shift 2
+      fi
+      (($# == 2)) || usage
+      for colour in "$1" "$2"; do
+        [[ $colour =~ ^#[0-9a-fA-F]{6}$ ]] || usage
+      done
+      accent=$1
+      alt=$2
+
+      # Written beside the target and renamed over it. GTK and mako both reject their whole
+      # configuration over a file they cannot read, so a reload landing mid-write must still
+      # find a complete one.
+      #
+      # A file that already says the same thing is left alone, and `changed` records whether
+      # any did not: the login pick lands on files lattice-wallpaper --choose wrote before
+      # the bar started, and reloading a bar that is already right only makes it blink.
+      install -d "$dir"
+      changed=0
+      # <file> <printf format> <args...>. Not fed from a pipe: the right side of one is a
+      # subshell, and `changed` would never get back out of it.
+      write() {
+        local file=$1 format=$2
+        shift 2
+        # shellcheck disable=SC2059 # the format is always one of the literals below
+        printf "$format" "$@" >"$dir/.$file.tmp"
+        if cmp -s "$dir/.$file.tmp" "$dir/$file"; then
+          rm -f "$dir/.$file.tmp"
+        else
+          mv -f "$dir/.$file.tmp" "$dir/$file"
+          changed=1
+        fi
+      }
+
+      write accent.css '@define-color accent %s;\n@define-color accentAlt %s;\n' "$accent" "$alt"
+      # `highlight` is a literal for the reason given in modules/nixos/theme.nix.
+      write accent.rasi '* {\n  accent: %s;\n  accentAlt: %s;\n  highlight: bold %s;\n}\n' \
+        "$accent" "$alt" "$accent"
+      write accent.mako 'border-color=%s\n' "$accent"
+      write accent.lua \
+        'hl.config({ general = { col = { active_border = { colors = { "rgba(%sff)", "rgba(%sff)" }, angle = 45 } } } })\n' \
+        "''${accent#\#}" "''${alt#\#}"
+
+      ((reload)) || exit 0
+
+      # Hyprland whatever the files said: it read accent.lua when it started, which can be
+      # before this session's pick was written, and setting a border never flickers.
+      hyprctl eval "$(cat "$dir/accent.lua")" >/dev/null || true
+      ((changed)) || exit 0
+      systemctl --user kill --signal=SIGUSR2 --kill-whom=main waybar.service 2>/dev/null || true
+      systemctl --user try-restart swayosd.service || true
+      makoctl reload 2>/dev/null || true
+    '';
+  };
+
+  # What the runtime files hold before anything has picked: the build-time accent pair, so a
+  # fresh home looks exactly as it did before the accent could move.
+  accentSeed = pkgs.runCommand "lattice-accent-seed" { } ''
+    ${lib.getExe latticeAccent} --write-only $out ${
+      lib.escapeShellArgs [
+        theme.accentHex
+        theme.accentAltHex
+      ]
+    }
+  '';
+
   # Switching between them, for a bind in ~/.dotfiles and for the login pick below.
   # hyprpaper 0.8 loads an image when it is asked for -- `preload` is gone -- so the pool
   # only has to exist in the store. hyprpaper can also rotate a directory by itself, with
@@ -225,6 +332,7 @@ let
       pkgs.coreutils
       pkgs.hyprland
       pkgs.jq
+      latticeAccent
     ];
     text = ''
       panel=(${lib.concatStringsSep " " panelWallpapers})
@@ -232,6 +340,8 @@ let
       names=(${lib.concatMapStringsSep " " (accent: accent.name) poolAccents})
       outers=(${lib.concatMapStringsSep " " (accent: hex accent.outer) poolAccents})
       checks=(${lib.concatMapStringsSep " " (accent: hex accent.check) poolAccents})
+      accents=(${lib.escapeShellArgs (map (accent: accent.hex) poolAccents)})
+      alts=(${lib.escapeShellArgs (map (accent: accent.check) poolAccents)})
       state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-wallpaper"
       count=''${#desk[@]}
 
@@ -239,6 +349,17 @@ let
       # boot starts out with no wallpaper of its own rather than with the first one.
       current=$(cat "$state" 2>/dev/null || echo -1)
       index=$((current < 0 ? 0 : current))
+
+      # --choose settles the pick and writes down everything that reads it -- the symlinks,
+      # the lock accent, the desktop accent -- without telling anyone. It is for the login
+      # pick, which runs before hyprpaper and the bar have started (lattice-wallpaper-choose
+      # below), so they come up on the session's wallpaper and accent instead of on the
+      # defaults with the pick landing over them a moment later.
+      choose=0
+      if [[ ''${1:-} == --choose ]]; then
+        choose=1
+        shift
+      fi
 
       case "''${1:-next}" in
       next) index=$(((index + 1) % count)) ;;
@@ -269,8 +390,11 @@ let
         echo "$current"
         exit 0
         ;;
+      # The pick already made, pushed to hyprpaper again: for the second half of the login
+      # pick, and for a hyprpaper that has restarted on hyprpaper.conf.
+      apply) ;;
       *[!0-9]*)
-        echo "usage: lattice-wallpaper [next|prev|random|list|current|<index>]" >&2
+        echo "usage: lattice-wallpaper [--choose] [next|prev|random|apply|list|current|<index>]" >&2
         exit 2
         ;;
       *) index=$(($1 % count)) ;;
@@ -295,6 +419,12 @@ let
       \$lockOuter = rgb(''${outers[index]})
       \$lockCheck = rgb(''${checks[index]})
       EOF
+
+      if ((choose)); then
+        lattice-accent --write-only "${currentDir}" "''${accents[index]}" "''${alts[index]}"
+        echo "$index" >"$state"
+        exit 0
+      fi
 
       # An internal panel is a small screen a forearm away and gets the drawing sized for
       # one; anything else is taken for a monitor across a desk. Matching on the connector
@@ -326,6 +456,10 @@ let
         fi
         sleep 0.5
       done
+
+      # Only once the wallpaper is really up, so a pick that never landed does not leave
+      # the desktop wearing the accent of a wallpaper it is not showing.
+      lattice-accent "''${accents[index]}" "''${alts[index]}"
 
       echo "$index" >"$state"
     '';
@@ -2030,8 +2164,8 @@ let
       click=(-me-select-entry "" -me-accept-entry MousePrimary)
 
       # -1 before the session's own pick has landed, which is a real state and not an error:
-      # hyprpaper is up on hyprpaper.conf's default and nothing has chosen yet. Nothing gets
-      # marked, rather than the first row being marked on a guess.
+      # lattice-wallpaper-choose failed or has not run, so hyprpaper is up on whatever the
+      # symlink last named. Nothing gets marked, rather than the first row on a guess.
       current=$(lattice-wallpaper current)
       selected=()
       ((current >= 0)) && selected=(-a "$current")
@@ -2605,7 +2739,14 @@ in
 
   ### APPS ###
   environment.systemPackages = with pkgs; [
-    ghostty
+    # 1.3.1's GTK build spends every touchpad sideways scroll on switching tabs and never
+    # hands it to the terminal, so nvim's <ScrollWheelLeft/Right> never fire. Upstream's
+    # gtk-horizontal-tab-scroll (ghostty-org/ghostty#12659, due in 1.4.0) forwards it
+    # instead when set false, which ~/.config/ghostty-nixos/config does. Drop the patch
+    # once nixpkgs ships 1.4.0.
+    (ghostty.overrideAttrs (old: {
+      patches = (old.patches or [ ]) ++ [ ./patches/ghostty-horizontal-tab-scroll.patch ];
+    }))
     rofiWithCalc
     # The same libqalculate engine at its other two surfaces: `qalc` in a terminal, and a
     # real window for the times a calculation is worth keeping on screen and editing --
@@ -2700,6 +2841,7 @@ in
 
     cycleWallpaper
     wallpaperMenu
+    latticeAccent
     sunset
     idleInhibit
     tailscale
@@ -2940,7 +3082,32 @@ in
     hyprpolkitagent.wantedBy = [ "graphical-session.target" ];
     hyprsunset.wantedBy = [ "graphical-session.target" ];
 
-    # One wallpaper out of the pool per login.
+    # One wallpaper out of the pool per login, in two halves. This one settles it before
+    # anything draws: hyprpaper.conf names the symlink it writes, and the bar, mako and
+    # swayosd read the accent files it writes, so all of them start on the session's pick.
+    # It needs nothing running -- no IPC, only files -- so ordering it ahead of them is
+    # all there is to it. No After= on the target, for the reason the next unit gives.
+    lattice-wallpaper-choose = {
+      description = "Choose this session's wallpaper and accent";
+
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      before = [
+        "hyprpaper.service"
+        "waybar.service"
+        "mako.service"
+        "swayosd.service"
+      ];
+      onFailure = [ "lattice-notify-failure@%n.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${lib.getExe cycleWallpaper} --choose random";
+      };
+    };
+
+    # And this one hands it to hyprpaper per output, which only IPC can do: hyprpaper.conf
+    # has one path for every screen, and the panel wants its own size of the same drawing.
     #
     # It hangs off hyprpaper rather than off graphical-session.target, which is not a
     # stylistic choice: hyprpaper's own unit is `After=graphical-session.target`, so a unit
@@ -2948,10 +3115,9 @@ in
     # for the pick, the pick waits for hyprpaper, hyprpaper waits for the target. systemd
     # spots that at activation and breaks it by deleting a job from the cycle, which is a
     # warning in the journal and a wallpaper that never changes, not a failure anyone is
-    # told about. Being wanted by hyprpaper instead says the same thing -- pick once the
+    # told about. Being wanted by hyprpaper instead says the same thing -- apply once the
     # wallpaper daemon is up -- with no edge back to the target. It also means a hyprpaper
-    # that died and restarted gets a fresh pick rather than coming back on whatever
-    # hyprpaper.conf names, which is the better answer anyway.
+    # that died and restarted gets the session's pick back at the right size per screen.
     #
     # There is no Restart= here on purpose. hyprpaper is Type=simple, so ordering after it
     # only means its process has been forked and its IPC socket may not be bound yet -- but
@@ -2971,7 +3137,7 @@ in
 
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${lib.getExe cycleWallpaper} random";
+        ExecStart = "${lib.getExe cycleWallpaper} apply";
       };
     };
 
@@ -3204,6 +3370,9 @@ in
     ];
 
   ### THEME ###
+  # The palettes in /etc/xdg layer lattice-accent's files over their own accent; see there.
+  lattice.theme.runtimeAccent = currentDir;
+
   xdg.icons.fallbackCursorThemes = [ cursorTheme ];
 
   programs.dconf.profiles.user.databases = [
@@ -3245,10 +3414,12 @@ in
   environment.etc."xdg/gtk-4.0/settings.ini".text = gtkSettings;
 
   ### WALLPAPER ###
+  # The desk-sized copy of the session's pick, which lattice-wallpaper-choose has written
+  # before hyprpaper starts; the panel gets its own size a moment later over IPC.
   environment.etc."xdg/hypr/hyprpaper.conf".text = ''
     wallpaper {
       monitor =
-      path = ${wallpaper}
+      path = ${currentDesk}
       fit_mode = cover
     }
 
@@ -3279,11 +3450,24 @@ in
     # `-s` keeps VT switching, which is the way out if the greeter ever comes up blank; `-d`
     # stops cage asking foot for decorations it would then have to draw.
     #
+    # `-m last` is also why cage is patched. In wlroots 0.20 the output layout is freed when
+    # the display's destroy signal fires, but the DRM backend tears its outputs down only
+    # after that, from the event loop's destroy. On the first of them cage's `last` handler
+    # re-enables whichever output remains, which adds it to the freed layout, and cage
+    # segfaults in output_layout_add on every login. The handoff has already happened by
+    # then, so nothing visible breaks, but it leaves a coredump per boot. cage-kiosk/cage#525
+    # (for #515) skips the re-enable once the server is terminating. Drop the patch once
+    # nixpkgs' cage includes it.
+    #
     # No useTextGreeter: that option only adjusts greetd's own TTY plumbing so systemd cannot
     # scribble over a TUI sharing VT1 with it. The TUI is inside a compositor now, and there
     # is nothing left on the VT to protect.
     settings.default_session.command = lib.concatStringsSep " " [
-      "${pkgs.cage}/bin/cage"
+      "${
+        pkgs.cage.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [ ./patches/cage-last-mode-teardown.patch ];
+        })
+      }/bin/cage"
       "-s"
       "-d"
       "-m"
@@ -3368,8 +3552,11 @@ in
   # GTK CSS, like waybar's and swayosd's, but written here rather than imported from
   # ~/.dotfiles: wlogout is Wayland-only, so there is no macOS half to keep in step.
   # The pill treatment carries over -- translucent @base, @surface0 border -- scaled up,
-  # over a scrim that dims the desktop behind it.
+  # over a scrim that dims the desktop behind it. The accent comes in through the bar's
+  # palette rather than as a literal, so the hover follows lattice-accent like the bar does.
   environment.etc."xdg/wlogout/style.css".text = ''
+    @import url("file:///etc/xdg/waybar/lattice.css");
+
     * {
       background-image: none;
       box-shadow: none;
@@ -3396,9 +3583,9 @@ in
 
     button:focus,
     button:hover {
-      color: ${theme.accentHex};
+      color: @accent;
       background-color: alpha(${palette.surface0}, ${toString theme.opacity});
-      border-color: ${theme.accentHex};
+      border-color: @accent;
     }
 
     /* The two that can't be taken back warn in their own colour on the way past. */
@@ -3420,9 +3607,24 @@ in
 
   # `C` copies only when the target is absent, so this seeds the file on a fresh home and
   # then never touches it again -- every later write is lattice-wallpaper's.
-  systemd.user.tmpfiles.rules = [
+  #
+  # Per-user rather than systemd.user.tmpfiles.rules: those go to every user manager, and
+  # the greeter's starts one too, failing on winston's home at every boot.
+  systemd.user.tmpfiles.users.winston.rules = [
     "d ${currentDir} 0755 - - -"
     "C ${currentLockAccent} 0644 - - - ${defaultLockAccent}"
+  ]
+  # `L` without `+` for the same reason as `C`: only on a home that has never picked, so
+  # hyprpaper.conf names something even before the first lattice-wallpaper-choose.
+  ++ [
+    "L ${currentDesk} - - - - ${wallpaper}"
+    "L ${currentPanel} - - - - ${lib.head panelWallpapers}"
+  ]
+  ++ map (file: "C ${currentDir}/${file} 0644 - - - ${accentSeed}/${file}") [
+    "accent.css"
+    "accent.rasi"
+    "accent.mako"
+    "accent.lua"
   ];
 
   environment.etc = {

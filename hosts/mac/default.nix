@@ -280,8 +280,9 @@ in
   # no home-manager here, so the stylesheets are linked into the profiles directly. Both
   # profile directory names are generated at first run and are derivable from nothing in this
   # file: a new profile means the path has to be updated, and until it is the stylesheet
-  # stops applying silently.
-  systemd.user.tmpfiles.rules =
+  # stops applying silently. Per-user for the same reason as the graphical profile's: the
+  # greeter's user manager would otherwise try these under its own /var/empty home.
+  systemd.user.tmpfiles.users.winston.rules =
     let
       linkChrome = profile: css: [
         "d ${profile}/chrome 0755 - - -"
@@ -337,6 +338,23 @@ in
     linkChrome firefoxProfile firefoxUserChrome
     ++ linkChrome thunderbirdProfile thunderbirdUserChrome
     ++ [ "L+ ${thunderbirdProfile}/user.js - - - - ${thunderbirdUserJs}" ];
+
+  ### GREETER ###
+  # apple-drm can register after greetd has started -- 7.24s against 6.60s on 2026-10-03,
+  # and on another of the eight boots in the journal that day. Until it does, the only DRM
+  # device is simpledrm's framebuffer, and cage would take that, then lose its only output
+  # when apple-drm unregisters it moments later. Nothing guarded this explicitly. greetd's
+  # Type=idle held it back while other boot jobs ran, up to its 5s cap, and the long job was
+  # NetworkManager-wait-online for docker -- which was also why the greeter came up ~6s
+  # after the splash on those boots. With docker socket-activated that wait is gone, so the
+  # wait is written down instead: for the display controller's own node, by path, since
+  # the card number is just the order the drivers bound in.
+  #
+  # `-` and a timeout, so a kernel where apple-drm never appears still reaches a greeter on
+  # whatever framebuffer there is, rather than a black screen.
+  systemd.services.greetd.serviceConfig.ExecStartPre = [
+    "-${pkgs.systemd}/bin/udevadm wait --timeout=15 /dev/dri/by-path/platform-soc:display-subsystem-card"
+  ];
 
   ### KEYBOARD ###
   # The built-in keyboard is bound to hid-apple (HID 05AC:0352), which can swap the two
@@ -656,7 +674,14 @@ in
   };
 
   ### DOCKER ###
-  virtualisation.docker.enable = true;
+  # Socket-activated: docker.socket stays up and the daemon starts on the first `docker`
+  # call. Started at boot, docker.service pulls in network-online.target, which held the
+  # graphical target behind NetworkManager-wait-online for ~7.5s on every boot. The cost is
+  # that containers with a restart policy no longer come back on their own until then.
+  virtualisation.docker = {
+    enable = true;
+    enableOnBoot = false;
+  };
 
   ### VIRTUALIZATION ###
   virtualisation.libvirtd.enable = true;
