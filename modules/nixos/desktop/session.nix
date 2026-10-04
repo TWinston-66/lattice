@@ -49,7 +49,7 @@ let
         exit 0
         ;;
       *)
-        echo "usage: lattice-sunset [toggle|on|off|status]" >&2
+        echo "usage: lattice sunset [toggle|on|off|status]" >&2
         exit 2
         ;;
       esac
@@ -61,6 +61,32 @@ let
       # for the same reason as the signal: a deck that is unplugged, or a lattice-deck that
       # is not on this caller's PATH, must not fail the toggle that has already happened.
       lattice-deck sync sunset || true
+    '';
+  };
+
+  # The pieces that most often need a kick, under the names a person would use for them
+  # rather than their units'. Each is what the session itself would do: mako and Hyprland
+  # reload rather than restart (a restart drops the notification history), and audio goes
+  # through the deck's own restart so the banner and its keys come along.
+  restart = pkgs.writeShellApplication {
+    name = "lattice-restart";
+    runtimeInputs = [
+      pkgs.hyprland
+      pkgs.mako
+    ];
+    text = ''
+      case "''${1-}" in
+      bar) systemctl --user restart waybar.service ;;
+      deck) systemctl --user restart streamdeck.service ;;
+      osd) systemctl --user reset-failed swayosd.service 2>/dev/null; systemctl --user restart swayosd.service ;;
+      notifications) makoctl reload ;;
+      hypr) hyprctl reload ;;
+      audio) lattice-deck audio-restart ;;
+      *)
+        echo "usage: lattice restart <bar|deck|osd|notifications|hypr|audio>" >&2
+        exit 2
+        ;;
+      esac
     '';
   };
 in
@@ -198,4 +224,26 @@ in
     };
   };
 
+  lattice.cli.commands = {
+    sunset = {
+      exec = lib.getExe sunset;
+      args = "[toggle|on|off|status]";
+      summary = "Warm the screens for the night; toggle by default";
+      group = "look";
+    };
+    restart = {
+      exec = lib.getExe restart;
+      args = "<bar|deck|osd|notifications|hypr|audio>";
+      summary = "Restart one piece of the session";
+      details = ''
+        bar            waybar
+        deck           the Stream Deck daemon
+        osd            swayosd, the volume and brightness pill
+        notifications  reload mako, keeping its history
+        hypr           reload Hyprland's config
+        audio          PipeWire and WirePlumber, for speakers that vanish
+      '';
+      group = "session";
+    };
+  };
 }

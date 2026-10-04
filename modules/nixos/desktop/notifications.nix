@@ -57,7 +57,7 @@ let
         exit 0
         ;;
       *)
-        echo "usage: lattice-dnd [toggle|on|off|status]" >&2
+        echo "usage: lattice dnd [toggle|on|off|status]" >&2
         exit 2
         ;;
       esac
@@ -270,6 +270,20 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${pkgs.systemd}/bin/systemctl --user --machine=winston@.host start lattice-notify-failure-system@%i.service";
+    };
+  };
+
+  lattice.cli.commands = {
+    dnd = {
+      exec = lib.getExe dnd;
+      args = "[toggle|on|off|status]";
+      summary = "Do not disturb: banners go straight to the history";
+      group = "session";
+    };
+    notifications = {
+      exec = lib.getExe notifyHistory;
+      summary = "Browse the notification history";
+      group = "session";
     };
   };
 }

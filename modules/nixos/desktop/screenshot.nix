@@ -259,4 +259,9 @@ in
     "L+ ${config.users.users.winston.home}/.config/hyprquickframe/theme.toml - - - - ${currentDir}/theme.hqf.toml"
   ];
 
+  lattice.cli.commands.screenshot = {
+    exec = lib.getExe screenshot;
+    summary = "Select a region to save, copy, annotate or read the text from";
+    group = "session";
+  };
 }

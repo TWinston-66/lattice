@@ -343,7 +343,7 @@ let
       raise) brightnessctl -q -d "$led" -c leds set "+''${step}%" ;;
       lower) brightnessctl -q -d "$led" -c leds set "''${step}%-" ;;
       *)
-        echo "usage: lattice-kbd-backlight [raise|lower]" >&2
+        echo "usage: lattice kbd-backlight [raise|lower]" >&2
         exit 2
         ;;
       esac
@@ -619,4 +619,23 @@ in
       }
     ''
   );
+
+  lattice.cli.commands = {
+    kbd-backlight = {
+      exec = lib.getExe kbdBacklight;
+      args = "<raise|lower>";
+      summary = "Step the keyboard backlight";
+      group = "devices";
+    };
+    sleep-drain = {
+      exec = "${lib.getExe sleepDrain} report";
+      summary = "Battery spent in each recent sleep";
+      group = "devices";
+    };
+    portal = {
+      exec = lib.getExe portalSignIn;
+      summary = "Open the captive portal's sign-in page";
+      group = "session";
+    };
+  };
 }

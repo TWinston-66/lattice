@@ -381,7 +381,7 @@ let
       # pick, for a hyprpaper that has restarted on hyprpaper.conf, and for lattice-theme.
       apply) ;;
       *[!0-9]*)
-        echo "usage: lattice-wallpaper [--choose] [next|prev|random|apply|list|current|<index>]" >&2
+        echo "usage: lattice wallpaper [next|prev|random|apply|list|current|<index>]" >&2
         exit 2
         ;;
       *) index=$(($1 % count)) ;;
@@ -479,7 +479,7 @@ let
       *)
         target=$1
         if [[ " ''${flavors[*]} " != *" $target "* ]]; then
-          echo "usage: lattice-theme [next|prev|list|current|${lib.concatStringsSep "|" flavorNames}]" >&2
+          echo "usage: lattice theme [next|prev|list|current|${lib.concatStringsSep "|" flavorNames}]" >&2
           exit 2
         fi
         ;;
@@ -879,4 +879,50 @@ in
     "accent.lua"
     "lock-accent.conf"
   ];
+
+  lattice.cli.commands = {
+    theme = {
+      exec = lib.getExe latticeTheme;
+      args = "[next|prev|list|current|<flavour>]";
+      complete = [
+        "next"
+        "prev"
+        "list"
+        "current"
+      ]
+      ++ flavorNames;
+      summary = "Switch the flavour at run time; next by default";
+      group = "look";
+    };
+    "theme menu" = {
+      exec = lib.getExe themeMenu;
+      summary = "Pick a flavour from a menu";
+      group = "look";
+    };
+    wallpaper = {
+      exec = lib.getExe cycleWallpaper;
+      args = "[next|prev|random|apply|list|current|<index>]";
+      summary = "Step through the wallpaper pool; next by default";
+      group = "look";
+    };
+    "wallpaper menu" = {
+      exec = lib.getExe wallpaperMenu;
+      summary = "Pick a wallpaper from a menu";
+      group = "look";
+    };
+    art = {
+      exec = lib.getExe config.lattice.artwork.draw;
+      args = "<wallpaper|mark|widget|key> [options]";
+      summary = "Draw lattice artwork as SVG, with the live palette";
+      details = "Each kind takes --help for its own knobs.";
+      group = "look";
+    };
+    palette = {
+      exec = lib.getExe latticePalette;
+      args = "[--write-only <dir>] <flavour> <#accent> <#accentAlt>";
+      summary = "Write the run-time theme files and tell every app";
+      group = "look";
+      hidden = true;
+    };
+  };
 }

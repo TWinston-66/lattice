@@ -105,7 +105,7 @@
 
 <p align="center">
   <img src=".github/assets/screenshots/wallpapers.png" alt="Generated wallpapers across flavours and accents" width="100%">
-  <br><sub>The wallpapers aren't downloaded. <code>lattice-art</code> draws them at build time, one per accent in each flavour, sized for each screen.</sub>
+  <br><sub>The wallpapers aren't downloaded. <code>lattice art</code> draws them at build time, one per accent in each flavour, sized for each screen.</sub>
 </p>
 
 ## Features
@@ -132,9 +132,9 @@
 - `lattice.theme` holds the palette, the flavours and the accent. Generated theme kits feed
   GTK (adw-gtk3), Qt, Papirus folder icons, rofi, mako, waybar, hyprlock, Ghostty, tmux,
   Neovim, Thunderbird and a dozen CLI tools.
-- **`lattice-theme`** switches the flavour at run time. Every app that can reload, does:
+- **`lattice theme`** switches the flavour at run time. Every app that can reload, does:
   GTK3 apps restyle in place, Ghostty and Neovim reload, and the wallpaper and Stream Deck follow.
-- **`lattice-wallpaper`** cycles through the generated pool, or right-click the bar to pick one.
+- **`lattice wallpaper`** cycles through the generated pool, or right-click the bar to pick one.
 - Boot is silent: a **Plymouth** splash that pulses the lattice mark, straight into a themed
   **tuigreet** greeter, sized per screen under cage and foot.
 
@@ -190,7 +190,8 @@ and `server` profiles plus feature modules.
 | `modules/nixos/desktop/` | The desktop by surface: session, apps, theming, bar, menus, notifications, lock, screenshot, greeter, plus the patches they carry |
 | `modules/nixos/profiles/` | `laptop`, `graphical` and `server`; `graphical` is the desktop modules and the hardware ones they need |
 | `secrets/` | [sops](https://github.com/getsops/sops)-encrypted secrets |
-| `scripts/` | Deploy, rebuild, update and password helpers |
+| `modules/nixos/cli.nix` | The `lattice` command: each module registers its scripts in `lattice.cli.commands` |
+| `scripts/` | What `lattice rebuild`, `deploy`, `update` and `secrets password` run |
 | `assets/lattice-art.py` | Draws the wallpapers, the splash, its widgets and the Stream Deck keys |
 
 User-level configs (Hyprland, waybar, rofi, Neovim, tmux…) live in
@@ -199,15 +200,21 @@ generated theme files, so tweaking a bar or menu needs no rebuild.
 
 ## Usage
 
+Everything goes through one command. `lattice` alone lists it all, `lattice <command> --help`
+explains one, and zsh completes both.
+
 ```sh
-scripts/deploy.sh [host] [addr]          # build and switch a host over SSH
-scripts/rebuild.sh [host]                # build and switch this machine
-scripts/set-password.sh [user]           # set a login password
-nix develop -c sops secrets/common.yaml  # edit secrets
+lattice rebuild [host]                   # build and switch this machine
+lattice deploy [host] [addr]             # build and switch a host over SSH
+lattice update [input...]                # move flake.lock, then offer a rebuild
+lattice secrets password [user]          # set a login password
+lattice secrets edit                     # edit secrets in sops
+lattice version                          # what is running, and whether the checkout has moved
+lattice doctor                           # failed units, config drift, boot errors, disk
 ```
 
-`deploy.sh` evaluates locally and builds on the target, reaching it by MagicDNS
-name; pass an address for a host not on the tailnet yet. Both switch scripts
+`lattice deploy` evaluates locally and builds on the target, reaching it by MagicDNS
+name; pass an address for a host not on the tailnet yet. Both switch commands
 refuse a host that can't decrypt its secrets, since it would boot with every
 account locked. Secrets decrypt with an admin age key at
 `~/.config/sops/age/keys.txt` or with each host's SSH host key.
@@ -219,9 +226,9 @@ lattice.theme.accent = "mauve";   # the default accent, any palette entry
 ```
 
 ```sh
-lattice-theme                     # pick a flavour
-lattice-wallpaper [next|prev|random|list|current|<slot>]
-lattice-art wallpaper --density 1.4 > wallpaper.svg
+lattice theme [next|prev|<flavour>]          # or `lattice theme menu`
+lattice wallpaper [next|prev|random|<slot>]  # or `lattice wallpaper menu`
+lattice art wallpaper --density 1.4 > wallpaper.svg
 ```
 
 Each generated file defines `accent` and `accentAlt` aliases; prefer them over literal

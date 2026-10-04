@@ -332,7 +332,7 @@ let
               osd=--input-volume; topic=mic; fallback=󰍬
               ;;
             *)
-              echo "usage: lattice-audio output|input" >&2
+              echo "usage: lattice audio output|input" >&2
               exit 2
               ;;
             esac
@@ -945,4 +945,28 @@ in
       border-color: @red;
     }
   '';
+
+  lattice.cli.commands = {
+    wifi = {
+      exec = lib.getExe wifiMenu;
+      summary = "Join, rescan, disconnect or switch off Wi-Fi";
+      group = "session";
+    };
+    audio = {
+      exec = lib.getExe audioMenu;
+      args = "<output|input>";
+      summary = "Pick an output or input; what is playing moves with it";
+      group = "session";
+    };
+    "power menu" = {
+      exec = lib.getExe powerMenu;
+      summary = "Lock, suspend, log out, reboot or shut down";
+      group = "session";
+    };
+    keys = {
+      exec = lib.getExe keybindings;
+      summary = "Search every Hyprland, tmux and Neovim binding";
+      group = "session";
+    };
+  };
 }

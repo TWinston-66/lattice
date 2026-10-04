@@ -69,7 +69,7 @@ let
         exit 0
         ;;
       *)
-        echo "usage: lattice-idle [toggle|on|off|status]" >&2
+        echo "usage: lattice awake [toggle|on|off|status]" >&2
         exit 2
         ;;
       esac
@@ -229,5 +229,12 @@ in
         dots_spacing = 0.3
       }
     '';
+  };
+
+  lattice.cli.commands.awake = {
+    exec = lib.getExe idleInhibit;
+    args = "[toggle|on|off|status]";
+    summary = "Keep the session from locking or blanking; toggle by default";
+    group = "session";
   };
 }

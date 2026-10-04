@@ -206,7 +206,7 @@ let
       toggle) toggle ;;
       web) web ;;
       *)
-        echo "usage: lattice-tailscale [status|toggle|web]" >&2
+        echo "usage: lattice tailscale [status|toggle|web]" >&2
         exit 2
         ;;
       esac
@@ -387,7 +387,7 @@ let
       # RTMIN+3 matches the "signal" of custom/weather in ~/.dotfiles/waybar.
       refresh) pkill -RTMIN+3 waybar 2>/dev/null || true ;;
       *)
-        echo "usage: lattice-weather [status|refresh]" >&2
+        echo "usage: lattice weather [status|refresh]" >&2
         exit 2
         ;;
       esac
@@ -463,7 +463,7 @@ let
         exit 0
         ;;
       *)
-        echo "usage: lattice-power-profile [status|cycle]" >&2
+        echo "usage: lattice power profile [status|cycle]" >&2
         exit 2
         ;;
       esac
@@ -1222,4 +1222,47 @@ in
     ];
   };
 
+  lattice.cli.commands = {
+    tailscale = {
+      exec = lib.getExe tailscale;
+      args = "[status|toggle|web]";
+      summary = "Tailscale: bring it up or down, or open the admin console";
+      group = "session";
+    };
+    weather = {
+      exec = lib.getExe weather;
+      args = "[status|refresh]";
+      summary = "The bar's weather; refresh drops the cache";
+      group = "session";
+    };
+    "power profile" = {
+      exec = lib.getExe powerProfile;
+      args = "[status|cycle]";
+      summary = "Cycle the power profile; status is the bar's JSON";
+      group = "session";
+    };
+    calendar = {
+      exec = lib.getExe calendar;
+      summary = "A month calendar in a menu";
+      group = "session";
+    };
+    "bar clock" = {
+      exec = lib.getExe clock;
+      summary = "The clock pill's output";
+      group = "session";
+      hidden = true;
+    };
+    "bar capslock" = {
+      exec = lib.getExe capsLock;
+      summary = "The caps-lock pill's output";
+      group = "session";
+      hidden = true;
+    };
+    "bar battery" = {
+      exec = lib.getExe batteryPill;
+      summary = "The battery pill's output";
+      group = "session";
+      hidden = true;
+    };
+  };
 }

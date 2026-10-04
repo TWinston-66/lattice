@@ -103,7 +103,7 @@ let
         # Deliberately not an error when the read fails: the caller is a key being
         # repainted, and "I could not tell" is a third answer it has to be able to act on.
         # See sync_home in modules/nixos/streamdeck.nix, which leaves the face alone for it.
-        entity="''${2:?usage: lattice-ha state <entity>}"
+        entity="''${2:?usage: lattice ha state <entity>}"
         if raw="$(api GET "states/$entity" 2>/dev/null)"; then
           printf '%s\n' "$raw" | jq -r '.state // "unknown"'
         else
@@ -112,7 +112,7 @@ let
         ;;
 
       toggle | on | off)
-        entity="''${2:?usage: lattice-ha ''${1} <entity>}"
+        entity="''${2:?usage: lattice ha ''${1} <entity>}"
         case "$1" in
         toggle) service=homeassistant.toggle ;;
         on) service=homeassistant.turn_on ;;
@@ -129,7 +129,7 @@ let
         # after a toggle; without this it sits wrong until the five-minute timer comes
         # round. resync before the banner, so the keys settle while notify-send is busy
         # looking the friendly name up.
-        entity="''${2:?usage: lattice-ha activate <entity>}"
+        entity="''${2:?usage: lattice ha activate <entity>}"
         call "$(service_for "$entity")" "$entity" || fail "Could not run $entity"
         resync
         notify-send -a lattice-ha -i dialog-information "Home Assistant" "$(friendly "$entity")"
@@ -138,8 +138,8 @@ let
       call)
         # The escape hatch, for anything the three verbs above do not shape: a fan speed, a
         # light's colour, a media player. Same argument order as the service itself reads.
-        service="''${2:?usage: lattice-ha call <domain.service> <entity>}"
-        entity="''${3:?usage: lattice-ha call <domain.service> <entity>}"
+        service="''${2:?usage: lattice ha call <domain.service> <entity>}"
+        entity="''${3:?usage: lattice ha call <domain.service> <entity>}"
         call "$service" "$entity" || fail "Could not call $service"
         ;;
 
@@ -157,7 +157,7 @@ let
 
       *)
         cat >&2 <<USAGE
-      usage: lattice-ha <verb>
+      usage: lattice ha <verb>
 
         state <entity>               on, off, or unknown if the house cannot be reached
         toggle | on | off <entity>   a device, with the deck's key repainted after
@@ -232,5 +232,28 @@ in
     # what lets lattice-deck call it and it call lattice-deck back without a cycle between
     # the two derivations. See sessionPath in modules/nixos/streamdeck.nix.
     environment.systemPackages = [ ha ];
+
+    lattice.cli.commands.ha = {
+      exec = lib.getExe ha;
+      args = "<verb> [entity]";
+      complete = [
+        "state"
+        "toggle"
+        "on"
+        "off"
+        "activate"
+        "call"
+        "entities"
+      ];
+      summary = "Home Assistant: devices, scenes and services";
+      details = ''
+        state <entity>               on, off, or unknown if the house cannot be reached
+        toggle | on | off <entity>   a device, with the deck's key repainted after
+        activate <entity>            a scene, script or automation, with a banner
+        call <domain.service> <e>    any other service, targeting one entity
+        entities [substring]         every entity id and friendly name, for setting the above
+      '';
+      group = "devices";
+    };
   };
 }

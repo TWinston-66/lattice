@@ -1091,7 +1091,7 @@ let
         ;;
 
       page)
-        target="''${2:?usage: lattice-deck page <index>}"
+        target="''${2:?usage: lattice deck page <index>}"
         printf '%s' "$target" > "$page_file"
         # The key that ran this also carries switch_page, so the page has already changed by
         # now; this is here for a page switch from anywhere else.
@@ -1266,7 +1266,7 @@ let
 
       *)
         cat >&2 <<USAGE
-      usage: lattice-deck <verb>
+      usage: lattice deck <verb>
 
         sync [--wait] [reading...]   repaint the live keys; everything, by default
         page <index>                 switch page and light its rail key
@@ -1470,5 +1470,35 @@ in
         message = "lattice.streamdeck: the rebuild key needs programs.nh.flake, which is where the repo's path is written down.";
       }
     ];
+
+    lattice.cli.commands.deck = {
+      exec = lib.getExe deck;
+      args = "<verb> [args...]";
+      complete = [
+        "sync"
+        "page"
+        "play"
+        "mute"
+        "mic"
+        "audio"
+        "audio-restart"
+        "profile"
+        "dim"
+        "wake"
+        "arm"
+        "rebuild"
+      ];
+      summary = "Drive the Stream Deck and repaint its keys";
+      details = ''
+        sync [--wait] [reading...]   repaint the live keys; everything, by default
+        page <index>                 switch page and light its rail key
+        play | mute | mic | audio    media and audio, with the key repainted after
+        audio-restart                restart PipeWire when the speakers vanish
+        profile                      cycle the power profile, as the bar's bubble does
+        dim | wake                   the deck's own backlight
+        arm | rebuild                the two halves of the rebuild key
+      '';
+      group = "devices";
+    };
   };
 }

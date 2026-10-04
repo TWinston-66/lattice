@@ -10,6 +10,7 @@
     inputs.sops-nix.nixosModules.sops
     inputs.nix-index-database.nixosModules.nix-index
     ./branding.nix
+    ./cli.nix
     ./firewall.nix
   ];
 
