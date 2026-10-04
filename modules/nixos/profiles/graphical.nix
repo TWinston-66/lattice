@@ -58,9 +58,12 @@ let
   # which keeps it the image it was before the pool existed and the right one to seed the
   # wallpaper symlinks with before a home has ever picked.
   #
-  # An entry is the generator's own argument set, so one only has to name what it changes;
-  # the seed is its position in the list, which makes appending a wallpaper cheap and
-  # reordering the list a redraw of everything that moved.
+  # An entry names palette entries rather than colours, because the pool is drawn once per
+  # flavour in lattice.theme.flavors: "mauve" is a different hex in each, and the runtime
+  # theme switch (lattice-theme) swaps the whole pool for that flavour's drawing of it, so
+  # the wallpaper's background moves with the rest of the desktop. The seed is its position
+  # in the list, which makes appending a wallpaper cheap and reordering the list a redraw of
+  # everything that moved.
   #
   # None of them names a density, deliberately: they all take the generator's 1.0. Density
   # divides the node spacing, and everything in the drawing is measured in spacings -- the
@@ -72,56 +75,56 @@ let
   pool = [
     { }
     {
-      accent = palette.mauve;
-      accentAlt = palette.pink;
+      accent = "mauve";
+      accentAlt = "pink";
     }
     {
-      accent = palette.teal;
-      accentAlt = palette.sky;
+      accent = "teal";
+      accentAlt = "sky";
     }
     {
-      accent = palette.peach;
-      accentAlt = palette.yellow;
+      accent = "peach";
+      accentAlt = "yellow";
     }
     {
-      accent = palette.sapphire;
-      accentAlt = palette.teal;
+      accent = "sapphire";
+      accentAlt = "teal";
     }
     {
-      accent = palette.lavender;
-      accentAlt = palette.blue;
+      accent = "lavender";
+      accentAlt = "blue";
     }
     {
-      accent = palette.green;
-      accentAlt = palette.teal;
+      accent = "green";
+      accentAlt = "teal";
     }
     {
-      accent = palette.pink;
-      accentAlt = palette.mauve;
+      accent = "pink";
+      accentAlt = "mauve";
     }
     {
-      accent = palette.maroon;
-      accentAlt = palette.peach;
+      accent = "maroon";
+      accentAlt = "peach";
     }
     {
-      accent = palette.sky;
-      accentAlt = palette.sapphire;
+      accent = "sky";
+      accentAlt = "sapphire";
     }
     {
-      accent = palette.yellow;
-      accentAlt = palette.peach;
+      accent = "yellow";
+      accentAlt = "peach";
     }
     {
-      accent = palette.red;
-      accentAlt = palette.maroon;
+      accent = "red";
+      accentAlt = "maroon";
     }
     {
-      accent = palette.flamingo;
-      accentAlt = palette.rosewater;
+      accent = "flamingo";
+      accentAlt = "rosewater";
     }
     {
-      accent = palette.rosewater;
-      accentAlt = palette.flamingo;
+      accent = "rosewater";
+      accentAlt = "flamingo";
     }
   ];
 
@@ -148,43 +151,109 @@ let
   # magnified to cover it -- which is the whole of what the paragraph above is about.
   screens = config.lattice.display.canvas;
 
-  wallpapersFor =
-    screen:
-    lib.imap0 (
-      seed: entry: config.lattice.artwork.wallpaper (entry // screen // { inherit seed; })
-    ) pool;
+  # In the picker's order, which is by label so each family's variants sit together.
+  flavorNames = lib.sort (a: b: theme.flavors.${a}.label < theme.flavors.${b}.label) (
+    lib.attrNames theme.flavors
+  );
 
-  panelWallpapers = wallpapersFor screens.panel;
-  deskWallpapers = wallpapersFor screens.desk;
-
-  # What the pool's members are called, for `lattice-wallpaper list` and for the picker.
-  # An entry carries colours rather than a name -- the generator is only ever handed the
-  # nine roles it draws with -- so the name is read back out of the palette the hex came
-  # from instead of being written beside each entry, which would be a second place to edit
-  # when one is re-tinted. Entry 0 names no accent at all, being the live accent drawn
-  # plain, so it resolves through accentHex and lands on that colour's name like the rest.
-  poolAccents = map (
-    entry:
+  # The pool resolved against one flavour: the entries whose accent is one of that flavour's
+  # own colours (its `accents`), as that flavour's hexes, plus the palette the rest of the
+  # drawing takes. A blend made only to fill a slot would draw a near-twin of a wallpaper
+  # already in the pool, so a flavour with seven hues gets seven wallpapers, not fourteen.
+  # The seed stays the entry's position in the whole pool, so "red" is the same composition
+  # in every flavour and only its colours move.
+  #
+  # Entry 0 names nothing and so takes lattice.theme.accent's pair, and is always kept: it is
+  # the plain drawing, and in the build-time flavour exactly what the artwork module makes by
+  # default -- the same store path as before flavours.
+  poolFor =
+    flavor:
     let
-      value = entry.accent or theme.accentHex;
+      inherit (theme.flavors.${flavor}) palette accents;
     in
-    {
-      hex = value;
-      name = lib.findFirst (n: palette.${n} == value) "accent" (lib.attrNames palette);
+    lib.filter (entry: entry.seed == 0 || accents ? ${entry.slot}) (
+      lib.imap0 (
+        seed: entry:
+        let
+          slot = entry.accent or theme.accent;
+        in
+        {
+          inherit seed slot palette;
+          label = accents.${slot} or slot;
+          accent = palette.${slot};
+          accentAlt = palette.${entry.accentAlt or theme.accentAlt};
+        }
+      ) pool
+    );
 
-      # What the lock screen's input field takes from this entry. `outer` is the resting
-      # outline, half of the entry's own accent and half the surface it sits on: the full
-      # accent matches the mark exactly and then competes with it for the one bright thing
-      # on the screen, and a flat grey matches nothing. `check` is the flash while the
-      # password is being verified, and stays at full strength because a moment of feedback
-      # should read as one.
-      outer = mixHex 0.5 value palette.surface0;
-      check = entry.accentAlt or theme.accentAltHex;
-    }
-  ) pool;
+  wallpapersFor =
+    flavor: screen:
+    map (
+      entry:
+      config.lattice.artwork.wallpaper (
+        {
+          inherit (entry)
+            seed
+            accent
+            accentAlt
+            palette
+            ;
+        }
+        // screen
+      )
+    ) (poolFor flavor);
+
+  panelWallpapers = lib.genAttrs flavorNames (flavor: wallpapersFor flavor screens.panel);
+  deskWallpapers = lib.genAttrs flavorNames (flavor: wallpapersFor flavor screens.desk);
+
+  # A bash `case` over the flavours, one arm each, from `arm flavor` -> the arm's body.
+  # How the scripts below carry per-flavour arrays: the pool's hexes and store paths are
+  # build-time facts, so they are baked in rather than looked up.
+  flavorCase =
+    arm:
+    ''
+      case "$flavor" in
+    ''
+    + lib.concatMapStrings (flavor: ''
+      ${flavor})
+      ${arm flavor}
+        ;;
+    '') flavorNames
+    + ''
+      esac
+    '';
+
+  # Where lattice-theme keeps the flavour, and the shell that reads it back. In ~/.local/state
+  # rather than beside the wallpaper's per-boot pick in XDG_RUNTIME_DIR: the flavour is a
+  # preference, and should survive a reboot. Anything unreadable or no longer in
+  # lattice.theme.flavors falls back to the build-time one rather than failing.
+  themeState = "${config.users.users.winston.home}/.local/state/lattice/theme";
+  readFlavor = ''
+    flavor=$(cat "${themeState}" 2>/dev/null || true)
+    case "$flavor" in
+    ${lib.concatStringsSep " | " flavorNames}) ;;
+    *) flavor=${theme.flavor} ;;
+    esac
+  '';
+
+  # The run-time palette as a bash associative array `c`, for scripts that draw their own
+  # Pango markup: the build-time colours, then theme.sh over them when lattice-palette has
+  # written one. Parsed with `read` rather than sourced, so it costs no fork -- the
+  # power-profile pill runs it every two seconds -- and shellcheck can see every name used.
+  readColours = ''
+    declare -A c=(${
+      lib.concatStrings (lib.mapAttrsToList (n: hex: " [${n}]='${hex}'") palette)
+    } [accent]='${theme.accentHex}' [accentAlt]='${theme.accentAltHex}')
+    if [[ -r "${currentDir}/theme.sh" ]]; then
+      while IFS='=' read -r key value; do
+        value=''${value#\'}
+        c[$key]=''${value%\'}
+      done <"${currentDir}/theme.sh"
+    fi
+  '';
 
   # What the wallpaper symlinks are seeded with: the plain drawing at desk size.
-  wallpaper = lib.head deskWallpapers;
+  wallpaper = lib.head deskWallpapers.${theme.flavor};
 
   # Where the picker records what it set, for the things that cannot be told. hyprlock
   # reads its backgrounds at launch from paths fixed at build time, so pointing it at these
@@ -195,54 +264,117 @@ let
   currentDir = "${config.users.users.winston.home}/.cache/lattice";
   currentPanel = "${currentDir}/wallpaper-panel.png";
   currentDesk = "${currentDir}/wallpaper-desk.png";
-  currentLockAccent = "${currentDir}/lock-accent.conf";
 
-  # What that file holds before the first pick of the session has landed. The pool's entry
-  # 0 is the live accent drawn plain, so this is that entry's pair and not a fourteenth
-  # colour: the lock screen before a pick looks like the lock screen after picking the
-  # plain one. Shipped through tmpfiles rather than left to hyprlock's own default so that
-  # the file always exists -- a `source` with nothing behind it is not fatal, hyprlock
-  # carries on and uses the definition above it, but it logs a config error on every lock.
-  defaultLockAccent = pkgs.writeText "lattice-lock-accent.conf" ''
-    $lockOuter = rgb(${hex (mixHex 0.5 theme.accentHex palette.surface0)})
-    $lockCheck = rgb(${hex theme.accentAltHex})
-  '';
+  # Folder icons that follow the accent. catppuccin-papirus-folders recolours Papirus's
+  # folders, but per flavour and accent at build time; this is its Mocha-blue set with the
+  # four colours it draws in turned into tokens, which lattice-palette fills in at run time:
+  # the accent, the folder's darker back (the accent 20 down per channel, as Catppuccin's
+  # has it), the paper (text) and the ink on the emblems (surface0). Only the sizes that
+  # Papirus-Dark draws in colour -- 32, 48 and 64 -- and only the files catppuccin's set
+  # touches, plus every alias that ends at one, pointed straight at it. Everything else
+  # comes from Papirus-Dark, which this inherits.
+  folderIconTemplate =
+    pkgs.runCommand "lattice-folder-icons"
+      {
+        src = "${
+          pkgs.catppuccin-papirus-folders.override {
+            flavor = "mocha";
+            accent = "blue";
+          }
+        }/share/icons/Papirus";
+      }
+      ''
+        sizes="32x32 48x48 64x64"
+        for size in $sizes; do
+          mkdir -p $out/$size/places
+          for f in $src/$size/places/*; do
+            name=''${f##*/}
+            target=$(readlink -f "$f")
+            case ''${target##*/} in
+            folder-cat-mocha-blue*) ;;
+            *) continue ;;
+            esac
+            if [ -L "$f" ]; then
+              ln -s "''${target##*/}" $out/$size/places/$name
+            else
+              sed -e 's/#89B4FA/%ACCENT%/gI' -e 's/#75A0E6/%ACCENT_DARK%/gI' \
+                -e 's/#CDD6F4/%PAPER%/gI' -e 's/#313244/%INK%/gI' "$f" > $out/$size/places/$name
+            fi
+          done
+          ln -s $size $out/$size@2x
+        done
+        {
+          printf '[Icon Theme]\nName=lattice-icons\nInherits=Papirus-Dark,hicolor\nDirectories='
+          for size in $sizes; do printf '%s/places,%s@2x/places,' $size $size; done
+          printf '\n'
+          for size in $sizes; do
+            n=''${size%%x*}
+            printf '\n[%s/places]\nSize=%s\nContext=Places\nType=Fixed\n' $size $n
+            printf '\n[%s@2x/places]\nSize=%s\nScale=2\nContext=Places\nType=Fixed\n' $size $n
+          done
+        } > $out/index.theme
+      '';
 
-  # The desktop's accent at run time, so it can follow the wallpaper instead of being fixed
-  # at lattice.theme.accent until the next rebuild. Every consumer is pointed at a file in
-  # ${currentDir} rather than sent the colours, the same arrangement as the lock screen's:
-  # waybar, swayosd and wlogout through accent.css, which the palettes in /etc/xdg import
-  # last (lattice.theme.runtimeAccent); rofi and mako through their own syntax of the same
-  # two colours; Hyprland's border through accent.lua, which hyprland.lua in ~/.dotfiles
-  # loads after its own default so a `hyprctl reload` keeps the pick.
+  # The desktop's theme at run time -- flavour and accent both -- so it can follow the
+  # wallpaper and lattice-theme instead of being fixed at lattice.theme until the next
+  # rebuild. Every consumer is pointed at a file in ${currentDir} rather than sent the
+  # colours: waybar, swayosd and wlogout through theme.css, which the palettes in /etc/xdg
+  # import last (lattice.theme.runtimeTheme); rofi and mako through their own syntax of the
+  # same; Hyprland's borders through theme.lua, which hyprland.lua in ~/.dotfiles loads
+  # after its own default so a `hyprctl reload` keeps the pick; the lock screen through
+  # theme.hyprlock; tmux, Ghostty and nvim through theme.tmux, theme.ghostty and
+  # theme-nvim.lua. The files themselves are lattice.theme.runtimeKits, one directory per
+  # flavour with the accent left as tokens; this fills those in and puts each file in place.
   #
-  # Telling each one is the other half, and it is per program because none of them watches
-  # its files. waybar reloads on SIGUSR2, sent by systemd itself rather than through the
-  # unit's `reload`: upstream's ExecReload is a bare `kill`, which is not on the user
-  # manager's PATH here, so `systemctl --user reload waybar` fails with 203/EXEC. mako has
-  # `makoctl reload`; swayosd has no reload at all, so it is restarted; Hyprland takes the
-  # same Lua the file holds, through `hyprctl eval` -- `keyword` refuses a Lua config. rofi
-  # and wlogout read theirs at every launch. Every one is allowed to miss: a unit that is
-  # not up yet will read the file when it starts.
+  # Telling each one is the other half, and it is per program, and only for a file that
+  # actually changed -- a wallpaper step changes the accent and nothing in tmux or Ghostty,
+  # and re-sourcing tmux.conf for nothing costs a status-bar redraw. waybar watches
+  # theme.css itself (reload_style_on_change in ~/.dotfiles/waybar/config.jsonc): that
+  # restyles the bar in place, where the SIGUSR2 it used to get rebuilt every bar surface,
+  # ate the next click on the wallpaper pill and aborted waybar outright on a few picks in
+  # quick succession. nvim watches theme-nvim.lua the same way. mako has `makoctl reload`;
+  # swayosd has no reload at all, so it is restarted; Hyprland takes the same Lua the file
+  # holds, through `hyprctl eval` -- `keyword` refuses a Lua config. tmux re-sources its
+  # whole config, because catppuccin/tmux expands its colours into the status formats as it
+  # loads. Ghostty has a reload-config action on its GApplication, which is safer than its
+  # SIGUSR2: on a build without the handler, that signal's default action is to exit. rofi,
+  # wlogout and hyprlock read theirs at every launch. Every one is allowed to miss: a
+  # program that is not up yet will read the file when it starts.
   #
-  # The GTK theme, the Stream Deck's keys and the screenshot overlay stay on the build-time
-  # accent: all three are drawn or packaged per accent, and none can be told at run time.
+  # The GTK theme, cursors, folder icons, Stream Deck keys, screenshot overlay, console,
+  # boot splash and greeter stay on the build-time flavour and accent: all of them are
+  # drawn or packaged per palette, and none can be told at run time.
   #
-  # --write-only is for the build, which runs this same script to make the seeds below: two
-  # copies of four file formats would drift the first time either was edited.
-  latticeAccent = pkgs.writeShellApplication {
-    name = "lattice-accent";
+  # --write-only is for the build, which runs this same script to make the seeds below, and
+  # for the login pick, which writes before anything that reads these has started.
+  latticePalette = pkgs.writeShellApplication {
+    name = "lattice-palette";
     runtimeInputs = [
       pkgs.coreutils
       pkgs.diffutils
+      pkgs.findutils
+      pkgs.gnused
+      pkgs.dconf
       pkgs.hyprland
       pkgs.mako
+      pkgs.systemd
+      pkgs.tmux
     ];
     text = ''
       usage() {
-        echo "usage: lattice-accent [--write-only <dir>] <#accent> <#accentAlt>" >&2
+        echo "usage: lattice-palette [--write-only <dir>] <flavour> <#accent> <#accentAlt>" >&2
         exit 2
       }
+
+      declare -A kits=(${
+        lib.concatStrings (lib.mapAttrsToList (n: kit: " [${n}]=${kit}") theme.runtimeKits)
+      })
+      declare -A text=(${
+        lib.concatStrings (lib.mapAttrsToList (n: f: " [${n}]=${f.palette.text}") theme.flavors)
+      })
+      declare -A surface0=(${
+        lib.concatStrings (lib.mapAttrsToList (n: f: " [${n}]=${f.palette.surface0}") theme.flavors)
+      })
 
       dir="${currentDir}"
       reload=1
@@ -252,63 +384,143 @@ let
         reload=0
         shift 2
       fi
-      (($# == 2)) || usage
-      for colour in "$1" "$2"; do
+      (($# == 3)) || usage
+      flavor=$1
+      [[ -n ''${kits[$flavor]:-} ]] || usage
+      for colour in "$2" "$3"; do
         [[ $colour =~ ^#[0-9a-fA-F]{6}$ ]] || usage
       done
-      accent=$1
-      alt=$2
+      accent=$2
+      alt=$3
+
+      # The lock screen's resting outline: half the accent, half the surface it sits on. The
+      # full accent matches the mark exactly and then competes with it for the one bright
+      # thing on the screen, and a flat grey matches nothing. Rounded the way mixHex in Nix
+      # rounds, so the build-time seed and a run-time write agree to the bit.
+      mix() {
+        local a=''${1#\#} b=''${2#\#} out="" i
+        for i in 0 2 4; do
+          out+=$(printf '%02x' $(((16#''${a:i:2} + 16#''${b:i:2} + 1) / 2)))
+        done
+        echo "$out"
+      }
+      outer=$(mix "$accent" "''${surface0[$flavor]}")
 
       # Written beside the target and renamed over it. GTK and mako both reject their whole
       # configuration over a file they cannot read, so a reload landing mid-write must still
       # find a complete one.
       #
-      # A file that already says the same thing is left alone, and `changed` records whether
-      # any did not: the login pick lands on files lattice-wallpaper --choose wrote before
+      # A file that already says the same thing is left alone, and `changed` records the ones
+      # that did not: the login pick lands on files lattice-wallpaper --choose wrote before
       # the bar started, and reloading a bar that is already right only makes it blink.
       install -d "$dir"
-      changed=0
-      # <file> <printf format> <args...>. Not fed from a pipe: the right side of one is a
-      # subshell, and `changed` would never get back out of it.
-      write() {
-        local file=$1 format=$2
-        shift 2
-        # shellcheck disable=SC2059 # the format is always one of the literals below
-        printf "$format" "$@" >"$dir/.$file.tmp"
-        if cmp -s "$dir/.$file.tmp" "$dir/$file"; then
-          rm -f "$dir/.$file.tmp"
+      changed=" "
+      # <file>, from what is already in .<file>.tmp.
+      place() {
+        if cmp -s "$dir/.$1.tmp" "$dir/$1"; then
+          rm -f "$dir/.$1.tmp"
         else
-          mv -f "$dir/.$file.tmp" "$dir/$file"
-          changed=1
+          mv -f "$dir/.$1.tmp" "$dir/$1"
+          changed+="$1 "
         fi
       }
+      for src in "''${kits[$flavor]}"/*; do
+        file=''${src##*/}
+        sed -e "s/%ACCENT%/$accent/g" -e "s/%ALT%/$alt/g" \
+          -e "s/%ACCENT_BARE%/''${accent#\#}/g" -e "s/%ALT_BARE%/''${alt#\#}/g" \
+          -e "s/%LOCK_OUTER_BARE%/$outer/g" "$src" >"$dir/.$file.tmp"
+        place "$file"
+      done
 
-      write accent.css '@define-color accent %s;\n@define-color accentAlt %s;\n' "$accent" "$alt"
-      # `highlight` is a literal for the reason given in modules/nixos/theme.nix.
-      write accent.rasi '* {\n  accent: %s;\n  accentAlt: %s;\n  highlight: bold %s;\n}\n' \
-        "$accent" "$alt" "$accent"
-      write accent.mako 'border-color=%s\n' "$accent"
-      write accent.lua \
-        'hl.config({ general = { col = { active_border = { colors = { "rgba(%sff)", "rgba(%sff)" }, angle = 45 } } } })\n' \
-        "''${accent#\#}" "''${alt#\#}"
+      # starship has no include, so its config is ~/.config/starship.toml with the palette
+      # line pointed at the kit's [palettes.lattice] and that table appended; .zshrc points
+      # STARSHIP_CONFIG here. Rebuilt on every write, so an edit to the dotfile lands at the
+      # next wallpaper pick, theme switch or login. Skipped where there is no such file --
+      # the build's seed, which has no home to read it from.
+      if [[ -r $HOME/.config/starship.toml ]]; then
+        {
+          sed 's/^palette = .*/palette = "lattice"/' "$HOME/.config/starship.toml"
+          cat "$dir/starship-palette.toml"
+        } >"$dir/.starship.toml.tmp"
+        place starship.toml
+      fi
 
       ((reload)) || exit 0
 
-      # Hyprland whatever the files said: it read accent.lua when it started, which can be
+      # Hyprland whatever the files said: it read theme.lua when it started, which can be
       # before this session's pick was written, and setting a border never flickers.
-      hyprctl eval "$(cat "$dir/accent.lua")" >/dev/null || true
-      ((changed)) || exit 0
-      systemctl --user kill --signal=SIGUSR2 --kill-whom=main waybar.service 2>/dev/null || true
-      systemctl --user try-restart swayosd.service || true
-      makoctl reload 2>/dev/null || true
+      hyprctl eval "$(cat "$dir/theme.lua")" >/dev/null || true
+
+      if [[ $changed == *" theme.css "* ]]; then
+        systemctl --user try-restart swayosd.service || true
+      fi
+      if [[ $changed == *" theme.mako "* ]]; then
+        makoctl reload 2>/dev/null || true
+      fi
+      # Only with a server already up: source-file is not one of the commands that starts
+      # one, but has-session says so without the error.
+      if [[ $changed == *" theme.tmux "* ]] && tmux has-session 2>/dev/null; then
+        tmux source-file "$HOME/.config/tmux/tmux.conf" >/dev/null 2>&1 || true
+      fi
+      # GTK3 reads a theme's CSS once, when the theme is set, and the colours are a theme --
+      # lattice-a and lattice-b, the same directory under two names (see gtkUserTheme). So a
+      # change is told by flipping to the other name, which has every running GTK3 app
+      # restyle from the new file. It runs on any setting that is neither name, too: that is
+      # a home whose dconf still says what it said before these existed.
+      gtkTheme=$(dconf read /org/gnome/desktop/interface/gtk-theme 2>/dev/null || true)
+      if [[ $changed == *" theme.gtk.css "* || ($gtkTheme != "'lattice-a'" && $gtkTheme != "'lattice-b'") ]]; then
+        next=lattice-a
+        if [[ $gtkTheme == "'lattice-a'" ]]; then
+          next=lattice-b
+        fi
+        dconf write /org/gnome/desktop/interface/gtk-theme "'$next'" || true
+      fi
+      # Folder icons: the template recoloured into whichever of lattice-icons-a and -b is not
+      # in use, then the icon theme flipped to it -- so nothing ever reads a half-written set,
+      # and the flip is what has running apps reload their icons. A stamp records what a set
+      # was drawn for, and an unchanged one is left alone; a home whose dconf names neither
+      # set gets one drawn too.
+      icons="$HOME/.local/share/icons"
+      stamp="$accent ''${text[$flavor]} ''${surface0[$flavor]}"
+      iconTheme=$(dconf read /org/gnome/desktop/interface/icon-theme 2>/dev/null || true)
+      iconTheme=''${iconTheme//\'/}
+      if [[ ($iconTheme != lattice-icons-a && $iconTheme != lattice-icons-b) ||
+        $(cat "$icons/$iconTheme/stamp" 2>/dev/null) != "$stamp" ]]; then
+        next=lattice-icons-a
+        if [[ $iconTheme == lattice-icons-a ]]; then
+          next=lattice-icons-b
+        fi
+        darker=""
+        for i in 1 3 5; do
+          darker+=$(printf '%02x' $((16#''${accent:i:2} > 20 ? 16#''${accent:i:2} - 20 : 0)))
+        done
+        rm -rf "''${icons:?}/$next"
+        install -d "$icons"
+        cp -r --no-preserve=mode ${folderIconTemplate} "$icons/$next"
+        find "$icons/$next" -type f -name '*.svg' -exec sed -i \
+          -e "s/%ACCENT%/$accent/g" -e "s/%ACCENT_DARK%/#$darker/g" \
+          -e "s/%PAPER%/''${text[$flavor]}/g" -e "s/%INK%/''${surface0[$flavor]}/g" {} +
+        echo "$stamp" >"$icons/$next/stamp"
+        dconf write /org/gnome/desktop/interface/icon-theme "'$next'" || true
+      fi
+
+      # The clock pill's calendar tooltip, which otherwise waits for the next minute.
+      if [[ $changed == *" theme.sh "* ]]; then
+        kill -USR1 "$(cat "''${XDG_RUNTIME_DIR:-/tmp}/lattice-clock.pid" 2>/dev/null)" 2>/dev/null || true
+      fi
+      if [[ $changed == *" theme.ghostty "* ]]; then
+        busctl --user call com.mitchellh.ghostty /com/mitchellh/ghostty \
+          org.gtk.Actions Activate 'sava{sv}' reload-config 0 0 >/dev/null 2>&1 || true
+      fi
     '';
   };
 
-  # What the runtime files hold before anything has picked: the build-time accent pair, so a
-  # fresh home looks exactly as it did before the accent could move.
-  accentSeed = pkgs.runCommand "lattice-accent-seed" { } ''
-    ${lib.getExe latticeAccent} --write-only $out ${
+  # What the runtime files hold before anything has picked: the build-time flavour and
+  # accent pair, so a fresh home looks exactly as it did before either could move.
+  themeSeed = pkgs.runCommand "lattice-theme-seed" { } ''
+    ${lib.getExe latticePalette} --write-only $out ${
       lib.escapeShellArgs [
+        theme.flavor
         theme.accentHex
         theme.accentAltHex
       ]
@@ -326,35 +538,53 @@ let
   # (tested -- "Invalid monitor"), and a name is the one thing about a monitor that is not
   # knowable until it is plugged in. Reading the live output list also means the pick is
   # right whether this laptop is docked, undocked, or on a screen it has never seen.
+  #
+  # Which flavour's drawing of the pool is lattice-theme's to say; this reads it back on
+  # every run, so `apply` after a theme switch redraws the same member in the new flavour.
   cycleWallpaper = pkgs.writeShellApplication {
     name = "lattice-wallpaper";
     runtimeInputs = [
       pkgs.coreutils
       pkgs.hyprland
       pkgs.jq
-      latticeAccent
+      latticePalette
     ];
     text = ''
-      panel=(${lib.concatStringsSep " " panelWallpapers})
-      desk=(${lib.concatStringsSep " " deskWallpapers})
-      names=(${lib.concatMapStringsSep " " (accent: accent.name) poolAccents})
-      outers=(${lib.concatMapStringsSep " " (accent: hex accent.outer) poolAccents})
-      checks=(${lib.concatMapStringsSep " " (accent: hex accent.check) poolAccents})
-      accents=(${lib.escapeShellArgs (map (accent: accent.hex) poolAccents)})
-      alts=(${lib.escapeShellArgs (map (accent: accent.check) poolAccents)})
+      ${readFlavor}
+      ${flavorCase (flavor: ''
+        panel=(${lib.concatStringsSep " " panelWallpapers.${flavor}})
+        desk=(${lib.concatStringsSep " " deskWallpapers.${flavor}})
+        accents=(${lib.escapeShellArgs (map (entry: entry.accent) (poolFor flavor))})
+        alts=(${lib.escapeShellArgs (map (entry: entry.accentAlt) (poolFor flavor))})
+        slots=(${lib.escapeShellArgs (map (entry: entry.slot) (poolFor flavor))})
+        labels=(${lib.escapeShellArgs (map (entry: entry.label) (poolFor flavor))})
+      '')}
       state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-wallpaper"
       count=''${#desk[@]}
 
-      # -1 when nothing has been picked yet: the state lives in XDG_RUNTIME_DIR, so each
-      # boot starts out with no wallpaper of its own rather than with the first one.
-      current=$(cat "$state" 2>/dev/null || echo -1)
+      # The pick is kept as the palette name of its accent, not as a position: the flavours'
+      # pools differ in length and membership, and a theme switch has to land on the same
+      # wallpaper in the new flavour. -1 when nothing has been picked yet -- the state lives
+      # in XDG_RUNTIME_DIR, so each boot starts out with no wallpaper of its own rather than
+      # with the first one. A name this flavour has no wallpaper for comes back as the plain
+      # one, entry 0, which every flavour has.
+      picked=$(cat "$state" 2>/dev/null || true)
+      current=-1
+      if [[ -n $picked ]]; then
+        current=0
+        for i in "''${!slots[@]}"; do
+          if [[ ''${slots[i]} == "$picked" ]]; then
+            current=$i
+          fi
+        done
+      fi
       index=$((current < 0 ? 0 : current))
 
-      # --choose settles the pick and writes down everything that reads it -- the symlinks,
-      # the lock accent, the desktop accent -- without telling anyone. It is for the login
-      # pick, which runs before hyprpaper and the bar have started (lattice-wallpaper-choose
-      # below), so they come up on the session's wallpaper and accent instead of on the
-      # defaults with the pick landing over them a moment later.
+      # --choose settles the pick and writes down everything that reads it -- the symlinks
+      # and the theme files -- without telling anyone. It is for the login pick, which runs
+      # before hyprpaper and the bar have started (lattice-wallpaper-choose below), so they
+      # come up on the session's wallpaper and theme instead of on the defaults with the
+      # pick landing over them a moment later.
       choose=0
       if [[ ''${1:-} == --choose ]]; then
         choose=1
@@ -378,7 +608,7 @@ let
         ;;
       list)
         for i in $(seq 0 $((count - 1))); do
-          printf '%s\t%s\t%s\t%s\n' "$i" "''${names[i]}" "''${desk[i]}" "''${panel[i]}"
+          printf '%s\t%s\t%s\t%s\n' "$i" "''${labels[i]}" "''${desk[i]}" "''${panel[i]}"
         done
         exit 0
         ;;
@@ -391,7 +621,7 @@ let
         exit 0
         ;;
       # The pick already made, pushed to hyprpaper again: for the second half of the login
-      # pick, and for a hyprpaper that has restarted on hyprpaper.conf.
+      # pick, for a hyprpaper that has restarted on hyprpaper.conf, and for lattice-theme.
       apply) ;;
       *[!0-9]*)
         echo "usage: lattice-wallpaper [--choose] [next|prev|random|apply|list|current|<index>]" >&2
@@ -407,22 +637,9 @@ let
       ln -sfn "''${panel[index]}" "${currentPanel}"
       ln -sfn "''${desk[index]}" "${currentDesk}"
 
-      # And the two colours the lock screen takes from the pick. hyprlock has no way to run
-      # a command for a colour -- cmd[] is for label text only -- but its parser is
-      # hyprlang, so the config below defines these two and then sources this file, where a
-      # second definition wins. Same fact as the symlinks above, written the same moment.
-      # A heredoc rather than printf because the names have to reach the file with their
-      # dollars intact, and shellcheck reads a '$' inside single quotes as a mistake (SC2016)
-      # -- which writeShellApplication treats as fatal. \$ is literal here and the array
-      # expansions still run.
-      cat > "${currentLockAccent}" <<EOF
-      \$lockOuter = rgb(''${outers[index]})
-      \$lockCheck = rgb(''${checks[index]})
-      EOF
-
       if ((choose)); then
-        lattice-accent --write-only "${currentDir}" "''${accents[index]}" "''${alts[index]}"
-        echo "$index" >"$state"
+        lattice-palette --write-only "${currentDir}" "$flavor" "''${accents[index]}" "''${alts[index]}"
+        echo "''${slots[index]}" >"$state"
         exit 0
       fi
 
@@ -458,10 +675,71 @@ let
       done
 
       # Only once the wallpaper is really up, so a pick that never landed does not leave
-      # the desktop wearing the accent of a wallpaper it is not showing.
-      lattice-accent "''${accents[index]}" "''${alts[index]}"
+      # the desktop wearing the theme of a wallpaper it is not showing.
+      lattice-palette "$flavor" "''${accents[index]}" "''${alts[index]}"
 
-      echo "$index" >"$state"
+      echo "''${slots[index]}" >"$state"
+    '';
+  };
+
+  # The flavour, for the bar's theme pill and its menu. It records the choice and hands the
+  # rest to `lattice-wallpaper apply`, which draws the wallpaper already up in the
+  # new flavour and rewrites the theme files from it -- so the accent the wallpaper set is
+  # kept across a switch, in that flavour's shade of it.
+  latticeTheme = pkgs.writeShellApplication {
+    name = "lattice-theme";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+      cycleWallpaper
+    ];
+    text = ''
+      ${readFlavor}
+      flavors=(${lib.escapeShellArgs flavorNames})
+      labels=(${lib.escapeShellArgs (map (n: theme.flavors.${n}.label) flavorNames)})
+      count=''${#flavors[@]}
+
+      index=0
+      for i in "''${!flavors[@]}"; do
+        if [[ ''${flavors[i]} == "$flavor" ]]; then
+          index=$i
+        fi
+      done
+
+      case "''${1:-next}" in
+      next) target=''${flavors[(index + 1) % count]} ;;
+      prev) target=''${flavors[(index - 1 + count) % count]} ;;
+      list)
+        for i in "''${!flavors[@]}"; do
+          printf '%s\t%s\n' "''${flavors[i]}" "''${labels[i]}"
+        done
+        exit 0
+        ;;
+      current)
+        echo "$flavor"
+        exit 0
+        ;;
+      *)
+        target=$1
+        if [[ " ''${flavors[*]} " != *" $target "* ]]; then
+          echo "usage: lattice-theme [next|prev|list|current|${lib.concatStringsSep "|" flavorNames}]" >&2
+          exit 2
+        fi
+        ;;
+      esac
+
+      install -d "$(dirname "${themeState}")"
+      echo "$target" >"${themeState}.tmp"
+      mv -f "${themeState}.tmp" "${themeState}"
+      lattice-wallpaper apply
+
+      # The Stream Deck has one layout per flavour (modules/nixos/streamdeck.nix) and reads it
+      # only at start, so a new flavour is a restart; its seed step picks the layout from the
+      # file just written. Only on a real change -- the deck goes blank for a second or two
+      # and back to its first page -- and --no-block so the menu that ran this is not held.
+      if [[ $target != "$flavor" ]]; then
+        systemctl --user --no-block try-restart streamdeck.service || true
+      fi
     '';
   };
 
@@ -1056,19 +1334,21 @@ let
       pkgs.procps # pkill, to signal the bar after a click
     ];
     text = ''
-      # The tooltip's palette, interpolated from lattice.theme so a re-accent reaches it too.
+      # The tooltip's palette, read from the run-time theme on every tick so a theme switch
+      # reaches it too.
       # The three profile colours are the ones style.css gives the pill, so the name in the
       # tooltip and the glyph on the bar are the same colour; the series each get their own.
-      c_dim='${palette.overlay1}'
-      c_text='${palette.text}'
-      c_load='${palette.blue}'
-      c_pcore='${palette.lavender}'
-      c_ecore='${palette.teal}'
-      c_watt='${palette.peach}'
-      c_saver='${palette.green}'
-      c_balanced='${palette.mauve}'
-      c_perf='${palette.peach}'
-      c_none='${palette.overlay0}'
+      ${readColours}
+      c_dim=''${c[overlay1]}
+      c_text=''${c[text]}
+      c_load=''${c[blue]}
+      c_pcore=''${c[lavender]}
+      c_ecore=''${c[teal]}
+      c_watt=''${c[peach]}
+      c_saver=''${c[green]}
+      c_balanced=''${c[mauve]}
+      c_perf=''${c[peach]}
+      c_none=''${c[overlay0]}
       # The graph is `width` samples of the waybar interval, so these two are the window: 60 at
       # 2s is the last two minutes. Keep `period` in step with "interval" on custom/power-profile
       # in ~/.dotfiles/waybar/config.jsonc -- it is only used to say how long the window is.
@@ -2111,8 +2391,9 @@ let
   #
   # The rows are baked in here rather than read back out of `lattice-wallpaper list`,
   # because the one thing this menu has to show is the colour, and a colour never reaches
-  # the CLI -- the pool's hexes are a build-time fact. Both sides come off `poolAccents`,
-  # so the list and the menu cannot disagree about what is in the pool or what it is called.
+  # the CLI -- the pool's hexes are a build-time fact, one set per flavour, picked by the
+  # same `case` lattice-wallpaper uses. Both sides come off `poolFor`, so
+  # the list and the menu cannot disagree about what is in the pool or what it is called.
   #
   # The swatch is the wallpaper's own glyph in the wallpaper's own accent, which is what
   # makes this worth being a menu at all: the names are the palette's, and "sapphire"
@@ -2126,11 +2407,14 @@ let
       cycleWallpaper
     ];
     text = ''
-      rows=(
-        ${lib.concatMapStringsSep "\n  " (
-          accent: "'<span color=\"${accent.hex}\">󰸉</span>  ${accent.name}'"
-        ) poolAccents}
-      )
+      ${readFlavor}
+      ${flavorCase (flavor: ''
+        rows=(
+          ${lib.concatMapStringsSep "\n  " (
+            entry: "'<span color=\"${entry.accent}\">󰸉</span>  ${entry.label}'"
+          ) (poolFor flavor)}
+        )
+      '')}
 
       # Anchored north *west*, unlike lattice-wifi and lattice-audio: this pill lives in the
       # left group, so the fixed edge to hang from is the other one. 10px is waybar's own
@@ -2144,13 +2428,14 @@ let
       #
       # 240px against that menu's 340: a swatch and a palette name is 12 columns, where an
       # SSID can be anything. lines is the whole pool, so the list never scrolls -- it is a
-      # fixed set of fourteen, not a listing of whatever happens to be in range.
+      # fixed set, not a listing of whatever happens to be in range -- and the pool's size
+      # is the flavour's, so it is counted rather than written in.
       theme='
         window { location: north west; anchor: north west; x-offset: 10px; y-offset: 5px; width: 240px; }
         * { font: "JetBrains Mono 10"; }
         inputbar { padding: 7px 10px; }
         element { padding: 5px 10px; }
-        listview { lines: 14; }
+        listview { lines: '"''${#rows[@]}"'; }
 
         /* The one already up, marked with rofi -a, in the same green lattice-wifi gives the
            network in use. It colours the name only -- the swatch carries its own colour in
@@ -2180,6 +2465,330 @@ let
       # Re-picking the one already up costs a redraw of two outputs and nothing else, so it
       # is left to fall through rather than special-cased into a no-op.
       lattice-wallpaper "$choice"
+    '';
+  };
+
+  # The bar's clock and calendar, replacing waybar's built-in clock module, whose calendar
+  # colours could only be literals in config.jsonc -- and waybar re-reads its config only on
+  # a full reload, the one that was crashing it (see lattice-palette). These draw from the
+  # run-time theme instead.
+  #
+  # `markup [offset]` is one month as Pango markup, the month `offset` away from this one:
+  # a title, the weekday row and the grid, every line padded to the same 20 columns so a
+  # centred box keeps the columns straight. Today is in the accent. Sunday first, as the
+  # en_US locale and the old module had it.
+  #
+  # With no argument it is the calendar menu behind a click on the clock: the month as the
+  # menu's message and three buttons under it, previous, today and next, each a rofi row
+  # laid out as columns. A button reopens the menu on the new month -- rofi has no way to
+  # rewrite its message in place -- and keeps that button selected, so paging is repeated
+  # clicks on one spot. Anchored north, under the clock, for the reason lattice-wifi gives.
+  calendar = pkgs.writeShellApplication {
+    name = "lattice-calendar";
+    runtimeInputs = [
+      pkgs.coreutils
+      rofiWithCalc
+    ];
+    text = ''
+      ${readColours}
+
+      month() {
+        local offset=$1 first title start days today="" pad line d cell col
+        first=$(date -d "$(date +%Y-%m-01) $offset month" +%F)
+        title=$(date -d "$first" '+%B %Y')
+        start=$(date -d "$first" +%w)
+        days=$(date -d "$first +1 month -1 day" +%-d)
+        if ((offset == 0)); then
+          today=$(date +%-d)
+        fi
+
+        pad=$(((20 - ''${#title}) / 2))
+        printf '%*s<span foreground="%s"><b>%s</b></span>%*s\n' "$pad" "" "''${c[text]}" "$title" \
+          $((20 - pad - ''${#title})) ""
+        printf '<span foreground="%s">Su Mo Tu We Th Fr Sa</span>\n' "''${c[subtext0]}"
+
+        printf -v line '%*s' $((start * 3)) ""
+        col=$start
+        for ((d = 1; d <= days; d++)); do
+          printf -v cell '%2d' "$d"
+          if [[ $d == "$today" ]]; then
+            line+="<span foreground=\"''${c[accent]}\"><b><u>$cell</u></b></span>"
+          else
+            line+="<span foreground=\"''${c[subtext1]}\">$cell</span>"
+          fi
+          col=$((col + 1))
+          if ((col == 7)); then
+            printf '%s\n' "$line"
+            line="" col=0
+          else
+            line+=" "
+          fi
+        done
+        if ((col > 0)); then
+          printf '%s%*s\n' "$line" $(((7 - col) * 3 - 1)) ""
+        fi
+      }
+
+      if [[ ''${1:-} == markup ]]; then
+        month "''${2:-0}"
+        exit 0
+      fi
+
+      theme='
+        window { location: north; anchor: north; y-offset: 5px; width: 250px; }
+        * { font: "JetBrains Mono 10"; }
+        inputbar { enabled: false; }
+        message { padding: 8px 10px 4px; border: 0; }
+        textbox { horizontal-align: 0.5; }
+        listview { columns: 3; lines: 1; padding: 4px 6px 6px; }
+        element { padding: 5px 0; }
+        element-text { horizontal-align: 0.5; }
+      '
+      click=(-me-select-entry "" -me-accept-entry MousePrimary)
+
+      offset=0
+      selected=1
+      while true; do
+        choice=$(printf '%s\n' "󰅁" "Today" "󰅂" |
+          rofi -dmenu -no-custom -format i -p Calendar -markup \
+            -mesg "<tt>$(month "$offset")</tt>" -selected-row "$selected" \
+            -theme-str "$theme" "''${click[@]}" || true)
+        case "$choice" in
+        0) offset=$((offset - 1)) ;;
+        1) offset=0 ;;
+        2) offset=$((offset + 1)) ;;
+        *) exit 0 ;;
+        esac
+        selected=$choice
+      done
+    '';
+  };
+
+  # The clock pill: the time, and this month's calendar as its tooltip. A long-running exec
+  # rather than an interval, so the minute turns over on the minute: it sleeps to the next
+  # one, and a USR1 -- from lattice-palette when the theme changes -- cuts the sleep short
+  # and redraws at once. Its pid is kept in XDG_RUNTIME_DIR for that.
+  clock = pkgs.writeShellApplication {
+    name = "lattice-clock";
+    runtimeInputs = [
+      pkgs.coreutils
+      calendar
+    ];
+    text = ''
+      pidfile="''${XDG_RUNTIME_DIR:-/tmp}/lattice-clock.pid"
+      echo $$ >"$pidfile"
+      trap ':' USR1
+
+      while true; do
+        # As one JSON string: newlines escaped, and the markup's double-quoted attributes
+        # turned single so they do not end it.
+        tip=$(lattice-calendar markup 0)
+        tip=''${tip//$'\n'/\\n}
+        tip=''${tip//\"/\'}
+        printf '{"text": "%s", "tooltip": "<tt>%s</tt>"}\n' "$(date '+%a %b %d  %H:%M')" "$tip"
+
+        sleep $((60 - 10#$(date +%S))) &
+        sleeper=$!
+        wait "$sleeper" || true
+        kill "$sleeper" 2>/dev/null || true
+      done
+    '';
+  };
+
+  # The caps-lock pill, which is only on the bar while caps lock is: the Mac's keyboard has
+  # an LED for it and the NuPhy does not. Read from the keyboards' LED nodes in sysfs, which
+  # are world-readable, rather than waybar's keyboard-state module -- that one opens
+  # /dev/input itself and so wants the input group, which is every keystroke on the seat
+  # handed to anything running as this user. Hyprland drives every keyboard's LED from the
+  # one shared lock state, so any of them being lit is the answer.
+  #
+  # sysfs attributes do not raise inotify events, so it polls; five reads of a few bytes a
+  # second is nothing, and it only prints when the state flips. The glob is expanded on
+  # every pass so a keyboard plugged in later is picked up. Empty text hides the pill.
+  capsLock = pkgs.writeShellApplication {
+    name = "lattice-capslock";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      last=
+      while true; do
+        state=off
+        for led in /sys/class/leds/*::capslock/brightness; do
+          [[ -r $led ]] || continue
+          read -r v <"$led" || continue
+          if [[ $v != 0 ]]; then
+            state=on
+            break
+          fi
+        done
+
+        if [[ $state != "$last" ]]; then
+          if [[ $state == on ]]; then
+            printf '{"text": "󰘲 CAPS", "class": "on", "tooltip": "Caps lock is on"}\n'
+          else
+            printf '{"text": ""}\n'
+          fi
+          last=$state
+        fi
+        sleep 0.2
+      done
+    '';
+  };
+
+  # The battery pill, replacing waybar's built-in battery module. That module never reads
+  # the kernel's `capacity` attribute: it works the percentage out itself from
+  # energy_now / energy_full. On the Mac those disagree -- macsmc-battery's capacity is the
+  # SMC's own state of charge, the number macOS shows, and it read 80% while the energy
+  # ratio read 77% (47.2 / 61.4 Wh) -- and neither `bat` nor `weighted-average` changes
+  # which one the module uses. upower reports `capacity`, and so do fastfetch, the
+  # power-profile tooltip, lattice-battery-notify's ladder and the 80% charge cap, so the
+  # bar was the one reading out of step with everything else.
+  #
+  # The battery is picked by role the way lattice-battery-notify picks it, so the mouse
+  # and headphones are skipped. `upower --monitor` prints a line whenever any device
+  # changes, which is the redraw trigger; the read timeout is a backstop for the minutes
+  # where upower publishes nothing. Empty text hides the pill on a host with no battery.
+  batteryPill = pkgs.writeShellApplication {
+    name = "lattice-battery-pill";
+    runtimeInputs = [
+      pkgs.upower
+      pkgs.gawk
+      pkgs.gnugrep
+      pkgs.coreutils
+    ];
+    text = ''
+      device=""
+      for candidate in $(upower -e | grep /battery_); do
+        if upower -i "$candidate" | grep 'power supply: *yes' >/dev/null; then
+          device=$candidate
+          break
+        fi
+      done
+      if [[ -z $device ]]; then
+        printf '{"text": ""}\n'
+        exec sleep infinity
+      fi
+
+      # The same ten glyphs, empty to full, that the built-in module's format-icons held.
+      icons=(󰁺 󰁻 󰁼 󰁽 󰁾 󰁿 󰂀 󰂁 󰂂 󰁹)
+
+      render() {
+        local info state level time icon class tooltip
+        info=$(upower -i "$device")
+        state=$(awk '/^ *state:/ { print $2; exit }' <<<"$info")
+        level=$(awk '/^ *percentage:/ { gsub(/%/, "", $2); print int($2 + 0.5); exit }' <<<"$info")
+        [[ -n $level ]] || return 0
+
+        case $state in
+        charging)
+          icon=󰂄
+          class='"charging"'
+          time=$(awk -F'time to full: *' 'NF > 1 { print $2; exit }' <<<"$info")
+          tooltip="Charging''${time:+, $time to full}"
+          ;;
+        discharging)
+          icon=''${icons[level * 9 / 100]}
+          class='"discharging"'
+          time=$(awk -F'time to empty: *' 'NF > 1 { print $2; exit }' <<<"$info")
+          tooltip="On battery''${time:+, $time left}"
+          ;;
+        fully-charged)
+          icon=󰚥
+          class='"plugged"'
+          tooltip="Fully charged"
+          ;;
+        *)
+          # pending-charge: on the charger but held, which on the Mac is the charge cap.
+          icon=󰚥
+          class='"plugged"'
+          tooltip="Plugged in, not charging"
+          ;;
+        esac
+
+        # The thresholds the built-in module's `states` had; the stylesheet only colours
+        # them while not charging.
+        if ((level <= 10)); then
+          class+=', "critical"'
+        elif ((level <= 25)); then
+          class+=', "warning"'
+        fi
+
+        printf '{"text": "%s %s%%", "tooltip": "%s", "class": [%s]}\n' \
+          "$icon" "$level" "$tooltip" "$class"
+      }
+
+      coproc MONITOR { upower --monitor; }
+      # Its first line is a "Monitoring activity" banner, not a change.
+      read -r -t 5 -u "''${MONITOR[0]:-}" _ || true
+      while true; do
+        render
+        # A timeout is a status over 128. Anything else means upower --monitor has gone
+        # away, and without the sleep the loop would spin.
+        read -r -t 60 -u "''${MONITOR[0]:-}" _ || { (($? > 128)) || sleep 60; }
+      done
+    '';
+  };
+
+  # The flavour picker, behind a right-click on the bar's theme pill -- the wallpaper menu's
+  # twin, and placed the same way for the same reasons; see there. A row is a strip of the
+  # flavour's own colours, darkest surface to text and then two accents, because the
+  # flavours differ mostly in how light their surfaces sit and that is quicker seen than
+  # read. The strip's first block is that flavour's base against this flavour's, which is
+  # the comparison that matters.
+  themeMenu = pkgs.writeShellApplication {
+    name = "lattice-theme-menu";
+    runtimeInputs = [
+      rofiWithCalc
+      latticeTheme
+    ];
+    text = ''
+      flavors=(${lib.escapeShellArgs flavorNames})
+      rows=(
+        ${lib.concatMapStringsSep "\n  " (
+          name:
+          let
+            inherit (theme.flavors.${name}) label palette;
+            block = c: "<span color=\"${palette.${c}}\">██</span>";
+          in
+          "'${
+            lib.concatMapStrings block [
+              "crust"
+              "base"
+              "surface1"
+              "overlay1"
+              "text"
+              "mauve"
+              "blue"
+            ]
+          }  ${label}'"
+        ) flavorNames}
+      )
+
+      theme='
+        window { location: north west; anchor: north west; x-offset: 10px; y-offset: 5px; width: 360px; }
+        * { font: "JetBrains Mono 10"; }
+        inputbar { padding: 7px 10px; }
+        element { padding: 5px 10px; }
+        listview { lines: ${toString (lib.length flavorNames)}; }
+        element normal.active, element alternate.active { text-color: @green; }
+        element selected.active { background-color: @green; text-color: @crust; }
+      '
+
+      click=(-me-select-entry "" -me-accept-entry MousePrimary)
+
+      current=$(lattice-theme current)
+      selected=()
+      for i in "''${!flavors[@]}"; do
+        if [[ ''${flavors[i]} == "$current" ]]; then
+          selected=(-a "$i")
+        fi
+      done
+
+      choice=$(printf '%s\n' "''${rows[@]}" |
+        rofi -dmenu -i -no-cycle -markup-rows -format i -p Theme \
+          -theme-str "$theme" "''${click[@]}" "''${selected[@]}" || true)
+      [ -n "''${choice:-}" ] || exit 0
+
+      lattice-theme "''${flavors[choice]}"
     '';
   };
 
@@ -2245,6 +2854,13 @@ let
   # and any other value -- HQF_ACTION=save, say -- leaves all three off, which is upstream's
   # save-and-notify default.
   #
+  # The bar's "Text" toggle is ours (patches/hyprquickframe-ocr.patch): it runs the capture
+  # through tesseract and copies the text, on top of whatever Temp or Save does with the
+  # image -- the image is copied first, so the text is what pastes and the image is one
+  # entry back in cliphist. Edit is the one action it excludes, since satty would be
+  # annotating a capture whose text has already been read. `o` toggles it in the overlay,
+  # and HQF_OCR=1 starts with it on.
+  #
   # Note that HyprQuickFrame spawns satty itself, with its own flags, so the only settings
   # of ours it honours are the ones in ~/.dotfiles/satty/.config/satty/config.toml that it
   # does not override -- `fullscreen` among them, which is why that moved out of the CLI
@@ -2256,57 +2872,74 @@ let
   # ~/.config/quickshell/HyprQuickFrame, then its own install directory. XDG_CONFIG_DIRS is
   # never consulted, so the /etc/xdg drop-in that dresses waybar and mako cannot reach it.
   # Restacking the QML tree with our file as the install-directory copy themes it without
-  # putting anything in $HOME, and leaves both user paths free for a by-hand override that
-  # needs no rebuild.
+  # putting anything in $HOME.
   #
   # The parser on the other end is a hand-rolled line matcher, not a TOML library: it takes
   # `[section]` headers and `key = value`, folding the two into one camelCase name, and
   # understands bare true/false and numbers. Colours are read as #RRGGBBAA -- note that
   # upstream's own defaults look like Qt's #AARRGGBB and are simply wrong about their own
   # alpha, so every colour here is written the way the parser reads it.
-  hqfTheme = toml.generate "theme.toml" {
+  #
+  # Written by hand rather than through pkgs.formats.toml, because it is wanted as text: the
+  # same file is a runtime kit file (lattice.theme.extraKitFiles), so the overlay follows
+  # lattice-theme and the wallpaper -- ~/.config/hyprquickframe/theme.toml, the first place
+  # upstream looks, is linked to the kit's copy. The build-time copy below stays as the
+  # install-directory fallback for a home that has no runtime theme yet.
+  #
+  # Comments stay out here, not in the file, since the parser is not TOML's. `animations` is
+  # off: it gates only the two selectors (shell.qml wires it to RegionSelector's
+  # globalAnimations and WindowSelector's animateSelection), where it puts a spring -- 5/0.7,
+  # underdamped and slack -- between the pointer and the rectangle, so the region visibly
+  # trails the cursor while you drag; the bar and toggles animate from springs of their own.
+  # The toggles sit on an accent-coloured disc (toggleBackground falls back to accent), so
+  # OCR's icon is crust rather than a palette colour some accent would swallow. kdeconnect is
+  # not installed, so the share toggle can only ever report failure, but it is coloured
+  # anyway rather than left the one thing on screen not in the theme.
+  hqfThemeText =
+    {
+      palette,
+      accent,
+      accentAlt,
+    }:
+    ''
+      accent = "${accent}"
+      accentText = "${palette.crust}"
+      dimOpacity = 0.6
+      borderRadius = 10
+      outlineThickness = 2
+      bottomMargin = 60
+      animations = false
+      annotationTool = "satty"
+
+      [bar]
+      background = "${palette.surface0}cc"
+      border = "${palette.overlay0}40"
+      text = "${palette.subtext0}ff"
+      shadow = "${palette.crust}80"
+
+      [toggle]
+      shadow = "${palette.crust}80"
+      edit = "${palette.green}"
+      temp = "${accentAlt}"
+      ocr = "${palette.crust}"
+
+      [share]
+      connected = "${palette.sapphire}"
+      pending = "${palette.overlay0}"
+      errorIcon = "${palette.crust}"
+      errorBackground = "${palette.red}"
+    '';
+
+  hqfTheme = pkgs.writeText "theme.toml" (hqfThemeText {
+    inherit palette;
     accent = theme.accentHex;
-    accentText = palette.crust;
-    dimOpacity = 0.6;
-    borderRadius = 10;
-    outlineThickness = 2;
-    bottomMargin = 60;
-
-    # Off. This gates only the two selectors (shell.qml wires it to RegionSelector's
-    # globalAnimations and WindowSelector's animateSelection), where it puts a spring --
-    # 5/0.7, underdamped and slack -- between the pointer and the rectangle, so the region
-    # visibly trails the cursor while you drag. The bar and the toggles animate from
-    # hardcoded springs of their own and keep their movement either way.
-    animations = false;
-    annotationTool = "satty";
-
-    bar = {
-      background = "${palette.surface0}cc";
-      border = "${palette.overlay0}40";
-      text = "${palette.subtext0}ff";
-      shadow = "${palette.crust}80";
-    };
-
-    toggle = {
-      shadow = "${palette.crust}80";
-      edit = palette.green;
-      temp = theme.accentAltHex;
-    };
-
-    # kdeconnect is not installed on either host, so the share toggle can only ever report
-    # failure. Coloured anyway rather than left on upstream's stock palette, which is the
-    # one thing on screen that would not be Catppuccin.
-    share = {
-      connected = palette.sapphire;
-      pending = palette.overlay0;
-      errorIcon = palette.crust;
-      errorBackground = palette.red;
-    };
-  };
+    accentAlt = theme.accentAltHex;
+  });
 
   hqfShell = pkgs.runCommand "hyprquickframe-shell" { } ''
     cp -r ${hqf}/share/hyprquickframe $out
     chmod -R u+w $out
+    patch -p1 -d $out < ${./patches/hyprquickframe-ocr.patch}
     cp ${hqfTheme} $out/theme.toml
 
     # Each bar item is one Text holding "<glyph>  Region", the glyph coming from the
@@ -2330,6 +2963,62 @@ let
                     font.family: "Symbols Nerd Font"'
   '';
 
+  # What the patched overlay calls for the Text toggle: `hqf-ocr [--temp] <image>`, run
+  # detached, so it owns the notification -- "Reading text..." at once, replaced in place
+  # by the result -- and, with --temp, deleting the capture. tesseract is trained on dark
+  # text on a light page and most of what is on screen here is the reverse, so a dark
+  # capture is negated first. Small captures are upscaled 2x, which lifts 1x-scaled UI
+  # text into the size it reads reliably; a large one is left alone, since at 4K it costs
+  # seconds and the text in it is already big. English only -- the full language set is
+  # several hundred MB.
+  hqfOcr = pkgs.writeShellApplication {
+    name = "hqf-ocr";
+    runtimeInputs = [
+      (pkgs.tesseract.override { enableLanguages = [ "eng" ]; })
+      pkgs.imagemagick
+      pkgs.wl-clipboard
+      pkgs.libnotify
+    ];
+    text = ''
+      temp=0
+      if [ "$1" = --temp ]; then
+        temp=1
+        shift
+      fi
+      image=$1
+
+      if [ "$temp" = 1 ]; then
+        trap 'rm -f "$image"' EXIT
+        where="Image copied to the clipboard"
+        icon=()
+      else
+        where="Saved to ''${image%/*}"
+        icon=(-i "$image" -h "string:image-path:$image")
+      fi
+      id=$(notify-send -p -a HyprQuickFrame "''${icon[@]}" "Reading text…" "$where")
+
+      read -r dark w h < <(magick "$image" -colorspace gray -format '%[fx:mean<0.5] %w %h\n' info:)
+      prep=(-colorspace gray)
+      [ "$dark" = 1 ] && prep+=(-negate)
+      (( w * h < 2000000 )) && prep+=(-resize 200%)
+
+      text=$(magick "$image" "''${prep[@]}" png:- \
+        | tesseract stdin stdout 2>/dev/null \
+        | tr -d '\f' | sed -e 's/[[:space:]]*$//' -e '/./,$!d')
+
+      if [ -z "$text" ]; then
+        notify-send -r "$id" -a HyprQuickFrame "''${icon[@]}" "No text found" "$where"
+        exit 0
+      fi
+
+      printf '%s' "$text" | wl-copy
+      # mako renders Pango markup, so the preview is escaped before it goes in the body.
+      preview=$(head -n 4 <<<"$text" | cut -c 1-80 \
+        | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+      notify-send -r "$id" -a HyprQuickFrame "''${icon[@]}" "Text copied" "$preview"
+    '';
+  };
+
   # --path rather than upstream's --config: -c takes a *name* to look up under the
   # quickshell config directories, and only incidentally accepts a path. runtimeInputs is
   # load-bearing -- the QML shells out to every one of these by bare name.
@@ -2342,6 +3031,8 @@ let
       pkgs.wl-clipboard
       pkgs.satty
       pkgs.libnotify
+      pkgs.util-linux # setsid, which detaches hqf-ocr
+      hqfOcr
     ];
     text = ''
       export HQF_ACTION="''${HQF_ACTION-temp}"
@@ -2430,6 +3121,191 @@ let
         | jq -r --argjson id "$(printf '%s' "$selection" | cut -f1)" \
             '.[] | select(.id == $id) | .body' \
         | wl-copy
+    '';
+  };
+
+  # The SUPER + / cheatsheet: every bind that says what it does, in one rofi list. Nothing
+  # is written down twice -- the rows come live from the configs themselves, Hyprland binds
+  # with a description, tmux binds with a note and nvim maps with a desc, so a key goes on
+  # the sheet by being described where it is bound, and a rebind can't leave it stale.
+  # ~/.config/hypr/keys.tsv (the hypr stow package) adds what no config can report -- the
+  # trackpad gesture, the mouse's Solaar rules -- and hides rows not worth the space.
+  #
+  # tmux and nvim come from PATH rather than runtimeInputs: tmux has to be the build the
+  # server is running, and nvim has to be the one the config and its plugins were set up for.
+  hyprKeys = pkgs.writeText "lattice-keys-hypr.jq" ''
+    # hyprctl binds -j -> "<keys>\t<description>", for the described binds only. Binds that
+    # share a description, modifiers and submap fold into one row ("SUPER + 0-9"), in the
+    # order the config makes them.
+    def mods:
+      . as $m
+      | [[64, "SUPER"], [4, "CTRL"], [8, "ALT"], [1, "SHIFT"]]
+      | map(select(($m / .[0] | floor) % 2 == 1) | .[1]);
+    def pretty:
+      {
+        left: "←", right: "→", up: "↑", down: "↓",
+        mouse_down: "Scroll", mouse_up: "Scroll",
+        "mouse:272": "LMB", "mouse:273": "RMB", "mouse:274": "MMB",
+        slash: "/", escape: "Esc", return: "Enter", SPACE: "Space",
+        XF86AudioRaiseVolume: "Vol+", XF86AudioLowerVolume: "Vol-",
+        XF86AudioMute: "Mute", XF86AudioMicMute: "MicMute",
+        XF86MonBrightnessUp: "Bright+", XF86MonBrightnessDown: "Bright-",
+        XF86AudioPlay: "Play", XF86AudioPause: "Pause",
+        XF86AudioNext: "Next", XF86AudioPrev: "Prev"
+      }[.] // .;
+    def keylist:
+      if length == 10 and all(test("^[0-9]$")) then "0-9"
+      elif (sort == ["down", "left", "right", "up"]) then "Arrows"
+      else map(pretty) | reduce .[] as $k ([]; if index([$k]) then . else . + [$k] end) | join("/")
+      end;
+
+    reduce (.[] | select(.has_description)) as $b ({order: [], groups: {}};
+      ([$b.submap, ($b.modmask | tostring), $b.description] | join("\u0001")) as $id
+      | if .groups[$id] == null then
+          .order += [$id]
+          | .groups[$id] = {submap: $b.submap, modmask: $b.modmask, desc: $b.description, keys: [$b.key]}
+        elif (.groups[$id].keys | index([$b.key])) then .
+        else .groups[$id].keys += [$b.key]
+        end)
+    | .groups as $g
+    | .order[]
+    | $g[.]
+    | ((.modmask | mods) + [.keys | keylist] | join(" + ")) as $keys
+    | [(if .submap == "" then $keys else .submap + ": " + $keys end), .desc]
+    | @tsv
+  '';
+  nvimKeys = pkgs.writeText "lattice-keys-nvim.lua" ''
+    -- Every map the user's config describes, as "<keys>\t<description>" lines on stdout.
+    -- LSP maps are buffer-local and only made on LspAttach, which a headless nvim with no
+    -- server never sees, so it is fired by hand on the empty buffer first.
+    pcall(vim.api.nvim_exec_autocmds, "LspAttach", { buffer = 0, data = {} })
+
+    local leader = vim.g.mapleader or "\\"
+    local modes = { n = "n", x = "v", o = "o", i = "i", t = "t", c = "c" }
+    local order, rows = {}, {}
+
+    local function add(map, mode)
+      -- sid < 0 is nvim's own runtime: its default maps carry descs too, and are not ours.
+      if not map.desc or map.desc == "" or map.sid < 0 then
+        return
+      end
+      local lhs = map.lhs
+      if lhs:sub(1, #leader) == leader then
+        lhs = "<leader>" .. lhs:sub(#leader + 1)
+      end
+      lhs = lhs:gsub(" ", "<Space>")
+      local id = lhs .. "\t" .. map.desc
+      if not rows[id] then
+        rows[id] = { lhs = lhs, desc = map.desc, modes = {} }
+        table.insert(order, id)
+      end
+      if not vim.tbl_contains(rows[id].modes, mode) then
+        table.insert(rows[id].modes, mode)
+      end
+    end
+
+    for query, mode in pairs(modes) do
+      for _, map in ipairs(vim.api.nvim_get_keymap(query)) do
+        add(map, mode)
+      end
+      for _, map in ipairs(vim.api.nvim_buf_get_keymap(0, query)) do
+        add(map, mode)
+      end
+    end
+
+    table.sort(order)
+    for _, id in ipairs(order) do
+      local row = rows[id]
+      table.sort(row.modes)
+      local desc = row.desc
+      -- Normal mode goes without saying; anything else is spelled out.
+      if not (#row.modes == 1 and row.modes[1] == "n") then
+        desc = desc .. "  [" .. table.concat(row.modes, ",") .. "]"
+      end
+      io.stdout:write(row.lhs, "\t", desc, "\n")
+    end
+  '';
+  keybindings = pkgs.writeShellApplication {
+    name = "lattice-keys";
+    runtimeInputs = [
+      pkgs.hyprland
+      pkgs.jq
+      rofiWithCalc
+      pkgs.gawk
+      pkgs.gnugrep
+      pkgs.gnused
+      pkgs.coreutils
+    ];
+    text = ''
+      extras="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/keys.tsv"
+
+      # What is in front of you decides which section leads: nvim if the tmux pane last typed
+      # into is running it, tmux if a terminal has focus, the desktop otherwise. Everything is
+      # still listed and searchable; this only saves scrolling past the rest.
+      focus=hypr
+      if [[ $(hyprctl activewindow -j 2>/dev/null | jq -r '.class // ""') == com.mitchellh.ghostty ]]; then
+        focus=tmux
+        pane=$(tmux list-clients -F '#{client_activity} #{pane_current_command}' 2>/dev/null \
+          | sort -rn | head -n1 | cut -d' ' -f2-) || true
+        [[ $pane == nvim ]] && focus=nvim
+      fi
+      case $focus in
+        nvim) order=(nvim tmux hypr mouse) ;;
+        tmux) order=(tmux nvim hypr mouse) ;;
+        *) order=(hypr mouse tmux nvim) ;;
+      esac
+
+      live() {
+        hyprctl binds -j | jq -r -f ${hyprKeys} | sed 's/^/hypr\t/'
+
+        # Only binds the config itself notes: tmux notes every default too, so those are listed
+        # by a throwaway server that has read no config and taken out. The prefix is set on it
+        # first so its rows read the same as the live ones. No server, no tmux section --
+        # starting one with the real config would set tmux-continuum restoring sessions.
+        if prefix=$(tmux show -gv prefix 2>/dev/null); then
+          tmux list-keys -N \
+            | grep -vxFf <(tmux -L "lattice-keys-$$" -f /dev/null start-server \; \
+                set -g prefix "$prefix" \; list-keys -N \; kill-server 2>/dev/null) \
+            | sed -E 's/^([^ ]+ [^ ]+) +/tmux\t\1\t/' || true
+        fi
+
+        # The real config, headless, against an empty buffer. timeout so a plugin that wants
+        # an answer at startup costs a missing section rather than a picker that never opens.
+        if command -v nvim >/dev/null; then
+          (cd "''${XDG_RUNTIME_DIR:-/tmp}" && timeout 5 nvim --headless \
+            -c "luafile ${nvimKeys}" -c 'qa!' 2>/dev/null) | sed 's/^/nvim\t/' || true
+        fi
+      }
+
+      # keys.tsv rows are added, and a "-" description takes the matching live row out. awk
+      # reads the extras first so it knows what to drop by the time the live rows arrive. By
+      # name rather than FNR == NR, which an empty or missing keys.tsv would turn true for both.
+      rows=$(
+        awk -F '\t' -v OFS='\t' -v order="''${order[*]}" '
+          BEGIN { n = split(order, o, " "); for (i = 1; i <= n; i++) rank[o[i]] = i }
+          FILENAME == ARGV[1] {
+            if ($0 ~ /^#/ || NF < 3) next
+            if ($3 == "-") hide[$1 FS $2] = 1
+            else extra[++e] = $0
+            next
+          }
+          !(($1 FS $2) in hide) && !seen[$0]++ { print rank[$1] + 0, ++i, $0 }
+          END { for (j = 1; j <= e; j++) { split(extra[j], f, FS); print rank[f[1]] + 0, ++i, extra[j] } }
+        ' <(cat "$extras" 2>/dev/null || true) <(live) \
+          | sort -t$'\t' -k1,1n -k2,2n | cut -f3-
+      )
+
+      # Read-only: picking a row does nothing, it is the search that is the point.
+      # Padded into columns rather than rofi's -display-columns, which joins but never aligns.
+      # The font is monospace (config.rasi), so spaces line up.
+      printf '%s\n' "$rows" \
+        | awk -F '\t' '
+            { s[NR] = $1; k[NR] = $2; d[NR] = $3; if (length($2) > w) w = length($2) }
+            END { for (i = 1; i <= NR; i++) printf "%-5s  %-*s  %s\n", s[i], w, k[i], d[i] }
+          ' \
+        | rofi -dmenu -i -no-custom -p "keys" \
+            -theme-str 'window { width: 960px; } listview { lines: 14; }' \
+        >/dev/null || true
     '';
   };
 
@@ -2589,10 +3465,39 @@ let
     '';
   };
 
-  # Catppuccin, matching ~/.dotfiles. Theme names follow lattice.theme.
-  gtkTheme = "catppuccin-${theme.flavor}-${theme.accent}-standard";
+  # GTK is adw-gtk3 -- libadwaita's look, ported to GTK3 -- recoloured from the run-time
+  # theme, so GTK apps follow lattice-theme and the wallpaper's accent like the rest of the
+  # desktop. adw-gtk3 draws everything from libadwaita's named colours, and theme.gtk.css in
+  # the runtime kit redefines those; this user theme is adw-gtk3-dark with that file
+  # imported after it, where a second definition wins.
+  #
+  # It is installed under two names, lattice-a and lattice-b, both this one directory.
+  # GTK3 reads a theme's CSS once, when the theme is set, so a running app only restyles
+  # when the name changes -- lattice-palette flips between the two whenever theme.gtk.css
+  # changes. libadwaita apps take no GTK theme at all; they read ~/.config/gtk-4.0/gtk.css,
+  # which in ~/.dotfiles imports the same file, at launch.
+  #
+  # Cursors and folder icons stay Catppuccin's, built in the build-time flavour's nearest
+  # one and blue: they are packaged per flavour and accent and cannot change at run time.
+  catppuccinFlavor = theme.flavors.${theme.flavor}.catppuccin;
+  gtkUserTheme =
+    let
+      adw = "${pkgs.adw-gtk3}/share/themes/adw-gtk3-dark";
+      css = file: ''
+        @import url("file://${adw}/gtk-3.0/${file}");
+        @import url("file://${currentDir}/theme.gtk.css");
+      '';
+    in
+    pkgs.runCommand "lattice-gtk-theme" { } ''
+      mkdir -p $out/gtk-3.0
+      cp ${pkgs.writeText "gtk.css" (css "gtk.css")} $out/gtk-3.0/gtk.css
+      cp ${pkgs.writeText "gtk-dark.css" (css "gtk-dark.css")} $out/gtk-3.0/gtk-dark.css
+      printf '[Desktop Entry]\nType=X-GNOME-Metatheme\nName=lattice\n\n[X-GNOME-Metatheme]\nGtkTheme=lattice\n' \
+        > $out/index.theme
+    '';
+  gtkTheme = "lattice-a";
   iconTheme = "Papirus-Dark";
-  cursorTheme = "catppuccin-${theme.flavor}-dark-cursors";
+  cursorTheme = "catppuccin-${catppuccinFlavor}-dark-cursors";
   # 9pt (12px) keeps UI text close to Ghostty and waybar; qt6ct in ~/.dotfiles uses the same fonts.
   uiFont = "${theme.fonts.ui} ${toString theme.fonts.size}";
   monospaceFont = "${theme.fonts.monospace} ${toString theme.fonts.size}";
@@ -2752,7 +3657,7 @@ in
     # real window for the times a calculation is worth keeping on screen and editing --
     # qalculate-gtk carries the history, stored variables, user functions and the plot
     # button that a one-line launcher prompt has nowhere to put. It is GTK3, so the
-    # catppuccin-gtk theme below dresses it; it lands in `rofi -show drun` as "Qalculate!".
+    # run-time GTK theme (gtkUserTheme) dresses it; it lands in `rofi -show drun` as "Qalculate!".
     # libqalculate is free here (rofi-calc already put it in the closure) and qalculate-gtk
     # adds ~8 MiB on top of it.
     libqalculate
@@ -2780,9 +3685,7 @@ in
     mpv
     imv
     xarchiver
-    libreoffice-qt
     hunspellDicts.en_US
-    hyphenDicts.en_US
     drawio
     telegram-desktop
     zathura
@@ -2830,18 +3733,18 @@ in
     # Mullvad Browser is x86-only for the same reason, so there is nothing to make the
     # two hosts agree on. `nix run nixpkgs#tor-browser` on the Dell for the rare need.
 
-    (catppuccin-gtk.override {
-      variant = theme.flavor;
-      accents = [ theme.accent ];
-    })
+    adw-gtk3
     (catppuccin-papirus-folders.override {
-      inherit (theme) flavor accent;
+      flavor = catppuccinFlavor;
+      inherit (theme) accent;
     })
-    catppuccin-cursors."${theme.flavor}Dark"
+    catppuccin-cursors."${catppuccinFlavor}Dark"
 
     cycleWallpaper
     wallpaperMenu
-    latticeAccent
+    latticePalette
+    latticeTheme
+    themeMenu
     sunset
     idleInhibit
     tailscale
@@ -2850,6 +3753,7 @@ in
     audioMenu
     powerMenu
     notifyHistory
+    keybindings
     dnd
     screenshot
     screenshotItem
@@ -3019,10 +3923,6 @@ in
 
   # Run Electron apps natively on Wayland so they aren't blurry under fractional scaling.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
-  # LibreOffice picks its GTK3 backend outside KDE, which can't do fractional scaling and oversizes its icons.
-  environment.sessionVariables.SAL_USE_VCLPLUGIN = "qt6";
-  # LibreOffice finds spelling/hyphenation dictionaries under share/{hunspell,hyphen} in the system profile.
-  environment.pathsToLink = [ "/share/hyphen" ];
 
   ### SESSION SERVICES ###
   systemd.packages = with pkgs; [
@@ -3176,6 +4076,16 @@ in
       # straight, right click opens the menu, which in turn calls it by name again.
       cycleWallpaper
       wallpaperMenu
+      # And the theme pill's, the same pair one level up.
+      latticeTheme
+      themeMenu
+      # The clock, and the calendar menu a click on it opens.
+      clock
+      calendar
+      # The caps-lock pill's exec.
+      capsLock
+      # The battery pill's.
+      batteryPill
       pkgs.wireplumber
       config.programs.firefox.finalPackage
     ];
@@ -3218,6 +4128,40 @@ in
           "%h/.local/share/tmux/plugins/tmux-resurrect/scripts/save.sh"
           "${pkgs.tmux}/bin/tmux kill-server"
         ];
+      };
+    };
+
+    # Collabora Office replaces LibreOffice: the same engine under Collabora Online's
+    # interface, which nixpkgs only packages as the server. Flathub builds the desktop app
+    # for both arches, so it lands as a per-user Flatpak at session start -- installed when
+    # missing and never updated here, so a login doesn't turn into a 400 MiB download;
+    # `flatpak update` is the upgrade.
+    #
+    # Its Qt UI comes out a size too big on both screens; QT_SCALE_FACTOR multiplies each
+    # output's own scale, so one factor shrinks it on the 2.25x panel and the 1.5x Samsung
+    # alike. Re-applied every run so the value here stays the source of truth.
+    lattice-flatpaks = {
+      description = "Install lattice's Flatpak apps";
+      wantedBy = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      # Fails when the session starts offline; say so rather than leave Collabora quietly
+      # missing from rofi.
+      onFailure = [ "lattice-notify-failure@%n.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = lib.getExe (
+          pkgs.writeShellApplication {
+            name = "lattice-flatpaks";
+            runtimeInputs = [ config.services.flatpak.package ];
+            text = ''
+              app=com.collaboraoffice.Office
+              flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+              flatpak info --user "$app" >/dev/null 2>&1 \
+                || flatpak install --user --noninteractive flathub "$app"
+              flatpak override --user --env=QT_SCALE_FACTOR=0.8 "$app"
+            '';
+          }
+        );
       };
     };
   };
@@ -3298,6 +4242,22 @@ in
     # comic reader.
     // assign "thunar.desktop" [ "inode/directory" ]
     // assign "org.pwmt.zathura.desktop" [ "application/pdf" ]
+    # The Flatpak's export, installed by lattice-flatpaks. CSV is left out on purpose: it is
+    # as often something to read in a terminal as a spreadsheet.
+    // assign "com.collaboraoffice.Office.desktop" [
+      "application/vnd.oasis.opendocument.text"
+      "application/vnd.oasis.opendocument.spreadsheet"
+      "application/vnd.oasis.opendocument.presentation"
+      "application/vnd.oasis.opendocument.graphics"
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      "application/msword"
+      "application/vnd.ms-excel"
+      "application/vnd.ms-powerpoint"
+      "application/rtf"
+      "text/rtf"
+    ]
     # .cbz is detected as application/vnd.comicbook+zip; zathura-cb only declares the
     # older application/x-cbz, so every real comic went to xarchiver instead -- the reader
     # was installed and unreachable.
@@ -3370,8 +4330,10 @@ in
     ];
 
   ### THEME ###
-  # The palettes in /etc/xdg layer lattice-accent's files over their own accent; see there.
-  lattice.theme.runtimeAccent = currentDir;
+  # The palettes in /etc/xdg layer lattice-palette's files over their own; see there.
+  lattice.theme.runtimeTheme = currentDir;
+  lattice.theme.runtimeState = themeState;
+  lattice.theme.extraKitFiles."theme.hqf.toml" = hqfThemeText;
 
   xdg.icons.fallbackCursorThemes = [ cursorTheme ];
 
@@ -3389,7 +4351,7 @@ in
     }
   ];
 
-  # Qt apps (hyprpolkitagent, LibreOffice) take their palette and fonts from qt6ct, configured in ~/.dotfiles.
+  # Qt apps (hyprpolkitagent) take their palette and fonts from qt6ct, configured in ~/.dotfiles.
   qt = {
     enable = true;
     platformTheme = "qt5ct";
@@ -3552,8 +4514,9 @@ in
   # GTK CSS, like waybar's and swayosd's, but written here rather than imported from
   # ~/.dotfiles: wlogout is Wayland-only, so there is no macOS half to keep in step.
   # The pill treatment carries over -- translucent @base, @surface0 border -- scaled up,
-  # over a scrim that dims the desktop behind it. The accent comes in through the bar's
-  # palette rather than as a literal, so the hover follows lattice-accent like the bar does.
+  # over a scrim that dims the desktop behind it. Every colour comes in through the bar's
+  # palette by name rather than as a literal, so the menu follows lattice-palette's flavour
+  # and accent like the bar does.
   environment.etc."xdg/wlogout/style.css".text = ''
     @import url("file:///etc/xdg/waybar/lattice.css");
 
@@ -3565,13 +4528,13 @@ in
     }
 
     window {
-      background-color: alpha(${palette.crust}, 0.72);
+      background-color: alpha(@crust, 0.72);
     }
 
     button {
-      color: ${palette.text};
-      background-color: alpha(${palette.base}, ${toString theme.opacity});
-      border: 2px solid ${palette.surface0};
+      color: @text;
+      background-color: alpha(@base, ${toString theme.opacity});
+      border: 2px solid @surface0;
       border-radius: 14px;
       /* Outside the height lattice-power sizes the grid to -- keep `gap` there in step. */
       margin: 14px;
@@ -3584,47 +4547,63 @@ in
     button:focus,
     button:hover {
       color: @accent;
-      background-color: alpha(${palette.surface0}, ${toString theme.opacity});
+      background-color: alpha(@surface0, ${toString theme.opacity});
       border-color: @accent;
     }
 
     /* The two that can't be taken back warn in their own colour on the way past. */
     #reboot:focus,
     #reboot:hover {
-      color: ${palette.peach};
-      border-color: ${palette.peach};
+      color: @peach;
+      border-color: @peach;
     }
 
     #shutdown:focus,
     #shutdown:hover {
-      color: ${palette.red};
-      border-color: ${palette.red};
+      color: @red;
+      border-color: @red;
     }
   '';
 
   ### IDLE/LOCK ###
   programs.hyprlock.enable = true;
 
-  # `C` copies only when the target is absent, so this seeds the file on a fresh home and
-  # then never touches it again -- every later write is lattice-wallpaper's.
+  # `C` copies only when the target is absent, so this seeds the theme files on a fresh home
+  # and then never touches them again -- every later write is lattice-palette's.
   #
   # Per-user rather than systemd.user.tmpfiles.rules: those go to every user manager, and
   # the greeter's starts one too, failing on winston's home at every boot.
   systemd.user.tmpfiles.users.winston.rules = [
     "d ${currentDir} 0755 - - -"
-    "C ${currentLockAccent} 0644 - - - ${defaultLockAccent}"
   ]
   # `L` without `+` for the same reason as `C`: only on a home that has never picked, so
   # hyprpaper.conf names something even before the first lattice-wallpaper-choose.
   ++ [
     "L ${currentDesk} - - - - ${wallpaper}"
-    "L ${currentPanel} - - - - ${lib.head panelWallpapers}"
+    "L ${currentPanel} - - - - ${lib.head panelWallpapers.${theme.flavor}}"
   ]
-  ++ map (file: "C ${currentDir}/${file} 0644 - - - ${accentSeed}/${file}") [
+  ++ map (file: "C ${currentDir}/${file} 0644 - - - ${themeSeed}/${file}") theme.runtimeFiles
+  # The screenshot overlay's theme, at the first path HyprQuickFrame looks; see hqfThemeText.
+  ++ [
+    "d ${config.users.users.winston.home}/.config/hyprquickframe 0755 - - -"
+    "L+ ${config.users.users.winston.home}/.config/hyprquickframe/theme.toml - - - - ${currentDir}/theme.hqf.toml"
+  ]
+  # The GTK user theme under both of its names; see gtkUserTheme. `L+` so each boot points
+  # them at this build's copy.
+  ++
+    map
+      (name: "L+ ${config.users.users.winston.home}/.local/share/themes/${name} - - - - ${gtkUserTheme}")
+      [
+        "lattice-a"
+        "lattice-b"
+      ]
+  # What the accent-only writer, lattice-accent, left behind; theme.* replaced all of it.
+  ++ map (file: "r ${currentDir}/${file}") [
     "accent.css"
     "accent.rasi"
     "accent.mako"
     "accent.lua"
+    "lock-accent.conf"
   ];
 
   environment.etc = {
@@ -3662,15 +4641,24 @@ in
     '';
 
     "xdg/hypr/hyprlock.conf".text = ''
-      # The two colours that follow the wallpaper. These are the fallback -- entry 0's pair,
-      # the live accent -- and lattice-wallpaper rewrites the sourced file on every pick with
-      # the pair belonging to the member it set. hyprlang takes the last definition of a
-      # variable, so the source has to come after these and both have to come before the
-      # block that reads them. A missing file is survivable: hyprlock logs the error and
-      # falls through to these, which is the right answer anyway.
-      $lockOuter = rgb(${hex (mixHex 0.5 theme.accentHex palette.surface0)})
-      $lockCheck = rgb(${hex theme.accentAltHex})
-      source = ${currentLockAccent}
+      # The colours that follow the wallpaper and the flavour. These are the fallback --
+      # the build-time flavour with entry 0's pair, the live accent -- and lattice-palette
+      # rewrites the sourced file on every pick and theme switch. hyprlang takes the last
+      # definition of a variable, so the source has to come after these and both have to
+      # come before the blocks that read them. A missing file is survivable: hyprlock logs
+      # the error and falls through to these, which is the right answer anyway. Bare hex,
+      # because the placeholder's markup takes them as well as rgb() -- there as "##", which
+      # is hyprlang's escape for a literal '#'; a single one would start a comment.
+      $lockOuter = ${mixHex 0.5 theme.accentHex palette.surface0}
+      $lockCheck = ${hex theme.accentAltHex}
+      $lockBase = ${hex palette.base}
+      $lockMantle = ${hex palette.mantle}
+      $lockText = ${hex palette.text}
+      $lockSubtext = ${hex palette.subtext0}
+      $lockMuted = ${hex palette.overlay0}
+      $lockFail = ${hex palette.red}
+      $lockCaps = ${hex palette.yellow}
+      source = ${currentDir}/theme.hyprlock
 
       general {
         hide_cursor = true
@@ -3682,13 +4670,13 @@ in
       background {
         monitor =
         path = ${currentDesk}
-        color = rgb(${hex palette.base})
+        color = rgb($lockBase)
       }
 
       background {
         monitor = eDP-1
         path = ${currentPanel}
-        color = rgb(${hex palette.base})
+        color = rgb($lockBase)
       }
 
       # Positions are absolute output pixels measured from the centre of the screen, positive
@@ -3711,7 +4699,7 @@ in
       label {
         monitor =
         text = $TIME
-        color = rgb(${hex palette.text})
+        color = rgb($lockText)
         font_size = 96
         font_family = ${theme.fonts.monospace} ExtraBold
         position = 0, 500
@@ -3722,7 +4710,7 @@ in
       label {
         monitor =
         text = cmd[update:60000] date +"%A, %B %-d"
-        color = rgb(${hex palette.subtext0})
+        color = rgb($lockSubtext)
         font_size = 22
         font_family = ${theme.fonts.monospace}
         position = 0, 375
@@ -3738,14 +4726,14 @@ in
         valign = center
         rounding = 14
         outline_thickness = 2
-        outer_color = $lockOuter
-        inner_color = rgb(${hex palette.mantle})
-        font_color = rgb(${hex palette.text})
+        outer_color = rgb($lockOuter)
+        inner_color = rgb($lockMantle)
+        font_color = rgb($lockText)
         font_family = ${theme.fonts.monospace}
-        check_color = $lockCheck
-        fail_color = rgb(${hex palette.red})
-        capslock_color = rgb(${hex palette.yellow})
-        placeholder_text = <span foreground="#${palette.overlay0}">password</span>
+        check_color = rgb($lockCheck)
+        fail_color = rgb($lockFail)
+        capslock_color = rgb($lockCaps)
+        placeholder_text = <span foreground="##$lockMuted">password</span>
         fail_text = $FAIL
         fade_on_empty = false
         dots_size = 0.25

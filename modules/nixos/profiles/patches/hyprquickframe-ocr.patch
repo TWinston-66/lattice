@@ -1,0 +1,231 @@
+diff -ruN a/assets/icons/ocr.svg b/assets/icons/ocr.svg
+--- a/assets/icons/ocr.svg	1969-12-31 17:00:00.000000000 -0700
++++ b/assets/icons/ocr.svg	2026-10-03 19:33:30.223088476 -0600
+@@ -0,0 +1 @@
++<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path opacity="0.5" d="M3 8V6a3 3 0 0 1 3-3h2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2" stroke="#1C274C" stroke-width="2" stroke-linecap="round"/><path d="M8 8h8M12 8v8" stroke="#1C274C" stroke-width="2.2" stroke-linecap="round"/></svg>
+diff -ruN a/components/ControlBar.qml b/components/ControlBar.qml
+--- a/components/ControlBar.qml	2026-10-03 19:32:47.510380961 -0600
++++ b/components/ControlBar.qml	2026-10-03 19:33:30.222963078 -0600
+@@ -7,13 +7,15 @@
+     property string mode: "region"
+     property bool tempActive: false
+     property bool editActive: false
++    property bool ocrActive: false
+     property var theme: null
+     property real tabItemSize: 100
+-    property real targetMenuWidth: (modes.length - (editActive ? 1 : 0) - (tempActive ? 1 : 0)) * tabItemSize + 8
++    property real targetMenuWidth: (modes.length - (ocrActive ? 1 : 0) - (editActive ? 1 : 0) - (tempActive ? 1 : 0)) * tabItemSize + 8
+ 
+     signal modeSelected(string mode)
+     signal tempToggled()
+     signal editToggled()
++    signal ocrToggled()
+ 
+     height: 50
+     width: targetMenuWidth
+@@ -37,6 +39,9 @@
+             if (m === "temp")
+                 return !root.tempActive;
+ 
++            if (m === "ocr")
++                return !root.ocrActive;
++
+             return true;
+         }).length * root.tabItemSize)
+ 
+@@ -63,7 +68,9 @@
+ 
+                 property bool isTemp: modelData === "temp"
+                 property bool isEdit: modelData === "edit"
+-                property bool collapsed: (isTemp && root.tempActive) || (isEdit && root.editActive)
++                property bool isOcr: modelData === "ocr"
++                property bool isToggle: isTemp || isEdit || isOcr
++                property bool collapsed: (isTemp && root.tempActive) || (isEdit && root.editActive) || (isOcr && root.ocrActive)
+ 
+                 width: collapsed ? 0 : root.tabItemSize
+                 height: root.height - 8
+@@ -78,6 +85,8 @@
+                             root.tempToggled();
+                         else if (modelData === "edit")
+                             root.editToggled();
++                        else if (modelData === "ocr")
++                            root.ocrToggled();
+                         else
+                             root.modeSelected(modelData);
+                     }
+@@ -90,18 +99,20 @@
+                             "region": "󰒉",
+                             "window": "󱂬",
+                             "temp": "󰅇",
+-                            "edit": "󰏫"
++                            "edit": "󰏫",
++                            "ocr": "󱄺"
+                         };
+                         const labels = {
+                             "region": "Region",
+                             "window": "Window",
+                             "temp": "Temp",
+-                            "edit": "Edit"
++                            "edit": "Edit",
++                            "ocr": "Text"
+                         };
+                         return icons[modelData] + "  " + labels[modelData];
+                     }
+-                    color: (modelData === "temp" || modelData === "edit") ? (theme ? theme.barText : "white") : (root.mode === modelData ? (theme ? theme.accentText : "black") : (theme ? theme.barText : "white"))
+-                    font.weight: (modelData === "temp" || modelData === "edit") ? Font.Medium : (root.mode === modelData ? Font.Bold : Font.Medium)
++                    color: tabItem.isToggle ? (theme ? theme.barText : "white") : (root.mode === modelData ? (theme ? theme.accentText : "black") : (theme ? theme.barText : "white"))
++                    font.weight: tabItem.isToggle ? Font.Medium : (root.mode === modelData ? Font.Bold : Font.Medium)
+                     font.pixelSize: 15
+                     opacity: tabItem.collapsed ? 0 : 1
+ 
+diff -ruN a/components/Theme.qml b/components/Theme.qml
+--- a/components/Theme.qml	2026-10-03 19:32:47.510380961 -0600
++++ b/components/Theme.qml	2026-10-03 19:33:30.223018463 -0600
+@@ -28,6 +28,7 @@
+     readonly property color toggleShadow: _get("toggleShadow", "#80000000")
+     readonly property color toggleEdit: _get("toggleEdit", "#1ABC9C")
+     readonly property color toggleTemp: _get("toggleTemp", "#2C66D8")
++    readonly property color toggleOcr: _get("toggleOcr", "#E67E22")
+     readonly property color shareConnected: _get("shareConnected", "#3498DB")
+     readonly property color sharePending: _get("sharePending", "#95A5A6")
+     readonly property color shareErrorIcon: _get("shareErrorIcon", "white")
+diff -ruN a/shell.qml b/shell.qml
+--- a/shell.qml	2026-10-03 19:32:47.510084152 -0600
++++ b/shell.qml	2026-10-03 19:37:00.494978945 -0600
+@@ -20,14 +20,17 @@
+     property var hyprlandMonitor: Hyprland.focusedMonitor
+     property string activeScreenName: hyprlandMonitor ? hyprlandMonitor.name : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "")
+     property string mode: ["region", "window"].indexOf(Quickshell.env("HQF_MODE")) !== -1 ? Quickshell.env("HQF_MODE") : "region"
+-    property var modes: ["edit", "region", "window", "temp"]
++    property var modes: ["ocr", "edit", "region", "window", "temp"]
+     property bool tempActive: Quickshell.env("HQF_ACTION") === "temp"
+     property bool editActive: Quickshell.env("HQF_ACTION") === "edit"
+     property bool shareActive: Quickshell.env("HQF_ACTION") === "share"
++    // Independent of Temp/Save: either one still decides where the image goes, and OCR
++    // adds the recognised text on top. Only Edit excludes it.
++    property bool ocrActive: Quickshell.env("HQF_OCR") === "1" && !editActive
+     property int connectivityStatus: 0
+     property string lastSavedPath: ""
+     property string lastTimestamp: ""
+-    readonly property real targetMenuWidth: (modes.length - (editActive ? 1 : 0) - (tempActive ? 1 : 0)) * 100 + 8
++    readonly property real targetMenuWidth: (modes.length - (ocrActive ? 1 : 0) - (editActive ? 1 : 0) - (tempActive ? 1 : 0)) * 100 + 8
+     property var theme: themeObj
+     property bool capturing: false
+     property bool overlaysVisible: true
+@@ -154,10 +157,27 @@
+             `${grimRegion} - | wl-copy --type image/png `
+             + `&& notify-send -a "HyprQuickFrame" "Screenshot Copied" "Copied to clipboard"`;
+         const defaultTempCommand = root.shareActive ? tempShareCommand : tempPlainCommand;
++        // The image is copied first and the text last, so the text is what pastes and the
++        // image is still one entry back in clipboard history. Recognition is detached: the
++        // frozen overlay stays up until this pipeline exits, and a whole screen takes
++        // seconds. hqf-ocr does the notifying, and deletes a --temp image when it is done.
++        const ocrTempCommand =
++            `{ ${grimRegion} ${eTempSnip} `
++            + `&& wl-copy --type image/png < ${eTempSnip}`
++            + `${maybeShare(eTempSnip)} `
++            + `&& setsid -f hqf-ocr --temp ${eTempSnip}; } `
++            + `|| rm -f ${eTempSnip}`;
++        const ocrSaveCommand =
++            `${mkdirCmd} && ${grimRegion} ${eOutputPath} `
++            + `&& wl-copy --type image/png < ${eOutputPath}`
++            + `${maybeShare(eOutputPath)} `
++            + `&& setsid -f hqf-ocr ${eOutputPath}`;
+ 
+         let cmd;
+         if (root.editActive)
+             cmd = theme.annotationTool === "gradia" ? gradiaCommand : sattyCommand;
++        else if (root.ocrActive)
++            cmd = root.tempActive ? ocrTempCommand : ocrSaveCommand;
+         else if (root.tempActive)
+             cmd = defaultTempCommand;
+         else
+@@ -377,8 +397,10 @@
+                 sequence: "e"
+                 onActivated: {
+                     root.editActive = !root.editActive;
+-                    if (root.editActive)
++                    if (root.editActive) {
+                         root.tempActive = false;
++                        root.ocrActive = false;
++                    }
+ 
+                 }
+             }
+@@ -394,6 +416,16 @@
+             }
+ 
+             Shortcut {
++                sequence: "o"
++                onActivated: {
++                    root.ocrActive = !root.ocrActive;
++                    if (root.ocrActive)
++                        root.editActive = false;
++
++                }
++            }
++
++            Shortcut {
+                 sequence: "k"
+                 onActivated: {
+                     root.shareActive = !root.shareActive;
+@@ -440,6 +472,7 @@
+                 mode: root.mode
+                 tempActive: root.tempActive
+                 editActive: root.editActive
++                ocrActive: root.ocrActive
+                 theme: overlay.themeRef
+                 anchors.horizontalCenter: parent.horizontalCenter
+                 anchors.bottom: parent.bottom
+@@ -454,6 +487,11 @@
+                 onEditToggled: {
+                     root.editActive = true;
+                     root.tempActive = false;
++                    root.ocrActive = false;
++                }
++                onOcrToggled: {
++                    root.ocrActive = true;
++                    root.editActive = false;
+                 }
+             }
+ 
+@@ -471,10 +509,29 @@
+                 borderWidth: 1
+                 targetX: (overlay.width - root.targetMenuWidth) / 2 - 15 - width
+                 targetY: segmentedControl.y + segmentedControl.height / 2
+-                sourceX: overlay.width / 2 - 204 + 32
++                sourceX: (overlay.width - root.targetMenuWidth) / 2 + 4 + (root.ocrActive ? 0 : 100) + 28
+                 onClicked: root.editActive = false
+             }
+ 
++            // Edit and OCR are exclusive, so they share the slot to the left of the bar.
++            QuickToggle {
++                id: ocrToggleButton
++
++                visible: overlay.isFocused && !root.capturing
++                active: root.ocrActive
++                icon: ""
++                imageSource: Qt.resolvedUrl("assets/icons/ocr.svg")
++                iconColor: overlay.themeRef.toggleOcr
++                backgroundColor: overlay.themeRef.toggleBackground
++                shadowColor: overlay.themeRef.toggleShadow
++                borderColor: overlay.themeRef.barBorder
++                borderWidth: 1
++                targetX: (overlay.width - root.targetMenuWidth) / 2 - 15 - width
++                targetY: segmentedControl.y + segmentedControl.height / 2
++                sourceX: (overlay.width - root.targetMenuWidth) / 2 + 4 + 28
++                onClicked: root.ocrActive = false
++            }
++
+             QuickToggle {
+                 id: tempToggleButton
+ 
+@@ -489,7 +546,7 @@
+                 borderWidth: 1
+                 targetX: (overlay.width + root.targetMenuWidth) / 2 + 15
+                 targetY: segmentedControl.y + segmentedControl.height / 2
+-                sourceX: overlay.width / 2 - 204 + 332
++                sourceX: (overlay.width + root.targetMenuWidth) / 2 - 4 - 100 + 28
+                 onClicked: root.tempActive = false
+             }
+ 

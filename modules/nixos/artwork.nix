@@ -15,7 +15,11 @@ let
   # drawing, not palette entries: `line` and `node` are the background grid, `warn` is the
   # boot splash's caps-lock indicator.
   paletteFor =
-    { accent, accentAlt }:
+    {
+      accent,
+      accentAlt,
+      palette ? theme.palette,
+    }:
     json.generate "lattice-art-palette.json" {
       inherit accent accentAlt;
       inherit (palette)
@@ -56,8 +60,10 @@ let
   # is forty-odd python startups either way, but as a single build it is one store path and
   # one rebuild when the palette moves. The deck reads them straight off the store path --
   # streamdeck-ui takes an absolute icon path per button and never copies the file.
-  deckKeys =
-    keys:
+  # `colours` is `{ palette, accent, accentAlt }` to draw in, defaulting to the build-time
+  # theme's -- the deck draws one set per flavour, so a theme switch can swap between them.
+  deckKeysWith =
+    colours: keys:
     pkgs.runCommand "lattice-deck-keys"
       {
         nativeBuildInputs = [
@@ -86,15 +92,22 @@ let
                 " ${name} ${lib.escapeShellArg (if builtins.isPath value then "${value}" else toString value)}";
           in
           ''
-            lattice-art key --index ${toString key.index}${arg "--glyph" (key.glyph or "")}${
-              arg "--glyph-font" (key.glyphFont or "")
-            }${arg "--glyph-size" (key.glyphSize or "")}${arg "--embed" (key.embed or null)}${
-              arg "--label" (key.label or "")
-            }${arg "--tone" (key.tone or "plain")}${arg "--bar" (key.bar or "none")} > key.svg
+            lattice-art --palette ${paletteFor colours} key --index ${toString key.index}${
+              arg "--glyph" (key.glyph or "")
+            }${arg "--glyph-font" (key.glyphFont or "")}${arg "--glyph-size" (key.glyphSize or "")}${
+              arg "--embed" (key.embed or null)
+            }${arg "--label" (key.label or "")}${arg "--tone" (key.tone or "plain")}${
+              arg "--bar" (key.bar or "none")
+            } > key.svg
             rsvg-convert -w 72 -h 72 key.svg -o $out/${key.name}.png
           ''
         ) keys
       );
+
+  deckKeys = deckKeysWith {
+    accent = theme.accentHex;
+    accentAlt = theme.accentAltHex;
+  };
 
   wallpaper =
     {
@@ -106,6 +119,9 @@ let
       seed ? 0,
       accent ? theme.accentHex,
       accentAlt ? theme.accentAltHex,
+      # The flavour's palette the rest of the drawing takes -- background, grid, mark text --
+      # so a wallpaper can be drawn for a flavour other than the build-time one.
+      palette ? theme.palette,
       # The canvas, in the units the drawing is laid out in -- and so, `spacing` being
       # fixed, what decides how much of the screen the mark covers. Sizing a canvas to a
       # screen's *logical* resolution is what puts the mark in the same relation to the UI
@@ -128,7 +144,7 @@ let
         ];
       }
       ''
-        lattice-art --palette ${paletteFor { inherit accent accentAlt; }} wallpaper \
+        lattice-art --palette ${paletteFor { inherit accent accentAlt palette; }} wallpaper \
           --width ${toString width} --height ${toString height} --density ${density} \
           --seed ${toString seed} \
           > wallpaper.svg
@@ -166,18 +182,30 @@ in
       '';
     };
 
+    deckKeysWith = lib.mkOption {
+      type = lib.types.functionTo (lib.types.functionTo lib.types.package);
+      readOnly = true;
+      default = deckKeysWith;
+      defaultText = lib.literalExpression "{ palette, accent, accentAlt }: keys: <a directory of 72px key PNGs>";
+      description = ''
+        `deckKeys` drawn in other colours: `{ palette, accent, accentAlt }` (palette optional,
+        defaulting to the build-time theme's), then the same key list.
+      '';
+    };
+
     wallpaper = lib.mkOption {
       type = lib.types.functionTo lib.types.package;
       readOnly = true;
       default = wallpaper;
       defaultText = lib.literalExpression "{ density ? \"1.0\", ... }: <wallpaper PNG>";
       description = ''
-        `{ density, seed, accent, accentAlt, width, height, scale }` -> the wallpaper as a
+        `{ density, seed, accent, accentAlt, palette, width, height, scale }` -> the wallpaper as a
         PNG. `density` is a zoom on the lattice: above 1 the grid is finer and the mark
         smaller. `width`/`height` are the canvas, which sets how much of a screen the mark
         covers; `scale` is how many output pixels each canvas unit is rasterised to. `seed`
         varies gradient direction and the lit ring, and 0, the default, varies nothing. The
-        accents default to the live theme's, so a variant only has to name what differs.
+        accents and `palette` default to the build-time theme's, so a variant only has to
+        name what differs.
       '';
     };
   };

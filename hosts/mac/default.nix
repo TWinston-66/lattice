@@ -1,4 +1,5 @@
 {
+  config,
   inputs,
   lib,
   pkgs,
@@ -107,6 +108,11 @@ in
 
   lattice.display.monitors."eDP-1" = {
     scale = "2.25";
+
+    # 120Hz on the charger, 60 on battery. The DCP driver offers no VRR (`vrr: false` in
+    # `hyprctl monitors`), so at 120 anything animating -- a cursor blink, a progress bar,
+    # a scrolling page -- is composited twice as often as it needs to be on battery.
+    batteryMode = "3024x1890@60";
 
     # Pinned to the origin rather than left at "auto", because auto is a placement pass
     # rather than a rule: it drops each output to the right of everything already laid out.
@@ -251,6 +257,14 @@ in
         "layout.css.devPixelsPerPx" = "-1";
         "browser.uidensity" = 1;
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+
+        # Asahi has no hardware video decode, so every video is decoded on the CPU -- an
+        # RDD process at ~80% of a core for one video, measured 2026-10-04. With
+        # AV1 off and VP9 off for MSE, YouTube falls back to H.264, the cheapest of the three
+        # to decode in software. The cost is that H.264 tops out at 1080p there. Plain
+        # <video> VP9 is left alone; it is only the streaming sites' default that matters.
+        "media.av1.enabled" = false;
+        "media.mediasource.vp9.enabled" = false;
       };
       preferencesStatus = "default";
     };
@@ -288,14 +302,6 @@ in
         "d ${profile}/chrome 0755 - - -"
         "L+ ${profile}/chrome/userChrome.css - - - - ${css}"
       ];
-
-      # Read on every startup and applied to the user branch, so it does the job the policy
-      # allowlist refuses for Thunderbird. Only for the pref that has no other route --
-      # anything settable through the module belongs there, where about:config can still
-      # override it for an evening.
-      thunderbirdUserJs = pkgs.writeText "lattice-thunderbird-user.js" ''
-        user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
-      '';
 
       firefoxProfile = "%h/.config/mozilla/firefox/uk8qrdih.default";
       firefoxUserChrome = pkgs.writeText "lattice-firefox-userChrome.css" ''
@@ -337,7 +343,40 @@ in
     in
     linkChrome firefoxProfile firefoxUserChrome
     ++ linkChrome thunderbirdProfile thunderbirdUserChrome
-    ++ [ "L+ ${thunderbirdProfile}/user.js - - - - ${thunderbirdUserJs}" ];
+    ++ [
+      "L+ ${thunderbirdProfile}/user.js - - - - ${config.lattice.theme.runtimeTheme}/thunderbird-user.js"
+    ];
+
+  # The profile's user.js, as a runtime kit file so the calendar colours follow lattice-theme.
+  # Thunderbird reads it at every startup and applies it to the user branch, so a switch lands
+  # at the next launch, and a colour changed in the calendar's properties dialog lasts only
+  # until then. Its other job is the pref the policy allowlist refuses for Thunderbird (see
+  # programs.thunderbird above); anything settable through the module belongs there instead.
+  #
+  # The calendars are keyed by the UUID Thunderbird generated when each was added, which is
+  # in nothing but this profile's prefs.js: a calendar removed and added again comes back
+  # under a new one, and its line here stops applying silently. Palette slots rather than the
+  # accent, since the accent moves with the wallpaper and a calendar's colour should not.
+  lattice.theme.extraKitFiles."thunderbird-user.js" =
+    { palette, ... }:
+    let
+      calendars = {
+        "262193a3-8f90-4cc1-a7af-ad483a5c01bc" = palette.blue; # winstonbthompson@gmail.com
+        "bf0f94d8-2ec2-4e58-aae8-51872d804284" = palette.lavender; # Winston Thompson
+        "53d36323-e22a-4766-bf98-ca03ed141c5f" = palette.yellow; # Work
+        "5dd1668b-1a09-4ea4-b1a8-a92deda57d8c" = palette.teal; # School
+        "a005c774-a761-4e47-947d-400e057738a4" = palette.green; # Tasks (local)
+        "611a68b4-b613-4e04-8e8b-c1540f22923f" = palette.overlay1; # Holidays in United States
+      };
+    in
+    ''
+      user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+    ''
+    + lib.concatStrings (
+      lib.mapAttrsToList (id: hex: ''
+        user_pref("calendar.registry.${id}.color", "${hex}");
+      '') calendars
+    );
 
   ### GREETER ###
   # apple-drm can register after greetd has started -- 7.24s against 6.60s on 2026-10-03,
@@ -672,6 +711,17 @@ in
       performance = "lattice-performance";
     };
   };
+
+  ### CHARGE LIMIT ###
+  # Stop charging at 80%. This laptop spends most of its time docked, and a lithium cell
+  # held at 100% and warm ages fastest -- it was at 87.6% of design capacity after 364
+  # cycles on 2026-10-04. Set from udev on every boot rather than trusted to persist.
+  # Back to 100 for a trip, until the next boot:
+  #
+  #   echo 100 | sudo tee /sys/class/power_supply/macsmc-battery/charge_control_end_threshold
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="power_supply", KERNEL=="macsmc-battery", ATTR{charge_control_end_threshold}="80"
+  '';
 
   ### DOCKER ###
   # Socket-activated: docker.socket stays up and the daemon starts on the first `docker`

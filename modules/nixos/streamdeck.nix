@@ -6,7 +6,7 @@
 }:
 let
   cfg = config.lattice.streamdeck;
-  inherit (config.lattice.theme) palette;
+  theme = config.lattice.theme;
 
   # Glyphs by the name Material Design Icons gives them, written as the characters rather
   # than as escapes because Nix has no \u. The comment is the searchable half: these are
@@ -729,14 +729,31 @@ let
     ) buttons
   );
 
-  icons = config.lattice.artwork.deckKeys faceArt;
+  # One set of faces per flavour, so the deck can follow lattice-theme: each drawn in that
+  # flavour's palette and its default accent pair -- lattice.theme.accent's names, which is
+  # what the plain wallpaper wears in it. Deliberately not the wallpaper's accent: that one
+  # moves on every click of the wallpaper pill, and every change costs the deck a restart
+  # (the config below is read once, at start), where a theme switch is rare enough to pay
+  # for one.
+  coloursFor =
+    flavor:
+    let
+      p = theme.flavors.${flavor}.palette;
+    in
+    {
+      palette = p;
+      accent = p.${theme.accent};
+      accentAlt = p.${theme.accentAlt};
+    };
+
+  iconsFor = flavor: config.lattice.artwork.deckKeysWith (coloursFor flavor) faceArt;
 
   # JetBrains Mono by path, not by family: the reading on a key is drawn by streamdeck-ui
   # with Pillow, which takes a font file and has no fontconfig to ask.
   readingFont = "${pkgs.jetbrains-mono}/share/fonts/truetype/JetBrainsMono-Regular.ttf";
 
-  stateFor = button: index: face: {
-    icon = "${icons}/${face.icon}.png";
+  stateFor = flavor: button: index: face: {
+    icon = "${iconsFor flavor}/${face.icon}.png";
     # Empty for every key whose label is baked into its PNG. The two that carry a reading get
     # theirs from `lattice-deck sync`, and where the label would be.
     text = face.text or "";
@@ -756,7 +773,7 @@ let
     text_vertical_align = "bottom";
     text_horizontal_align = "";
     font = readingFont;
-    font_color = palette.text;
+    font_color = theme.flavors.${flavor}.palette.text;
     font_size = 15;
     background_color = "";
   };
@@ -764,41 +781,45 @@ let
   # The config file, in the shape streamdeck_ui/config.py reads: keyed by the deck's serial,
   # then page, then key, then state. The five deck-level fields are all required -- that
   # reader takes them with [] and not .get() -- so none of them can be left out here.
-  generated = pkgs.writeText "lattice-streamdeck.json" (
-    builtins.toJSON {
-      streamdeck_ui_version = 2;
-      state.${cfg.serial} = {
-        brightness = cfg.brightness;
-        brightness_dimmed = 0;
-        # 0 disables streamdeck-ui's own dimmer, on purpose. With it on, the first press
-        # after the deck has dimmed is swallowed to wake it and does nothing else -- and the
-        # deck should go dark with the screen anyway, which is hypridle's business and not a
-        # timer of its own. See the listener in profiles/graphical.nix.
-        display_timeout = 0;
-        rotation = 0;
-        page = 0;
-        buttons = lib.listToAttrs (
-          lib.imap0 (page: _: {
-            name = toString page;
-            value = lib.listToAttrs (
-              map (button: {
-                name = toString button.index;
-                value = {
-                  state = button.state or 0;
-                  states = lib.listToAttrs (
-                    lib.imap0 (index: face: {
-                      name = toString index;
-                      value = stateFor button index face;
-                    }) button.faces
-                  );
-                };
-              }) (lib.filter (button: button.page == page) buttons)
-            );
-          }) pages
-        );
-      };
-    }
-  );
+  #
+  # One per flavour, like the faces; the seed below picks the one lattice-theme names.
+  generatedFor =
+    flavor:
+    pkgs.writeText "lattice-streamdeck-${flavor}.json" (
+      builtins.toJSON {
+        streamdeck_ui_version = 2;
+        state.${cfg.serial} = {
+          brightness = cfg.brightness;
+          brightness_dimmed = 0;
+          # 0 disables streamdeck-ui's own dimmer, on purpose. With it on, the first press
+          # after the deck has dimmed is swallowed to wake it and does nothing else -- and the
+          # deck should go dark with the screen anyway, which is hypridle's business and not a
+          # timer of its own. See the listener in profiles/graphical.nix.
+          display_timeout = 0;
+          rotation = 0;
+          page = 0;
+          buttons = lib.listToAttrs (
+            lib.imap0 (page: _: {
+              name = toString page;
+              value = lib.listToAttrs (
+                map (button: {
+                  name = toString button.index;
+                  value = {
+                    state = button.state or 0;
+                    states = lib.listToAttrs (
+                      lib.imap0 (index: face: {
+                        name = toString index;
+                        value = stateFor flavor button index face;
+                      }) button.faces
+                    );
+                  };
+                }) (lib.filter (button: button.page == page) buttons)
+              );
+            }) pages
+          );
+        };
+      }
+    );
 
   # Where a live key is, for the sync below: the coordinates live in the button list and are
   # interpolated into the script rather than written out a second time.
@@ -1271,6 +1292,10 @@ let
   # file -- which page was showing, which way each toggle was flipped -- and that is the
   # right way round: the generated config is the source of truth, and the sync at login puts
   # the toggles back to what is actually true a second later.
+  #
+  # Which generation is the flavour lattice-theme last picked (lattice.theme.runtimeState),
+  # so a theme switch is a restart of this unit -- lattice-theme does that -- and lands the
+  # deck on that flavour's faces. Anything unreadable is the build-time flavour.
   seed = pkgs.writeShellApplication {
     name = "lattice-streamdeck-seed";
     runtimeInputs = [ pkgs.coreutils ];
@@ -1278,13 +1303,29 @@ let
       config="''${STREAMDECK_UI_CONFIG:?}"
       stamp="$(dirname "$config")/generation"
 
-      if [ "$(cat "$stamp" 2>/dev/null || true)" = "${generated}" ]; then
+      flavor=${
+        if theme.runtimeState == null then
+          theme.flavor
+        else
+          "$(cat ${lib.escapeShellArg theme.runtimeState} 2>/dev/null || true)"
+      }
+      case "$flavor" in
+      ${
+        lib.concatStrings (
+          lib.mapAttrsToList (flavor: _: ''
+            ${flavor}) generated=${generatedFor flavor} ;;
+          '') theme.flavors
+        )
+      }*) generated=${generatedFor theme.flavor} ;;
+      esac
+
+      if [ "$(cat "$stamp" 2>/dev/null || true)" = "$generated" ]; then
         exit 0
       fi
 
-      install -Dm600 ${generated} "$config"
-      printf '%s' "${generated}" > "$stamp"
-      echo "seeded $config from ${generated}"
+      install -Dm600 "$generated" "$config"
+      printf '%s' "$generated" > "$stamp"
+      echo "seeded $config from $generated"
     '';
   };
 in
