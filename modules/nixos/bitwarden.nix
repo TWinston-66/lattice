@@ -38,8 +38,10 @@ in
   # login, and only while the app runs.
   #
   # Two app-side steps go with this: Settings > SSH agent on, and the key imported as an
-  # SSH key item. ~/.ssh/config keeps IdentityFile ~/.ssh/id_ed25519, and with the private
-  # half gone OpenSSH offers the .pub beside it and has the agent sign.
+  # SSH key item. With the private half gone, ~/.ssh/config names ~/.ssh/id_ed25519.pub as
+  # the IdentityFile (a Match on the key file, so macOS keeps loading its own); OpenSSH
+  # offers it and has the agent sign. Naming the missing private file instead works too,
+  # but warns "not accessible" on every connection.
   programs.ssh.startAgent = false;
   environment.sessionVariables.SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
 
