@@ -49,9 +49,7 @@ let
     paths = [ pkgs.vesktop ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
-      wrapProgram $out/bin/vesktop --add-flag ${
-        lib.escapeShellArg "--user-agent=Mozilla/5.0 (X11; Linux ${pkgs.stdenv.hostPlatform.uname.processor}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${lib.versions.major pkgs.electron.unwrapped.info.chrome}.0.0.0 Safari/537.36"
-      }
+      wrapProgram $out/bin/vesktop --add-flag ${lib.escapeShellArg "--user-agent=Mozilla/5.0 (X11; Linux ${pkgs.stdenv.hostPlatform.uname.processor}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${lib.versions.major pkgs.electron.unwrapped.info.chrome}.0.0.0 Safari/537.36"}
     '';
   };
 in
@@ -270,18 +268,24 @@ in
       description = "Install lattice's Flatpak apps";
       wantedBy = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
-      # Fails when the session starts offline; say so rather than leave Collabora quietly
-      # missing from rofi.
+      # Fails when the session starts offline before the first install; say so rather than
+      # leave Collabora quietly missing from rofi.
       onFailure = [ "lattice-notify-failure@%n.service" ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = lib.getExe (
           pkgs.writeShellApplication {
             name = "lattice-flatpaks";
-            runtimeInputs = [ config.services.flatpak.package ];
+            runtimeInputs = [
+              config.services.flatpak.package
+              pkgs.gnugrep
+            ];
             text = ''
               app=com.collaboraoffice.Office
-              flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+              # --if-not-exists still fetches the .flatpakrepo before checking, so an
+              # offline login failed even with everything already installed.
+              flatpak remotes --user --columns=name | grep -qx flathub \
+                || flatpak remote-add --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
               flatpak info --user "$app" >/dev/null 2>&1 \
                 || flatpak install --user --noninteractive flathub "$app"
               flatpak override --user --env=QT_SCALE_FACTOR=0.8 "$app"
