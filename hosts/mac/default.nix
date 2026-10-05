@@ -790,7 +790,36 @@ in
       # The default swaps balanced for balanced-battery on battery, which only changes EPP
       # and the panel power-saving level -- neither exists here -- and would drop the cap.
       battery.balanced = "lattice-balanced";
+      main.default = "power-saver";
     };
+  };
+
+  # Power saver at every boot and after every resume; the other levels are opt-in for the
+  # session. tuned-ppd starts on the level it saved in ppd_base_profile and only falls back
+  # to `main.default` above when that file is empty, so the default alone would just restore
+  # whatever was last picked. Seeding the file is what makes it stick -- including on the
+  # tuned-ppd restart a rebuild triggers when its config changes.
+  systemd.services.tuned-ppd.preStart = ''
+    echo power-saver > /etc/tuned/ppd_base_profile
+  '';
+  # The resume half runs as ExecStop, the same shape as NixOS's own sleep-actions.service:
+  # the unit starts with sleep.target on the way down and, being StopWhenUnneeded, is stopped
+  # when sleep.target goes inactive after the wake. Its own unit rather than a line in
+  # resumeCommands above, whose Bluetooth check exits early on most resumes.
+  systemd.services.lattice-power-saver-on-resume = {
+    description = "Return to the power-saver profile after a resume";
+    wantedBy = [ "sleep.target" ];
+    before = [ "sleep.target" ];
+    unitConfig.StopWhenUnneeded = true;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.coreutils}/bin/true";
+    };
+    preStop = ''
+      ${pkgs.systemd}/bin/busctl set-property net.hadess.PowerProfiles /net/hadess/PowerProfiles \
+        net.hadess.PowerProfiles ActiveProfile s power-saver
+    '';
   };
 
   # The nixpkgs module writes these files to /etc but gives neither unit a restart trigger,
