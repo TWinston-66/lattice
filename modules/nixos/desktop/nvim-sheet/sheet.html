@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neovim Cheatsheet</title>
+<style>
+:root {
+  --bg: #282828; --panel: #32302f; --raised: #3c3836; --line: #45403d;
+  --fg: #d4be98; --muted: #928374; --accent: #d8a657; --blue: #7daea3;
+  --green: #a9b665; --red: #ea6962; --purple: #d3869b; --aqua: #89b482; --orange: #e78a4e;
+  --mono: "JetBrainsMono Nerd Font", "JetBrains Mono", "FiraCode Nerd Font", ui-monospace, monospace;
+  --sans: "Inter", "Noto Sans", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 130px; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+code, kbd, .mono { font-family: var(--mono); }
+
+/* ---------- top bar ---------- */
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.bar {
+  max-width: 1600px; margin: 0 auto; padding: 12px 24px 10px;
+  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+.brand h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+.brand h1 span { color: var(--accent); }
+.brand small { color: var(--muted); font-size: 12px; }
+.search {
+  position: relative; flex: 1 1 280px; max-width: 420px;
+}
+.search input {
+  width: 100%; padding: 8px 12px 8px 34px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  font: inherit; outline: none;
+}
+.search input:focus { border-color: var(--accent); }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.search .hint { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button {
+  font: inherit; font-size: 12.5px; padding: 6px 10px; border: 0; cursor: pointer;
+  background: var(--panel); color: var(--muted);
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+select {
+  font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+nav.jump {
+  max-width: 1600px; margin: 0 auto; padding: 0 24px 10px;
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+nav.jump a {
+  flex: none; text-decoration: none; font-size: 12px; color: var(--muted);
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+}
+nav.jump a:hover { color: var(--fg); border-color: var(--accent); }
+
+main { max-width: 1600px; margin: 0 auto; padding: 20px 24px 60px; }
+
+/* ---------- intro ---------- */
+.intro { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px;
+}
+.card h2 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.card h2 .num { color: var(--accent); font-family: var(--mono); font-size: 12px; }
+.card p { margin: 6px 0; color: color-mix(in srgb, var(--fg) 85%, var(--muted)); }
+.card p.lead { color: var(--muted); font-size: 13px; margin-top: 0; }
+.modes { display: grid; gap: 6px; margin-top: 8px; }
+.mode { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: baseline; }
+.badge {
+  display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 7px; border-radius: 5px; text-align: center;
+}
+.b-n { background: color-mix(in srgb, var(--blue) 22%, transparent); color: var(--blue); }
+.b-i { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
+.b-v { background: color-mix(in srgb, var(--purple) 22%, transparent); color: var(--purple); }
+.b-c { background: color-mix(in srgb, var(--orange) 22%, transparent); color: var(--orange); }
+.b-t { background: color-mix(in srgb, var(--aqua) 22%, transparent); color: var(--aqua); }
+.notation { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; margin-top: 8px; }
+.notation .what { color: var(--muted); font-size: 13px; }
+.notation > :not(.what) { justify-self: start; }
+.prefixes { display: grid; gap: 7px; margin-top: 8px; }
+.prefix { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: baseline; }
+.prefix div:last-child { font-size: 13px; }
+.prefix em { color: var(--muted); font-style: normal; }
+
+/* grammar builder */
+.builder { grid-column: 1 / -1; }
+.builder .rows { display: grid; gap: 10px; margin-top: 10px; }
+.builder .row { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: start; }
+.builder .label { color: var(--muted); font-size: 12px; padding-top: 5px; text-transform: uppercase; letter-spacing: .05em; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  font: 12.5px var(--mono); padding: 4px 9px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--raised); color: var(--fg);
+}
+.chip small { font-family: var(--sans); color: var(--muted); margin-left: 5px; }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--raised)); }
+.chip[aria-pressed="true"] small { color: var(--fg); }
+.result {
+  margin-top: 14px; padding: 14px 16px; border-radius: 10px; background: var(--bg);
+  border: 1px dashed var(--line); display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+}
+.result .typed { font: 600 26px var(--mono); color: var(--accent); letter-spacing: .04em; min-width: 80px; }
+.result .typed .ct { color: var(--blue); }
+.result .typed .tg { color: var(--green); }
+.result .say { font-size: 15px; }
+.result .say b { color: var(--accent); font-weight: 600; }
+.result .quirk { flex-basis: 100%; color: var(--muted); font-size: 12.5px; }
+
+/* ---------- sections ---------- */
+.grid { columns: 400px; column-gap: 14px; }
+section.sec {
+  break-inside: avoid; margin: 0 0 14px; display: inline-block; width: 100%;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.sec > .head { padding: 13px 16px 9px; border-bottom: 1px solid var(--line); }
+.sec > .head h3 { margin: 0; font-size: 14.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sec > .head p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+.sec table { width: 100%; border-collapse: collapse; }
+.sec td { padding: 6px 16px; vertical-align: top; border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.sec tr:first-child td { border-top: 0; }
+.sec td.k { width: 165px; padding-right: 6px; }
+.sec td.d { font-size: 13px; }
+.sec tr.note td { color: var(--muted); font-size: 12.5px; font-style: italic; padding-top: 7px; padding-bottom: 7px; background: color-mix(in srgb, var(--bg) 35%, transparent); }
+.sec tr.ess td.d::before {
+  content: "★"; color: var(--accent); font-size: 11px; margin-right: 5px;
+}
+.tag {
+  display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 0 6px; border-radius: 4px; margin-left: 6px; vertical-align: 1px;
+  color: var(--aqua); border: 1px solid color-mix(in srgb, var(--aqua) 45%, transparent);
+}
+.sub { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+td.d code, .card code, .sub code {
+  font-size: 12px; padding: 0 4px; border-radius: 4px; background: var(--raised); color: var(--fg);
+}
+
+/* keys */
+.keys { display: inline-flex; flex-wrap: wrap; gap: 4px 2px; align-items: center; }
+.alt { white-space: nowrap; }
+.alt { display: inline-flex; gap: 2px; align-items: center; }
+.or { color: var(--muted); font-size: 11px; margin: 0 2px; }
+kbd {
+  display: inline-flex; align-items: center; gap: 3px;
+  min-width: 22px; justify-content: center;
+  font-size: 12.5px; line-height: 1; padding: 4px 6px 5px; border-radius: 5px;
+  background: var(--raised); color: var(--fg);
+  border: 1px solid var(--line); box-shadow: 0 2px 0 var(--line);
+}
+kbd .mod { font-size: 10.5px; color: var(--muted); font-family: var(--sans); font-weight: 600; }
+kbd.leader { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+kbd.named { font-family: var(--sans); font-size: 11.5px; font-weight: 600; }
+.ph {
+  font: italic 12px var(--sans); color: var(--blue); padding: 0 3px;
+}
+code.cmd {
+  font-size: 12.5px; padding: 3px 7px; border-radius: 5px;
+  background: color-mix(in srgb, var(--orange) 13%, var(--raised)); color: var(--orange);
+  border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--line)); white-space: nowrap;
+}
+
+.empty { display: none; text-align: center; color: var(--muted); padding: 40px; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 10px 24px 40px; line-height: 2; }
+footer kbd { font-size: 11px; padding: 2px 5px 3px; }
+#stale { color: var(--red); }
+.rmode {
+  font: 600 10px var(--mono); color: var(--purple); margin-left: 6px; padding: 0 5px; border-radius: 4px;
+  background: color-mix(in srgb, var(--purple) 15%, transparent); vertical-align: 1px;
+}
+
+/* learned ticks */
+.sec td.c { width: 28px; padding: 5px 10px 5px 0; text-align: right; }
+.tick {
+  width: 18px; height: 18px; border-radius: 50%; cursor: pointer; padding: 0;
+  border: 1.5px solid var(--line); background: transparent; color: transparent;
+  font-size: 11px; line-height: 15px; transition: background .12s, border-color .12s;
+}
+.tick:hover { border-color: var(--green); color: color-mix(in srgb, var(--green) 60%, transparent); }
+tr.learned .tick { background: var(--green); border-color: var(--green); color: var(--bg); }
+tr.learned td.d { color: var(--muted); }
+.progress { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.progress .track { width: 90px; height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden; }
+.progress .fill { height: 100%; background: var(--green); width: 0; transition: width .3s; }
+button.primary {
+  font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--line));
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel)); color: var(--fg);
+}
+button.primary:hover { background: color-mix(in srgb, var(--accent) 30%, var(--panel)); }
+
+/* learning path */
+.path { grid-column: 1 / -1; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
+.step { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.step h4 { margin: 0 0 2px; font-size: 13px; display: flex; gap: 8px; align-items: baseline; }
+.step h4 .n { font: 600 11px var(--mono); color: var(--accent); }
+.step h4 .done { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 500; }
+.step.complete { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+.step.complete h4 .done { color: var(--green); }
+.step p { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+.step .chips { gap: 4px; }
+.step .chip { padding: 3px 7px; font-size: 12px; }
+.step .chip.got { border-color: var(--green); color: var(--green); }
+
+/* practice */
+.overlay {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(6px);
+}
+.flash {
+  width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 22px 24px; box-shadow: 0 20px 60px rgb(0 0 0 / .35);
+}
+.flash .meta { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+.flash .meta .count { margin-left: auto; }
+.flash .q { font-size: 20px; line-height: 1.35; margin: 16px 0 6px; min-height: 54px; }
+.flash .sub { font-size: 13px; }
+.flash .answer {
+  margin: 14px 0; min-height: 64px; display: grid; place-items: center; border-radius: 10px;
+  background: var(--bg); border: 1px dashed var(--line);
+}
+.flash .answer .keys { max-width: none; justify-content: center; }
+.flash .answer kbd { font-size: 16px; padding: 6px 9px 7px; }
+.flash .answer code.cmd { font-size: 16px; }
+.flash .hint { color: var(--muted); font-size: 12.5px; }
+.flash .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.flash .actions button { font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--raised); color: var(--fg); }
+.flash .actions button.good { border-color: var(--green); color: var(--green); }
+.flash .actions kbd { font-size: 10.5px; padding: 1px 4px 2px; margin-left: 6px; min-width: 0; box-shadow: none; }
+
+[hidden] { display: none !important; }
+body.filtering .intro { display: none; }
+
+@media print {
+  :root { --bg: #fff; --panel: #fff; --raised: #f2f2f2; --line: #ccc; --fg: #111; --muted: #555; }
+  header, .intro, footer, td.c, .empty { display: none !important; }
+  body { font-size: 10px; }
+  main { padding: 0; max-width: none; }
+  .grid { columns: 3; column-gap: 8px; }
+  section.sec { border-radius: 4px; margin-bottom: 8px; }
+  .sec td { padding: 2px 6px; }
+  kbd { box-shadow: none; padding: 1px 3px; font-size: 9px; }
+  .sub, .sec > .head p { font-size: 9px; }
+}
+
+@media (max-width: 1100px) { .intro { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) {
+  .bar, nav.jump, main { padding-left: 16px; padding-right: 16px; }
+  .grid { columns: 1; }
+  .prefix, .mode, .builder .row { grid-template-columns: 1fr; gap: 2px; }
+  .intro { grid-template-columns: 1fr; }
+  .sec td.k { width: 120px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand"><h1><span>nvim</span> cheatsheet</h1><small>built-ins + your config</small></div>
+    <label class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search keys or actions… (split, delete, git)" autocomplete="off">
+      <span class="hint"><kbd>/</kbd></span>
+    </label>
+    <div class="seg" role="group" aria-label="Show">
+      <button data-show="all" aria-pressed="true">Everything</button>
+      <button data-show="ess" aria-pressed="false">★ Essentials</button>
+      <button data-show="learn" aria-pressed="false" title="Essentials you haven't ticked off yet">To learn</button>
+      <button data-show="mine" aria-pressed="false">Your config</button>
+    </div>
+    <button class="primary" id="practice" title="Flashcards from whatever is showing (p)">Practice</button>
+    <div class="progress" title="Essentials you've ticked off. Tick any row with the circle on its right."><div class="track"><div class="fill" id="pfill"></div></div><span id="ptext"></span></div>
+    <div class="seg" role="group" aria-label="Notation">
+      <button data-nota="friendly" aria-pressed="true" title="Show keys as Ctrl+w">Ctrl+w</button>
+      <button data-nota="vim" aria-pressed="false" title="Show keys in Vim notation">&lt;C-w&gt;</button>
+    </div>
+    <select id="theme" aria-label="Theme"></select>
+  </div>
+  <nav class="jump" id="jump"></nav>
+</header>
+
+<main>
+  <div class="intro">
+    <div class="card">
+      <h2><span class="num">01</span> Modes</h2>
+      <p class="lead">The same key does different things depending on the mode. You start in Normal mode, and Esc always brings you back.</p>
+      <div class="modes">
+        <div class="mode"><span class="badge b-n">Normal</span><div>Keys are <b>commands</b>: move, delete, copy. This is home base.</div></div>
+        <div class="mode"><span class="badge b-i">Insert</span><div>Keys <b>type text</b>. Enter it with <kbd>i</kbd>, <kbd>a</kbd> or <kbd>o</kbd>.</div></div>
+        <div class="mode"><span class="badge b-v">Visual</span><div><b>Select</b> text, then act on it. Enter it with <kbd>v</kbd>, <kbd>V</kbd> or <kbd><span class="mod">Ctrl</span>v</kbd>.</div></div>
+        <div class="mode"><span class="badge b-c">Command</span><div>Press <kbd>:</kbd> and type a command such as <code>w</code> (save), then Enter.</div></div>
+        <div class="mode"><span class="badge b-t">Terminal</span><div>Inside <code>:terminal</code>. Leave it with <kbd><span class="mod">Ctrl</span>\</kbd> <kbd><span class="mod">Ctrl</span>n</kbd>.</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">02</span> Reading the notation</h2>
+      <p class="lead">Keys inside <code>&lt; &gt;</code> are a single key or a held chord. Everything else is a plain key, pressed one after another.</p>
+      <div class="notation">
+        <kbd><span class="mod">Ctrl</span>w</kbd><div class="what"><code>&lt;C-w&gt;</code>: <b>hold Ctrl, tap w</b>, then let go. Like Ctrl+C anywhere else.</div>
+        <span><kbd><span class="mod">Ctrl</span>w</kbd> <kbd>v</kbd></span><div class="what"><code>&lt;C-w&gt;v</code>: Ctrl+w, <b>release</b>, then tap v. Two separate presses.</div>
+        <span><kbd>g</kbd> <kbd>g</kbd></span><div class="what"><code>gg</code>: tap g twice. Nothing is held.</div>
+        <kbd>G</kbd><div class="what">A capital letter means <b>Shift</b>+that letter, so <code>G</code> is Shift+g.</div>
+        <kbd class="leader named">Space</kbd><div class="what"><code>&lt;leader&gt;</code> is a key you choose. <b>In your config it's Space</b>, so <code>&lt;leader&gt;ff</code> is Space, f, f.</div>
+        <span><kbd class="named"><span class="mod">Shift</span>Tab</kbd> <kbd class="named"><span class="mod">Alt</span>q</kbd></span><div class="what"><code>&lt;S-…&gt;</code> is Shift, <code>&lt;A-…&gt;</code> or <code>&lt;M-…&gt;</code> is Alt, <code>&lt;CR&gt;</code> is Enter.</div>
+        <span class="ph">{char}</span><div class="what">A placeholder you fill in: <code>f{char}</code> could be <code>f(</code>.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">03</span> Prefix families</h2>
+      <p class="lead">Most keybindings belong to a few families. Once you know the family, the rest of the binding is easy to guess.</p>
+      <div class="prefixes">
+        <div class="prefix"><div><kbd><span class="mod">Ctrl</span>w</kbd></div><div><b>Windows</b> (splits): create, move between, close and resize them. <em>Every split command starts with it.</em></div></div>
+        <div class="prefix"><div><kbd class="leader named">Space</kbd></div><div><b>Your commands</b>, all from plugins: <code>f</code> find, <code>b</code> buffers, <code>g</code> git, <code>h</code> hunks, <code>d</code> debug, <code>m</code> cmake, <code>v</code> vault, <code>u</code> toggles.</div></div>
+        <div class="prefix"><div><kbd>g</kbd></div><div><b>"Go" / extra</b> commands: <code>gg</code> top, <code>gd</code> definition, <code>gc</code> comment, <code>gx</code> open link.</div></div>
+        <div class="prefix"><div><kbd>z</kbd></div><div><b>View, folds and spelling</b>: <code>zz</code> center, <code>za</code> fold, <code>z=</code> fix spelling.</div></div>
+        <div class="prefix"><div><kbd>[</kbd> <kbd>]</kbd></div><div><b>Previous / next</b> something: <code>]d</code> diagnostic, <code>]b</code> buffer, <code>]c</code> git change.</div></div>
+        <div class="prefix"><div><kbd>"</kbd></div><div><b>Pick a register</b> (clipboard slot) before a copy, delete or paste.</div></div>
+        <div class="prefix"><div><kbd>:</kbd></div><div><b>Command line</b>: type a command, press Enter.</div></div>
+      </div>
+    </div>
+
+    <div class="card builder">
+      <h2><span class="num">04</span> The grammar: verb + count + noun</h2>
+      <p class="lead">Most of Vim follows one pattern. An <b>operator</b> (the verb) waits for a <b>motion or text object</b> (the noun). Learn 5 verbs and 10 nouns and you get 50 commands. Try it:</p>
+      <div class="rows">
+        <div class="row"><div class="label">Verb</div><div class="chips" id="b-op"></div></div>
+        <div class="row"><div class="label">Count</div><div class="chips" id="b-ct"></div></div>
+        <div class="row"><div class="label">Noun</div><div class="chips" id="b-tg"></div></div>
+      </div>
+      <div class="result" id="b-out"></div>
+    </div>
+
+    <div class="card path">
+      <h2><span class="num">05</span> A learning path</h2>
+      <p class="lead">Don't learn it all. Take one step a week, use those keys until they're automatic, then move on. Click a key to find it below, and tick its row off when it sticks. A step goes green when every key in it is ticked.</p>
+      <div class="steps" id="steps"></div>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty">Nothing matches. Try another word, or <code>:FzfLua keymaps</code> inside nvim.</div>
+</main>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="flash" role="dialog" aria-modal="true" aria-label="Practice">
+    <div class="meta"><span id="f-sec"></span><span id="f-mode"></span><span class="count" id="f-count"></span></div>
+    <div class="q" id="f-q"></div>
+    <div class="sub" id="f-sub"></div>
+    <div class="answer" id="f-a"><span class="hint">Think of the keys, then press <kbd>Space</kbd> to check.</span></div>
+    <div class="actions">
+      <button id="f-close">Done<kbd>Esc</kbd></button>
+      <button id="f-show">Show<kbd>Space</kbd></button>
+      <button id="f-again" hidden>Not yet<kbd>n</kbd></button>
+      <button id="f-got" class="good" hidden>Knew it<kbd>y</kbd></button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span id="generated"></span> <span class="tag">yours</span> marks a binding from your config.
+  Regenerate with <code>lattice keys sheet</code> or <kbd><span class="mod">Super</span><span class="mod">Shift</span>/</kbd>. Search the same rows in rofi with <kbd><span class="mod">Super</span>/</kbd>.
+  <div id="stale"></div>
+</footer>
+
+<!-- Filled in by lattice-keys: the curated rows (keys.json, at build time) and the maps the
+     live nvim config describes (at generation time). -->
+<script type="application/json" id="sheet">
+@SHEET@
+</script>
+<script type="application/json" id="live">
+@LIVE@
+</script>
+
+<script>
+/* ======================================================================
+   Rows come from keys.json in lattice (modules/nixos/desktop/nvim-sheet), the same file
+   the SUPER+/ rofi menu reads its Neovim built-ins from. A row is
+     {keys: [...alternatives], desc, ess?, src?, sub?, mode?}  or  {note}
+   keys starting with ":" or "/text" render as commands, everything else as keystrokes.
+   src "live"   – described in your config; checked against the live dump below
+   src "plugin" – from your config, but nothing a dump can see (plugin-internal, buffer-local)
+   ====================================================================== */
+const readJSON = id => { try { return JSON.parse(document.getElementById(id).textContent); } catch { return null; } };
+const SHEET = readJSON("sheet") || { sections: [] };
+const LIVE = readJSON("live");
+const SECTIONS = SHEET.sections;
+
+/* ---------- reconcile with the live config ---------- */
+// Placeholders drop out and <...> is case-folded, so "gh{motion}" matches gh and <C-W> matches <C-w>.
+const norm = k => k.replace(/\{[^}]+\}/g, "").replace(/<[^>]+>/g, m => m.toLowerCase());
+const stale = [];
+if (LIVE && LIVE.maps && LIVE.maps.length) {
+  const live = new Set(LIVE.maps.map(m => norm(m.lhs)));
+  const covered = new Set();
+  for (const sec of SECTIONS) {
+    sec.rows = sec.rows.filter(r => {
+      if (!r.keys) return true;
+      r.keys.forEach(k => covered.add(norm(k)));
+      if (r.src !== "live" || r.keys.some(k => live.has(norm(k)))) return true;
+      stale.push(r.keys.join(" / "));
+      return false;
+    });
+  }
+  // Whatever the config describes that no row covers yet still belongs on the sheet.
+  const extra = LIVE.maps.filter(m => !covered.has(norm(m.lhs)));
+  if (extra.length) SECTIONS.push({
+    id: "more", title: "More from your config", mode: "n",
+    blurb: "Described in your config but not sorted into a section yet. Descriptions are the config's own.",
+    rows: extra.map(m => ({ keys: [m.lhs], desc: m.desc, src: "live", mode: m.modes.join(",") })),
+  });
+}
+
+const MODE = { n: ["Normal", "b-n"], i: ["Insert", "b-i"], v: ["Visual", "b-v"], c: ["Command", "b-c"], t: ["Terminal", "b-t"] };
+
+/* ---------- learned rows (this browser only) ---------- */
+const LEARNED_KEY = "nvim-cheatsheet-learned";
+let learned = new Set();
+try { learned = new Set(JSON.parse(localStorage.getItem(LEARNED_KEY) || "[]")); } catch {}
+const saveLearned = () => { try { localStorage.setItem(LEARNED_KEY, JSON.stringify([...learned])); } catch {} };
+// Every row, with a stable id: section plus keys survives description edits and regeneration.
+const ROWS = [];
+for (const sec of SECTIONS) for (const r of sec.rows) if (r.keys) {
+  r.id = sec.id + ":" + r.keys.join("|");
+  r.sec = sec;
+  ROWS.push(r);
+}
+const BY_ID = Object.fromEntries(ROWS.map(r => [r.id, r]));
+
+/* ---------- key rendering ---------- */
+const NAMED = { CR: "Enter", Esc: "Esc", Tab: "Tab", BS: "Backspace", Space: "Space", Up: "↑", Down: "↓", Left: "←", Right: "→", Bslash: "\\" };
+const MODS = { C: "Ctrl", S: "Shift", A: "Alt", M: "Alt" };
+let notation = "friendly";
+
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function tokenize(s) {
+  const out = [];
+  for (let i = 0; i < s.length;) {
+    const ang = /^<([^<>\s]+)>/.exec(s.slice(i));
+    if (s[i] === "<" && ang) { out.push({ t: "special", v: ang[1], raw: ang[0] }); i += ang[0].length; continue; }
+    const br = /^\{([^}]+)\}/.exec(s.slice(i));
+    if (s[i] === "{" && br) { out.push({ t: "ph", v: br[1] }); i += br[0].length; continue; }
+    out.push({ t: "key", v: s[i] }); i++;
+  }
+  return out;
+}
+
+function renderToken(tok) {
+  if (tok.t === "ph") return `<span class="ph">{${esc(tok.v)}}</span>`;
+  if (tok.t === "key") return `<kbd>${esc(tok.v)}</kbd>`;
+  const v = tok.v;
+  if (notation === "vim") return `<kbd class="${v === "leader" ? "leader" : ""}">${esc(tok.raw)}</kbd>`;
+  if (v === "leader") return `<kbd class="leader named" title="&lt;leader&gt;">Space</kbd>`;
+  if (v === "localleader") return `<kbd class="leader" title="&lt;localleader&gt;">\\</kbd>`;
+  const m = /^([CSAM])-(.+)$/.exec(v);
+  if (m) {
+    const k = NAMED[m[2]] || m[2];
+    const cls = k.length > 1 ? "named" : "";
+    return `<kbd class="${cls}" title="${esc(tok.raw)}"><span class="mod">${MODS[m[1]]}</span>${esc(k)}</kbd>`;
+  }
+  return `<kbd class="named" title="${esc(tok.raw)}">${esc(NAMED[v] || v)}</kbd>`;
+}
+
+const isCmd = s => s[0] === ":" && s.length > 1 || (s[0] === "/" || s[0] === "?") && s.length > 1;
+
+function renderAlt(s) {
+  if (isCmd(s)) return `<code class="cmd">${esc(s)}</code>`;
+  return `<span class="alt">${tokenize(s).map(renderToken).join("")}</span>`;
+}
+function renderKeys(keys) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  return `<span class="keys">${list.map(renderAlt).join('<span class="or">/</span>')}</span>`;
+}
+
+/* ---------- build sections ---------- */
+const grid = document.getElementById("grid");
+const jump = document.getElementById("jump");
+
+function build() {
+  grid.innerHTML = SECTIONS.map(sec => {
+    const [mname, mcls] = MODE[sec.mode];
+    const rows = sec.rows.map(r => {
+      if (r.note) return `<tr class="note"><td colspan="3">${r.note}</td></tr>`;
+      const plain = s => (s || "").replace(/<[^>]+>/g, "");
+      const text = [r.keys.join(" "), plain(r.desc), plain(r.sub), sec.title].join(" ").toLowerCase();
+      const mine = Boolean(r.src);
+      const cls = [r.ess ? "ess" : "", mine ? "mine" : "", learned.has(r.id) ? "learned" : ""].join(" ").trim();
+      const modes = r.mode && r.mode !== "n" ? ` <span class="rmode">${esc(r.mode)}</span>` : "";
+      return `<tr class="${cls}" data-id="${esc(r.id)}" data-text="${esc(text)}"><td class="k">${renderKeys(r.keys)}</td>` +
+        `<td class="d">${r.desc}${modes}${mine ? '<span class="tag">yours</span>' : ""}` +
+        `${r.sub ? `<span class="sub">${r.sub}</span>` : ""}</td>` +
+        `<td class="c"><button class="tick" title="I know this one" aria-label="Mark as learned">✓</button></td></tr>`;
+    }).join("");
+    return `<section class="sec" id="${sec.id}"><div class="head"><h3>${esc(sec.title)} <span class="badge ${mcls}">${mname}</span></h3>` +
+      `<p>${esc(sec.blurb)}</p></div><table>${rows}</table></section>`;
+  }).join("");
+  jump.innerHTML = SECTIONS.map(s => `<a href="#${s.id}">${esc(s.title.replace(/:.*$/, ""))}</a>`).join("");
+  filter();
+  progress();
+}
+
+grid.addEventListener("click", e => {
+  const b = e.target.closest(".tick"); if (!b) return;
+  const tr = b.closest("tr");
+  setLearned(tr.dataset.id, !learned.has(tr.dataset.id));
+});
+function setLearned(id, on) {
+  on ? learned.add(id) : learned.delete(id);
+  saveLearned();
+  const tr = grid.querySelector(`tr[data-id="${CSS.escape(id)}"]`);
+  if (tr) tr.classList.toggle("learned", on);
+  progress();
+  if (show === "learn") filter();
+}
+
+/* ---------- progress + learning path ---------- */
+const STEPS = [
+  { t: "Survive", p: "Get in, type, save, get out, undo.", k: ["<Esc>", "i", "a", "o", ":w", ":q", "u", "<C-r>"] },
+  { t: "Move without arrows", p: "Words and lines instead of single characters.", k: ["h", "j", "k", "l", "w", "b", "e", "0", "$", "gg", "G"] },
+  { t: "Edit with verbs", p: "Delete, copy, paste, and the magic dot.", k: ["x", "dd", "yy", "p", "ciw", ".", "u"] },
+  { t: "Jump around", p: "Get anywhere on screen in two or three keys.", k: ["f{char}", "%", "}", "<C-d>", "<C-u>", "<C-o>", "*", "n"] },
+  { t: "Your setup", p: "Find files, split the screen, read the code.", k: ["<leader>ff", "<leader>fg", "<leader>e", "<C-w>v", "<C-w>h", "gd", "K", "<leader>ca"] },
+  { t: "Text objects", p: "Act on whole things: quotes, brackets, paragraphs.", k: ["ci\"", "di(", "yip", "vip", "da(", "ci{"] },
+  { t: "Power moves", p: "Repeat yourself without repeating yourself.", k: ["q{a-z}", "@{a-z}", ":%s/old/new/g", "cgn", "<C-v>", "gv"] },
+];
+
+function progress() {
+  const ess = ROWS.filter(r => r.ess);
+  const got = ess.filter(r => learned.has(r.id)).length;
+  document.getElementById("pfill").style.width = (100 * got / Math.max(ess.length, 1)) + "%";
+  document.getElementById("ptext").textContent = `${got} / ${ess.length} essentials`;
+  // A path key counts as known when any row listing it is ticked.
+  const known = new Set(ROWS.filter(r => learned.has(r.id)).flatMap(r => r.keys));
+  document.getElementById("steps").innerHTML = STEPS.map((st, i) => {
+    const n = st.k.filter(k => known.has(k)).length;
+    return `<div class="step${n === st.k.length ? " complete" : ""}"><h4><span class="n">${String(i + 1).padStart(2, "0")}</span>${esc(st.t)}` +
+      `<span class="done">${n === st.k.length ? "done ✓" : `${n}/${st.k.length}`}</span></h4><p>${esc(st.p)}</p>` +
+      `<div class="chips">${st.k.map(k => `<button class="chip${known.has(k) ? " got" : ""}" data-key="${esc(k)}">${isCmd(k) ? esc(k) : tokenize(k).map(t => esc(t.t === "special" ? (notation === "vim" ? t.raw : renderPlain(t)) : t.t === "ph" ? "{" + t.v + "}" : t.v)).join("")}</button>`).join("")}</div></div>`;
+  }).join("");
+}
+function renderPlain(t) {
+  if (t.v === "leader") return "Space ";
+  if (t.v === "localleader") return "\\";
+  const m = /^([CSAM])-(.+)$/.exec(t.v);
+  return m ? `${MODS[m[1]]}+${NAMED[m[2]] || m[2]} ` : (NAMED[t.v] || t.v);
+}
+document.getElementById("steps").addEventListener("click", e => {
+  const c = e.target.closest(".chip"); if (!c) return;
+  q.value = c.dataset.key; filter();
+  const hit = grid.querySelector("tr:not([hidden])[data-id]");
+  if (hit) hit.scrollIntoView({ block: "center", behavior: "smooth" });
+});
+
+/* ---------- filtering ---------- */
+const q = document.getElementById("q");
+let show = "all";
+
+function filter() {
+  const terms = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let any = false;
+  document.body.classList.toggle("filtering", terms.length > 0 || show !== "all");
+  for (const sec of grid.querySelectorAll("section.sec")) {
+    let visible = 0;
+    for (const tr of sec.querySelectorAll("tr")) {
+      const isNote = tr.classList.contains("note");
+      let ok = terms.every(t => (tr.dataset.text || "").includes(t));
+      if (show === "ess") ok = ok && tr.classList.contains("ess");
+      if (show === "learn") ok = ok && tr.classList.contains("ess") && !tr.classList.contains("learned");
+      if (show === "mine") ok = ok && tr.classList.contains("mine");
+      if (isNote) ok = show === "all" && terms.length === 0;
+      tr.hidden = !ok;
+      if (ok && !isNote) visible++;
+    }
+    sec.hidden = visible === 0;
+    if (visible) any = true;
+  }
+  for (const a of jump.querySelectorAll("a")) a.hidden = document.getElementById(a.hash.slice(1)).hidden;
+  document.getElementById("empty").style.display = any ? "none" : "block";
+}
+q.addEventListener("input", filter);
+document.addEventListener("keydown", e => {
+  if (!overlay.hidden) return practiceKey(e);
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (e.key === "/" && !typing) { e.preventDefault(); q.focus(); q.select(); }
+  else if (e.key === "p" && !typing && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openPractice(); }
+  else if (e.key === "Escape" && document.activeElement === q) { q.value = ""; filter(); q.blur(); }
+});
+
+/* ---------- practice: flashcards from whatever rows are showing ---------- */
+const overlay = document.getElementById("overlay");
+const $ = id => document.getElementById(id);
+let deck = [], card = 0, shown = false;
+
+function openPractice() {
+  // Whatever the search and filter leave on screen, so "window" + Practice drills splits.
+  deck = [...grid.querySelectorAll("tr[data-id]:not([hidden])")]
+    .filter(tr => !tr.closest("section").hidden)
+    .map(tr => BY_ID[tr.dataset.id]).filter(Boolean);
+  if (!deck.length) return;
+  for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+  card = 0;
+  overlay.hidden = false;
+  showCard();
+}
+function showCard() {
+  if (card >= deck.length) { closePractice(); return; }
+  const r = deck[card], [mname, mcls] = MODE[r.mode && MODE[r.mode] ? r.mode : r.sec.mode];
+  shown = false;
+  $("f-sec").textContent = r.sec.title;
+  $("f-mode").innerHTML = `<span class="badge ${mcls}">${mname}</span>`;
+  $("f-count").textContent = `${card + 1} / ${deck.length}`;
+  $("f-q").innerHTML = r.desc;
+  $("f-sub").innerHTML = "";
+  $("f-a").innerHTML = `<span class="hint">Think of the keys, then press <kbd>Space</kbd> to check.</span>`;
+  $("f-show").hidden = false; $("f-got").hidden = true; $("f-again").hidden = true;
+}
+function reveal() {
+  const r = deck[card]; shown = true;
+  $("f-a").innerHTML = renderKeys(r.keys);
+  $("f-sub").innerHTML = r.sub || "";
+  $("f-show").hidden = true; $("f-got").hidden = false; $("f-again").hidden = false;
+}
+function answer(knew) {
+  if (knew) setLearned(deck[card].id, true);
+  else deck.push(deck[card]);              // see it again before the end
+  card++;
+  showCard();
+}
+function closePractice() { overlay.hidden = true; }
+function practiceKey(e) {
+  if (e.key === "Escape") closePractice();
+  else if (e.key === " " && !shown) reveal();
+  else if ((e.key === "y" || e.key === "Enter") && shown) answer(true);
+  else if (e.key === "n" && shown) answer(false);
+  else return;
+  e.preventDefault();
+}
+$("practice").addEventListener("click", openPractice);
+$("f-show").addEventListener("click", reveal);
+$("f-got").addEventListener("click", () => answer(true));
+$("f-again").addEventListener("click", () => answer(false));
+$("f-close").addEventListener("click", closePractice);
+overlay.addEventListener("click", e => { if (e.target === overlay) closePractice(); });
+
+function segment(attr, cb) {
+  const btns = document.querySelectorAll(`[data-${attr}]`);
+  btns.forEach(b => b.addEventListener("click", () => {
+    btns.forEach(x => x.setAttribute("aria-pressed", x === b));
+    cb(b.dataset[attr]);
+  }));
+}
+segment("show", v => { show = v; filter(); });
+segment("nota", v => { notation = v; build(); renderBuilder(); });
+
+/* ---------- grammar builder ---------- */
+const OPS = [
+  { k: "d", v: "delete" }, { k: "c", v: "change" }, { k: "y", v: "copy" }, { k: "v", v: "select" },
+  { k: "gc", v: "comment" }, { k: ">", v: "indent" }, { k: "<", v: "dedent" }, { k: "gU", v: "UPPERCASE" }, { k: "gu", v: "lowercase" },
+];
+const TGS = [
+  { k: "w", p: "from here to the start of the next word", n: "the next {n} words" },
+  { k: "e", p: "to the end of the word" },
+  { k: "b", p: "back to the start of the word" },
+  { k: "$", p: "to the end of the line" },
+  { k: "0", p: "back to the start of the line" },
+  { k: "j", p: "this line and the one below", n: "this line and {n} below" },
+  { k: "}", p: "to the next blank line" },
+  { k: "G", p: "to the end of the file" },
+  { k: "f)", p: "up to and including the next )" },
+  { k: "t)", p: "up to, but not including, the next )" },
+  { k: "iw", p: "the word under the cursor" },
+  { k: "i\"", p: "the text inside the quotes" },
+  { k: "a\"", p: "the quotes and the text inside" },
+  { k: "i(", p: "everything inside the parentheses" },
+  { k: "a(", p: "the parentheses and what's inside" },
+  { k: "i{", p: "everything inside the braces" },
+  { k: "ip", p: "the whole paragraph" },
+  { k: "it", p: "the contents of the HTML tag" },
+  { k: "LINE", label: "same key", p: "the whole line", n: "{n} lines" },
+];
+const CTS = ["", "2", "3", "5"];
+const st = { op: 0, ct: 0, tg: 10 };
+
+function chipRow(el, items, key, label) {
+  el.innerHTML = items.map((it, i) => `<button class="chip" data-i="${i}" aria-pressed="${st[key] === i}">${label(it)}</button>`).join("");
+  el.onclick = e => { const b = e.target.closest(".chip"); if (!b) return; st[key] = +b.dataset.i; renderBuilder(); };
+}
+function lineKey(op) { return op === "v" ? "V" : op === "gc" ? "gcc" : op.length === 2 ? op + op[1] : op + op; }
+
+function renderBuilder() {
+  chipRow(document.getElementById("b-op"), OPS, "op", o => `${esc(o.k)}<small>${o.v}</small>`);
+  chipRow(document.getElementById("b-ct"), CTS, "ct", c => c ? c : `<small style="margin:0">none</small>`);
+  chipRow(document.getElementById("b-tg"), TGS, "tg", t => t.label ? `<small style="margin:0">${t.label}</small>` : esc(t.k));
+  const op = OPS[st.op], ct = CTS[st.ct], tg = TGS[st.tg];
+  const line = tg.k === "LINE";
+  let typed, phrase = tg.p;
+  if (line) typed = `<span class="ct">${ct}</span>${esc(lineKey(op.k))}`;
+  else typed = `${esc(op.k)}<span class="ct">${ct}</span><span class="tg">${esc(tg.k)}</span>`;
+  if (ct) phrase = tg.n ? tg.n.replace("{n}", ct) : `${tg.p}, ${ct} times over`;
+  let quirk = "";
+  if (op.k === "c" && tg.k === "w") quirk = "Quirk: cw behaves like ce and keeps the space after the word. It's usually what you want anyway.";
+  else if (op.k === "v") quirk = "After selecting, press an operator (d, y, c, >…) to act on it.";
+  else if (op.k === "c") quirk = "You end up in Insert mode. Type the replacement, then Esc, and . repeats the whole change.";
+  else if (tg.k.startsWith("i") || tg.k.startsWith("a")) quirk = "The cursor can be anywhere inside the object, not only at its start.";
+  document.getElementById("b-out").innerHTML =
+    `<span class="typed">${typed}</span><span class="say"><b>${op.v}</b> ${esc(phrase)}</span>` +
+    (quirk ? `<span class="quirk">${esc(quirk)}</span>` : "");
+}
+
+/* ---------- themes (the six lattice themes) ---------- */
+const THEMES = {
+  "Gruvbox Material": ["#282828","#32302f","#3c3836","#45403d","#d4be98","#928374","#d8a657","#7daea3","#a9b665","#ea6962","#d3869b","#89b482","#e78a4e"],
+  "Catppuccin Mocha": ["#1e1e2e","#262637","#313244","#45475a","#cdd6f4","#7f849c","#cba6f7","#89b4fa","#a6e3a1","#f38ba8","#f5c2e7","#94e2d5","#fab387"],
+  "Catppuccin Macchiato": ["#24273a","#2b2e43","#363a4f","#494d64","#cad3f5","#8087a2","#c6a0f6","#8aadf4","#a6da95","#ed8796","#f5bde6","#8bd5ca","#f5a97f"],
+  "Catppuccin Frappé": ["#303446","#373b50","#414559","#51576d","#c6d0f5","#838ba7","#ca9ee6","#8caaee","#a6d189","#e78284","#f4b8e4","#81c8be","#ef9f76"],
+  "Tokyo Night": ["#1a1b26","#202231","#292e42","#3b4261","#c0caf5","#737aa2","#7aa2f7","#7dcfff","#9ece6a","#f7768e","#bb9af7","#73daca","#ff9e64"],
+  "Rosé Pine": ["#191724","#1f1d2e","#26233a","#403d52","#e0def4","#908caa","#ebbcba","#9ccfd8","#31748f","#eb6f92","#c4a7e7","#9ccfd8","#f6c177"],
+};
+const VARS = ["bg","panel","raised","line","fg","muted","accent","blue","green","red","purple","aqua","orange"];
+const sel = document.getElementById("theme");
+sel.innerHTML = Object.keys(THEMES).map(t => `<option>${t}</option>`).join("");
+function applyTheme(name) {
+  if (!THEMES[name]) name = "Gruvbox Material";
+  THEMES[name].forEach((c, i) => document.documentElement.style.setProperty(`--${VARS[i]}`, c));
+  sel.value = name;
+  try { localStorage.setItem("nvim-cheatsheet-theme", name); } catch {}
+}
+sel.addEventListener("change", () => applyTheme(sel.value));
+let saved = null;
+try { saved = localStorage.getItem("nvim-cheatsheet-theme"); } catch {}
+applyTheme(saved || "Gruvbox Material");
+
+const gen = document.getElementById("generated");
+if (LIVE && LIVE.maps && LIVE.maps.length) {
+  gen.textContent = `Generated ${LIVE.generated} against your live nvim config (${LIVE.maps.length} described maps).`;
+} else {
+  gen.textContent = "Not checked against your nvim config: this copy was never generated, or the dump failed.";
+  gen.style.color = "var(--red)";
+}
+if (stale.length) document.getElementById("stale").textContent =
+  `Dropped, no longer in your config: ${stale.join(", ")}. Update keys.json in lattice.`;
+
+build();
+renderBuilder();
+</script>
+</body>
+</html>

@@ -555,6 +555,9 @@ let
   # the sheet by being described where it is bound, and a rebind can't leave it stale.
   # ~/.config/hypr/keys.tsv (the hypr stow package) adds what no config can report -- the
   # trackpad gesture, the mouse's Solaar rules -- and hides rows not worth the space.
+  # Vim's own keys are the exception, with no config to read them from: they come from
+  # nvim-sheet/keys.json, which `lattice keys sheet` also turns into a browser page, so
+  # the picker and the page list the same nvim keys.
   #
   # tmux and nvim come from PATH rather than runtimeInputs: tmux has to be the build the
   # server is running, and nvim has to be the one the config and its plugins were set up for.
@@ -602,8 +605,11 @@ let
 
   nvimKeys = pkgs.writeText "lattice-keys-nvim.lua" ''
     -- Every map the user's config describes, as "<keys>\t<description>" lines on stdout.
-    -- LSP maps are buffer-local and only made on LspAttach, which a headless nvim with no
-    -- server never sees, so it is fired by hand on the empty buffer first.
+    -- lazy.nvim's VeryLazy waits for UIEnter, which a headless nvim never sends, and the
+    -- plugins and maps behind it (mini.diff's hunks, the <leader>u toggles) never load
+    -- without it. LSP maps are buffer-local and only made on LspAttach, which a headless
+    -- nvim with no server never sees either. Both are fired by hand on the empty buffer.
+    pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "VeryLazy" })
     pcall(vim.api.nvim_exec_autocmds, "LspAttach", { buffer = 0, data = {} })
 
     local leader = vim.g.mapleader or "\\"
@@ -652,6 +658,35 @@ let
     end
   '';
 
+  # The one place nvim keys are written down by hand: nvim-sheet/keys.json. Vim's own keys
+  # have no config to read them from, and plugin keys that live inside a picker or a
+  # buffer-local map never show up in the dump above. Both halves of the cheatsheet read
+  # it -- rofi gets its rows as TSV here, the browser page embeds the whole file -- so the
+  # two can't drift. Rows marked "live" are the ones the dump already reports; rofi takes
+  # those from the dump, and the page checks them against it.
+  nvimBuiltins = pkgs.runCommand "lattice-keys-nvim-builtins.tsv" { nativeBuildInputs = [ pkgs.jq ]; } ''
+    jq -r '
+      .sections[] as $s | $s.rows[] | select(.keys and .src != "live")
+      | (.mode // $s.mode) as $m
+      | [(.keys | join(" / ")),
+         (.desc | gsub("<[^>]+>"; "") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&amp;"; "&"))
+           + (if $s.ctx then " (" + $s.ctx + ")" else "" end)
+           + (if $m == "n" then "" else "  [" + $m + "]" end)]
+      | @tsv
+    ' ${./nvim-sheet/keys.json} > $out
+  '';
+
+  # sheet.html with keys.json inlined, so the page opens from file:// with nothing to fetch.
+  # The live dump goes in at @LIVE@ when `lattice keys sheet` writes it out. "</" is escaped
+  # so a </code> in a description can't close the script element early.
+  nvimSheet =
+    pkgs.runCommand "lattice-keys-nvim-sheet.html" { nativeBuildInputs = [ pkgs.jq pkgs.gawk pkgs.gnused ]; }
+      ''
+        jq -c . ${./nvim-sheet/keys.json} | sed 's#</#<\\/#g' > rows.json
+        awk -v f=rows.json '$0 == "@SHEET@" { while ((getline l < f) > 0) print l; next } { print }' \
+          ${./nvim-sheet/sheet.html} > $out
+      '';
+
   keybindings = pkgs.writeShellApplication {
     name = "lattice-keys";
     runtimeInputs = [
@@ -662,9 +697,42 @@ let
       pkgs.gnugrep
       pkgs.gnused
       pkgs.coreutils
+      pkgs.xdg-utils
     ];
     text = ''
       extras="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/keys.tsv"
+
+      # The real nvim config, headless, against an empty buffer. timeout so a plugin that
+      # wants an answer at startup costs a missing section rather than a picker that never
+      # opens.
+      nvim_maps() {
+        command -v nvim >/dev/null || return 0
+        (cd "''${XDG_RUNTIME_DIR:-/tmp}" && timeout 5 nvim --headless \
+          -c "luafile ${nvimKeys}" -c 'qa!' 2>/dev/null) || true
+      }
+
+      # `sheet [path]`: the browser half. keys.json's rows plus what the live config
+      # describes, written out (by default into the vault, beside the lattice notes) and
+      # opened. The page drops "live" rows the dump no longer has and lists described maps
+      # no row covers yet, so it says itself when it was last checked and what changed. An
+      # empty dump still writes the page; it then says it was not checked.
+      if [[ ''${1-} == sheet ]]; then
+        out=''${2:-$HOME/Documents/vault/Projects/lattice/nvim-cheatsheet.html}
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        nvim_maps \
+          | jq -R -s -c --arg generated "$(date '+%Y-%m-%d %H:%M')" '
+              {generated: $generated, maps: [split("\n")[] | select(length > 0) | split("\t")
+                | (.[1] | capture("^(?<desc>.*?)(  \\[(?<modes>[a-z,]+)\\])?$")) as $d
+                | {lhs: .[0], desc: $d.desc, modes: (($d.modes // "n") | split(","))}]}' \
+          | sed 's#</#<\\/#g' > "$tmp/live.json"
+        awk -v f="$tmp/live.json" '$0 == "@LIVE@" { while ((getline l < f) > 0) print l; next } { print }' \
+          ${nvimSheet} > "$tmp/sheet.html"
+        mkdir -p "$(dirname "$out")"
+        cp "$tmp/sheet.html" "$out"
+        xdg-open "$out" >/dev/null 2>&1 &
+        exit 0
+      fi
 
       # What is in front of you decides which section leads: nvim if the tmux pane last typed
       # into is running it, tmux if a terminal has focus, the desktop otherwise. Everything is
@@ -696,12 +764,9 @@ let
             | sed -E 's/^([^ ]+ [^ ]+) +/tmux\t\1\t/' || true
         fi
 
-        # The real config, headless, against an empty buffer. timeout so a plugin that wants
-        # an answer at startup costs a missing section rather than a picker that never opens.
-        if command -v nvim >/dev/null; then
-          (cd "''${XDG_RUNTIME_DIR:-/tmp}" && timeout 5 nvim --headless \
-            -c "luafile ${nvimKeys}" -c 'qa!' 2>/dev/null) | sed 's/^/nvim\t/' || true
-        fi
+        # What the config describes, then Vim's own keys and the plugin keys no dump can see,
+        # from keys.json -- the same rows the browser sheet shows.
+        { nvim_maps; cat ${nvimBuiltins}; } | sed 's/^/nvim\t/'
       }
 
       # keys.tsv rows are added, and a "-" description takes the matching live row out. awk
@@ -728,7 +793,9 @@ let
       printf '%s\n' "$rows" \
         | awk -F '\t' '
             { s[NR] = $1; k[NR] = $2; d[NR] = $3; if (length($2) > w) w = length($2) }
-            END { for (i = 1; i <= NR; i++) printf "%-5s  %-*s  %s\n", s[i], w, k[i], d[i] }
+            # Capped, so one long alternation (<C-w>h / <C-w>j / ...) does not push every
+            # description off to the right; the few longer rows just run over.
+            END { if (w > 24) w = 24; for (i = 1; i <= NR; i++) printf "%-5s  %-*s  %s\n", s[i], w, k[i], d[i] }
           ' \
         | rofi -dmenu -i -no-custom -p "keys" \
             -theme-str 'window { width: 960px; } listview { lines: 14; }' \
@@ -966,6 +1033,12 @@ in
     keys = {
       exec = lib.getExe keybindings;
       summary = "Search every Hyprland, tmux and Neovim binding";
+      group = "session";
+    };
+    "keys sheet" = {
+      exec = "${lib.getExe keybindings} sheet";
+      args = "[path]";
+      summary = "Write the Neovim cheatsheet page, checked against the live config, and open it";
       group = "session";
     };
   };

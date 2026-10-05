@@ -100,7 +100,10 @@ in
       general {
         lock_cmd = pidof hyprlock || hyprlock
         before_sleep_cmd = loginctl lock-session
-        after_sleep_cmd = hyprctl dispatch 'hl.dsp.dpms({ action = "on" })'
+        # The deck comes back from suspend USB-reset and blank, and streamdeck-ui reclaims
+        # it without repainting a single key (2026-10-04). A fresh start paints the page,
+        # and lattice-deck-sync follows it for the live keys.
+        after_sleep_cmd = hyprctl dispatch 'hl.dsp.dpms({ action = "on" })'; systemctl --user restart streamdeck.service
       }
 
       listener {

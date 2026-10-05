@@ -42,4 +42,25 @@ in
   # half gone OpenSSH offers the .pub beside it and has the agent sign.
   programs.ssh.startAgent = false;
   environment.sessionVariables.SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
+
+  # The app's own XDG entry stays the launcher (the doctor's persistence check expects it);
+  # this is a drop-in on the unit systemd generates from it. Electron registers its tray
+  # icon once, at startup, and gives up for good if no StatusNotifierWatcher is on the bus
+  # yet -- and at login it raced waybar and lost, leaving the app running with no window
+  # and no icon (2026-10-04). So it waits for waybar's tray, and comes back if it exits,
+  # because the SSH agent and the browser unlock both die with it.
+  systemd.user.services."app-bitwarden@autostart" = {
+    overrideStrategy = "asDropin";
+    after = [ "waybar.service" ];
+    serviceConfig = {
+      ExecStartPre = "${pkgs.writeShellScript "bitwarden-wait-for-tray" ''
+        for _ in $(seq 100); do
+          ${pkgs.systemd}/bin/busctl --user status org.kde.StatusNotifierWatcher >/dev/null 2>&1 && exit 0
+          sleep 0.1
+        done
+      ''}";
+      Restart = "always";
+      RestartSec = 2;
+    };
+  };
 }

@@ -1,0 +1,613 @@
+{
+ "sections": [
+  {
+   "id": "start", "title": "Start here", "mode": "n", "blurb": "Enough to survive. Everything else is a shortcut.",
+   "rows": [
+    {"keys": ["<Esc>"], "desc": "Back to Normal mode, from any mode", "ess": true},
+    {"keys": ["i"], "desc": "Insert before the cursor", "ess": true},
+    {"keys": ["a"], "desc": "Insert after the cursor", "ess": true},
+    {"keys": ["o", "O"], "desc": "Open a new line below / above and insert", "ess": true},
+    {"keys": [":w"], "desc": "Save", "ess": true},
+    {"keys": [":q", ":q!"], "desc": "Close window / close and throw away changes", "ess": true},
+    {"keys": [":wq", ":x"], "desc": "Save and close", "ess": true},
+    {"keys": [":qa"], "desc": "Quit everything", "ess": true},
+    {"keys": ["u"], "desc": "Undo", "ess": true},
+    {"keys": ["<C-r>"], "desc": "Redo", "ess": true},
+    {"keys": ["."], "desc": "Repeat the last change. Very powerful", "ess": true},
+    {"keys": [":h {topic}"], "desc": "Built-in help, e.g. <code>:h &lt;C-w&gt;</code> or <code>:h ciw</code>", "ess": true},
+    {"keys": [":Tutor"], "desc": "30-minute interactive tutorial. Worth doing once", "ess": true},
+    {"note": "Mouse is on in your config, so clicking, scrolling and dragging split borders all work."}
+   ]
+  },
+  {
+   "id": "windows", "title": "Windows and splits: Ctrl+w", "mode": "n", "blurb": "A window is a view onto a buffer. Splitting gives you two views, of the same file or of different ones.",
+   "rows": [
+    {"keys": ["<C-w>v", ":vsp"], "desc": "Split vertically (side by side)", "ess": true},
+    {"keys": ["<C-w>s", ":sp"], "desc": "Split horizontally (stacked)", "ess": true},
+    {"keys": [":vsp {file}", ":sp {file}"], "desc": "Split and open another file"},
+    {"keys": ["<C-w>h", "<C-w>j", "<C-w>k", "<C-w>l"], "desc": "Move to the window left / down / up / right", "ess": true},
+    {"keys": ["<C-w>w"], "desc": "Cycle to the next window"},
+    {"keys": ["<C-w>p"], "desc": "Back to the previous window"},
+    {"keys": ["<C-w>q"], "desc": "Close this window (the file stays open as a buffer)", "ess": true},
+    {"keys": ["<C-w>o"], "desc": "Close every other window", "ess": true},
+    {"keys": ["<C-w>="], "desc": "Make all windows the same size", "ess": true},
+    {"keys": ["<C-w>_", "<C-w>|"], "desc": "Maximize height / width"},
+    {"keys": ["<C-w>+", "<C-w>-"], "desc": "Taller / shorter (a count helps: <code>10&lt;C-w&gt;+</code>)"},
+    {"keys": ["<C-w>>", "<C-w><"], "desc": "Wider / narrower"},
+    {"keys": ["<C-w>H", "<C-w>J", "<C-w>K", "<C-w>L"], "desc": "Move this window to the far left / bottom / top / right"},
+    {"keys": ["<C-w>n"], "desc": "New empty window"},
+    {"keys": ["<C-w>c"], "desc": "Close this window, unless it's the last one"},
+    {"keys": ["<C-w>r"], "desc": "Rotate the windows in this row or column"},
+    {"keys": [":vnew", ":new"], "desc": "Split with an empty buffer"},
+    {"keys": ["<C-w>x"], "desc": "Swap with the next window"},
+    {"keys": ["<C-w>T"], "desc": "Move this window into its own tab"},
+    {"note": "With splitright/splitbelow on, new splits open to the right and below. You can also drag borders with the mouse."}
+   ]
+  },
+  {
+   "id": "buffers", "title": "Buffers", "mode": "n", "blurb": "A buffer is an open file. The bar at the top (bufferline) lists them. They aren't tabs.",
+   "rows": [
+    {"keys": ["]b", "[b"], "desc": "Next / previous buffer", "ess": true, "src": "live"},
+    {"keys": ["]B", "[B"], "desc": "Move this buffer right / left in the bar", "src": "live"},
+    {"keys": ["<C-^>"], "desc": "Toggle to the previous buffer", "ess": true},
+    {"keys": ["<leader>fb"], "desc": "Pick a buffer from a list", "ess": true, "src": "live"},
+    {"keys": ["<leader>bd"], "desc": "Close this buffer (keeps the window layout)", "ess": true, "src": "live"},
+    {"keys": ["<leader>bD"], "desc": "Close it even with unsaved changes", "src": "live"},
+    {"keys": ["<leader>bo"], "desc": "Close all other buffers", "src": "live"},
+    {"keys": [":ls", ":b {n}"], "desc": "List buffers / jump to one by number or name"},
+    {"keys": [":e!"], "desc": "Reload the file, discarding changes"}
+   ]
+  },
+  {
+   "id": "move", "title": "Moving around", "mode": "n", "blurb": "Motions. Each one also works as the noun after an operator (d, c, y…).",
+   "rows": [
+    {"keys": ["h", "j", "k", "l"], "desc": "Left, down, up, right", "ess": true},
+    {"keys": ["w", "b"], "desc": "Next word start / back to word start", "ess": true},
+    {"keys": ["e"], "desc": "End of word", "ess": true},
+    {"keys": ["W", "B", "E"], "desc": "Same, but WORDs: only spaces separate them (<code>foo.bar()</code> is one WORD)"},
+    {"keys": ["0", "^", "$"], "desc": "Line start / first non-blank / line end", "ess": true},
+    {"keys": ["gg", "G"], "desc": "Top / bottom of file", "ess": true},
+    {"keys": ["{n}G", ":{n}"], "desc": "Go to line n, e.g. <code>42G</code>", "ess": true},
+    {"keys": ["f{char}", "F{char}"], "desc": "Jump onto the next / previous {char} on this line", "ess": true},
+    {"keys": ["t{char}", "T{char}"], "desc": "Jump to just before {char}"},
+    {"keys": [";", ","], "desc": "Repeat the last f/t/F/T forward / backward"},
+    {"keys": ["%"], "desc": "Jump to the matching bracket", "ess": true},
+    {"keys": ["}", "{"], "desc": "Next / previous blank line (paragraph)", "ess": true},
+    {"keys": ["<C-d>", "<C-u>"], "desc": "Half page down / up", "ess": true},
+    {"keys": ["<C-f>", "<C-b>"], "desc": "Full page down / up"},
+    {"keys": ["H", "M", "L"], "desc": "Top / middle / bottom of the screen"},
+    {"keys": ["<C-o>", "<C-i>"], "desc": "Back / forward through places you jumped from", "ess": true, "sub": "Like browser back. After gd, <code>&lt;C-o&gt;</code> brings you back."},
+    {"keys": ["gj", "gk"], "desc": "Down / up by screen line when text is wrapped (markdown, tex)"},
+    {"keys": ["ge"], "desc": "Back to the end of the previous word"},
+    {"keys": ["g_"], "desc": "Last non-blank character of the line"},
+    {"keys": ["{n}|"], "desc": "Go to column n"},
+    {"keys": ["(", ")"], "desc": "Previous / next sentence"},
+    {"keys": ["<C-e>", "<C-y>"], "desc": "Scroll the view a line, the cursor stays put"},
+    {"note": "Counts work on any motion: 5j, 3w, 2}."}
+   ]
+  },
+  {
+   "id": "insert", "title": "Entering Insert mode", "mode": "n", "blurb": "Different ways in, depending on where you want the cursor.",
+   "rows": [
+    {"keys": ["i", "a"], "desc": "Before / after the cursor", "ess": true},
+    {"keys": ["I", "A"], "desc": "Start / end of the line", "ess": true},
+    {"keys": ["o", "O"], "desc": "New line below / above", "ess": true},
+    {"keys": ["C"], "desc": "Delete to end of line, then insert"},
+    {"keys": ["cc", "S"], "desc": "Replace the whole line"},
+    {"keys": ["s"], "desc": "Replace the character under the cursor"},
+    {"keys": ["gi"], "desc": "Insert where you last stopped typing", "sub": "In buffers with an LSP, your config remaps <code>gi</code> to Implementations."}
+   ]
+  },
+  {
+   "id": "inins", "title": "While in Insert mode", "mode": "i", "blurb": "Chords that work while you type. <C-w> here does not mean windows.",
+   "rows": [
+    {"keys": ["<C-w>"], "desc": "Delete the word before the cursor", "ess": true},
+    {"keys": ["<C-u>"], "desc": "Delete everything before the cursor on this line"},
+    {"keys": ["<C-h>"], "desc": "Backspace"},
+    {"keys": ["<C-r>{reg}"], "desc": "Paste from a register, e.g. <code>&lt;C-r&gt;\"</code>"},
+    {"keys": ["<C-o>{cmd}"], "desc": "Run one Normal command, then keep typing, e.g. <code>&lt;C-o&gt;zz</code>"},
+    {"keys": ["<C-t>", "<C-d>"], "desc": "Indent / dedent the current line"},
+    {"keys": ["<C-v>{key}"], "desc": "Insert a key literally (e.g. a real Tab)"},
+    {"keys": ["<C-a>"], "desc": "Type again whatever you typed last time in Insert mode"},
+    {"keys": ["<C-r>="], "desc": "Calculator: type <code>2*21</code>, Enter, and 42 is inserted"},
+    {"keys": ["<C-k>{a}{b}"], "desc": "Digraph: <code>&lt;C-k&gt;e'</code> types é. <code>:digraphs</code> lists them all"},
+    {"note": "mini.pairs closes brackets and quotes for you as you type."}
+   ]
+  },
+  {
+   "id": "complete", "title": "Completion menu", "mode": "i", "blurb": "blink.cmp with the super-tab preset.", "ctx": "completion menu",
+   "rows": [
+    {"keys": ["<Tab>"], "desc": "Accept the item / jump to the next snippet field", "ess": true, "src": "plugin"},
+    {"keys": ["<S-Tab>"], "desc": "Previous snippet field", "src": "plugin"},
+    {"keys": ["<C-n>", "<C-p>"], "desc": "Next / previous item (arrow keys work too)", "src": "plugin"},
+    {"keys": ["<C-Space>"], "desc": "Open the menu / toggle docs", "src": "plugin"},
+    {"keys": ["<C-e>"], "desc": "Close the menu", "src": "plugin"},
+    {"keys": ["<C-f>", "<C-b>"], "desc": "Scroll the docs popup", "src": "plugin"},
+    {"keys": ["<C-k>"], "desc": "Toggle signature help", "src": "plugin"}
+   ]
+  },
+  {
+   "id": "ops", "title": "Operators (verbs) and edits", "mode": "n", "blurb": "Operator + motion, e.g. dw, c$, y}. Double it for a whole line: dd, yy, >>, gcc.",
+   "rows": [
+    {"keys": ["d{motion}"], "desc": "Delete (cut)", "ess": true},
+    {"keys": ["c{motion}"], "desc": "Change: delete, then go into Insert mode", "ess": true},
+    {"keys": ["y{motion}"], "desc": "Yank (copy)", "ess": true, "sub": "Your config copies to the <b>system clipboard</b> (clipboard=unnamedplus), and so do d and c."},
+    {"keys": ["gc{motion}"], "desc": "Comment / uncomment (built in)", "ess": true},
+    {"keys": [">{motion}", "<{motion}"], "desc": "Indent / dedent"},
+    {"keys": ["={motion}"], "desc": "Auto-indent"},
+    {"keys": ["gu{motion}", "gU{motion}", "g~{motion}"], "desc": "lowercase / UPPERCASE / toggle case"},
+    {"keys": ["gq{motion}"], "desc": "Hard-wrap text to the line width"},
+    {"keys": ["dd", "cc", "yy"], "desc": "Delete / change / yank the whole line", "ess": true},
+    {"keys": ["gcc"], "desc": "Comment / uncomment the line", "ess": true},
+    {"keys": [">>", "<<"], "desc": "Indent / dedent the line"},
+    {"keys": ["D", "C", "Y"], "desc": "Delete / change / yank to end of line"},
+    {"keys": ["x"], "desc": "Delete the character under the cursor", "ess": true},
+    {"keys": ["r{char}"], "desc": "Replace one character", "ess": true},
+    {"keys": ["R"], "desc": "Replace mode: overtype until Esc"},
+    {"keys": ["J", "gJ"], "desc": "Join the next line on (with / without a space)"},
+    {"keys": ["~"], "desc": "Toggle case of the character"},
+    {"keys": ["\"_d{motion}"], "desc": "Delete <b>without</b> overwriting the clipboard", "ess": true},
+    {"keys": ["<C-a>", "<C-x>"], "desc": "Add / subtract 1 from the next number on the line (<code>5&lt;C-a&gt;</code> adds 5)"},
+    {"keys": ["gw{motion}"], "desc": "Hard-wrap, but leave the cursor where it was"},
+    {"keys": ["!{motion}{cmd}"], "desc": "Filter lines through a shell command, e.g. <code>!ip</code> then <code>sort</code>"},
+    {"keys": [":m +1", ":m -2"], "desc": "Move the line down / up"},
+    {"keys": [":t."], "desc": "Duplicate the line below itself"},
+    {"note": "Counts go in front: 3dd deletes 3 lines, d3w deletes 3 words, 5j moves down 5 lines."}
+   ]
+  },
+  {
+   "id": "paste", "title": "Paste and yank history", "mode": "n", "blurb": "yanky.nvim keeps a ring of everything you copied.",
+   "rows": [
+    {"keys": ["p", "P"], "desc": "Paste after / before the cursor", "ess": true, "src": "live"},
+    {"keys": ["gp", "gP"], "desc": "Paste, cursor ends up after the pasted text", "src": "live"},
+    {"keys": ["]y", "[y"], "desc": "Right after pasting: swap in an older / newer yank", "src": "live"},
+    {"keys": ["<leader>y"], "desc": "Pick from the yank history", "ess": true, "src": "live"},
+    {"keys": ["\"0p"], "desc": "Paste the last <b>yank</b> (skips anything you deleted since)", "ess": true},
+    {"note": "In Visual mode, p replaces the selection with what you copied."}
+   ]
+  },
+  {
+   "id": "textobj", "title": "Text objects (nouns)", "mode": "n", "blurb": "Use after an operator or in Visual mode. i = inside, a = around (includes the brackets or trailing space).",
+   "rows": [
+    {"keys": ["iw", "aw"], "desc": "Word", "ess": true},
+    {"keys": ["iW", "aW"], "desc": "WORD (space-separated)"},
+    {"keys": ["ip", "ap"], "desc": "Paragraph", "ess": true},
+    {"keys": ["is", "as"], "desc": "Sentence"},
+    {"keys": ["i\"", "a\""], "desc": "Double quotes (<code>i'</code> and <code>i`</code> work too)", "ess": true},
+    {"keys": ["i(", "a("], "desc": "Parentheses (also <code>ib</code>)", "ess": true},
+    {"keys": ["i{", "a{"], "desc": "Braces (also <code>iB</code>)", "ess": true},
+    {"keys": ["i[", "a["], "desc": "Square brackets"},
+    {"keys": ["i<", "a<"], "desc": "Angle brackets"},
+    {"keys": ["it", "at"], "desc": "HTML/XML tag"},
+    {"keys": ["gh"], "desc": "Git hunk (mini.diff)", "src": "live"},
+    {"keys": ["ciw"], "desc": "Example: change the word under the cursor", "ess": true},
+    {"keys": ["ci\""], "desc": "Example: change the text inside quotes", "ess": true},
+    {"keys": ["da("], "desc": "Example: delete the parentheses and what's inside"},
+    {"keys": ["yip"], "desc": "Example: copy the paragraph"},
+    {"note": "The cursor only has to be somewhere inside the object, not at its start."}
+   ]
+  },
+  {
+   "id": "combos", "title": "Power combos", "mode": "n", "blurb": "Small pieces that add up. Each is verb + noun, so read them aloud.",
+   "rows": [
+    {"keys": ["yyp"], "desc": "Duplicate the line", "ess": true},
+    {"keys": ["ggVG", ":%y"], "desc": "Select / copy the whole file", "ess": true},
+    {"keys": ["gg=G"], "desc": "Re-indent the whole file"},
+    {"keys": ["=ap"], "desc": "Re-indent the block you're in"},
+    {"keys": ["xp"], "desc": "Swap two characters (teh → the)"},
+    {"keys": ["ddp"], "desc": "Swap this line with the one below"},
+    {"keys": ["dt,"], "desc": "Delete up to the next comma"},
+    {"keys": ["ci("], "desc": "Rewrite a function call's arguments", "ess": true},
+    {"keys": ["vi\"p"], "desc": "Replace what's inside the quotes with what you copied"},
+    {"keys": ["gUiw"], "desc": "UPPERCASE the word"},
+    {"keys": ["dap"], "desc": "Delete the paragraph and the blank line after it"},
+    {"keys": ["A;<Esc>"], "desc": "Add a ; to the end of the line, from anywhere on it"},
+    {"keys": [":%norm A;"], "desc": "…and to the end of every line"},
+    {"keys": ["*cgn"], "desc": "Change a word everywhere, one at a time: type the new word, Esc, then . . ."},
+    {"keys": ["vip"], "desc": "Select the paragraph, then <code>:sort</code>, <code>&gt;</code> or <code>gc</code> it"},
+    {"note": "The . key repeats whole changes: after ciw + typing + Esc, . does all of it again on the next word."}
+   ]
+  },
+  {
+   "id": "visual", "title": "Visual mode", "mode": "v", "blurb": "Select first, then act. Useful while you're still learning motions.",
+   "rows": [
+    {"keys": ["v"], "desc": "Select characters", "ess": true},
+    {"keys": ["V"], "desc": "Select whole lines", "ess": true},
+    {"keys": ["<C-v>"], "desc": "Select a block (columns)", "ess": true},
+    {"keys": ["d", "y", "c", ">", "gc"], "desc": "Any operator acts on the selection", "ess": true},
+    {"keys": ["o"], "desc": "Jump to the other end of the selection"},
+    {"keys": ["gv"], "desc": "Reselect the last selection (from Normal)", "ess": true},
+    {"keys": ["I", "A"], "desc": "In block mode: type on every line at once, then Esc", "ess": true},
+    {"keys": ["u", "U"], "desc": "lowercase / UPPERCASE the selection"},
+    {"keys": ["J"], "desc": "Join the selected lines"},
+    {"keys": [":"], "desc": "Run a command on the selected lines (shows <code>:'&lt;,'&gt;</code>)"},
+    {"keys": ["O"], "desc": "In block mode: jump to the other corner on the same line"},
+    {"keys": ["<C-v>{n}j$A"], "desc": "Append to the end of ragged lines: block-select with $, then A"},
+    {"keys": ["g<C-a>"], "desc": "Turn selected numbers into a sequence (0 0 0 → 1 2 3)"},
+    {"keys": [":sort"], "desc": "Sort the selected lines (<code>:sort u</code> also drops duplicates)"},
+    {"keys": ["<leader>ca", "<leader>gb", "<leader>dw"], "desc": "Code action / open on GitHub / watch: all work on a selection", "src": "live"}
+   ]
+  },
+  {
+   "id": "search", "title": "Search and replace", "mode": "n", "blurb": "Search is case-insensitive unless you type a capital (smartcase).",
+   "rows": [
+    {"keys": ["/text", "?text"], "desc": "Search forward / backward", "ess": true},
+    {"keys": ["n", "N"], "desc": "Next / previous match", "ess": true},
+    {"keys": ["*", "#"], "desc": "Search for the word under the cursor, forward / backward", "ess": true},
+    {"keys": ["<C-l>", ":noh"], "desc": "Clear the search highlight", "ess": true},
+    {"keys": [":%s/old/new/g"], "desc": "Replace everywhere in the file", "ess": true},
+    {"keys": [":%s/old/new/gc"], "desc": "Same, but asks y/n for each one"},
+    {"keys": [":s/old/new/g"], "desc": "Replace on this line, or on the selection (select first)"},
+    {"keys": [":%s//new/g"], "desc": "Leave the pattern empty to reuse your last search, e.g. after *"},
+    {"keys": ["&", "g&"], "desc": "Repeat the last :s on this line / on every line"},
+    {"keys": [":%s/\\s\\+$//e"], "desc": "Strip trailing whitespace from the file"},
+    {"keys": ["/\\<word\\>"], "desc": "Whole word only: <code>\\&lt;</code> and <code>\\&gt;</code> are word edges"},
+    {"keys": ["/\\vtext"], "desc": "Very magic: ( ) | + ? work like normal regex, no backslashes needed"},
+    {"keys": ["<C-r><C-w>"], "desc": "While typing a search or command: insert the word under the cursor"},
+    {"keys": ["cgn"], "desc": "Change the next match, then press <code>.</code> to repeat on the next one"},
+    {"keys": [":g/text/d"], "desc": "Delete every line containing text (<code>:v</code> = lines without it)"},
+    {"keys": ["<leader>fg"], "desc": "Search text across the whole project", "ess": true, "src": "live"}
+   ]
+  },
+  {
+   "id": "find", "title": "Finding files and things", "mode": "n", "blurb": "fzf-lua pickers. Start typing to narrow, Enter to open.",
+   "rows": [
+    {"keys": ["<leader>ff"], "desc": "Find a file by name", "ess": true, "src": "live"},
+    {"keys": ["<leader>fg"], "desc": "Live grep: search file contents", "ess": true, "src": "live"},
+    {"keys": ["<leader>fb"], "desc": "Switch between open buffers", "ess": true, "src": "live"},
+    {"keys": ["<leader>fs"], "desc": "Symbols in this file (functions, classes)", "src": "live"},
+    {"keys": ["<leader>fd"], "desc": "Diagnostics in this file", "src": "live"},
+    {"keys": ["<leader>st"], "desc": "TODO / FIXME comments", "src": "live"},
+    {"keys": ["<leader>e"], "desc": "File explorer (sidebar)", "ess": true, "src": "live"},
+    {"keys": ["<leader>o"], "desc": "Toggle the code outline", "src": "live"},
+    {"keys": [":FzfLua keymaps"], "desc": "<b>Search every key mapping that's live right now</b>", "ess": true},
+    {"keys": [":e {file}"], "desc": "Open a file by path (Tab completes)"},
+    {"keys": ["gf"], "desc": "Open the file path under the cursor"},
+    {"keys": ["gx"], "desc": "Open the URL under the cursor in the browser"}
+   ]
+  },
+  {
+   "id": "picker", "title": "Inside a picker", "mode": "i", "blurb": "fzf-lua defaults: the fastest way to open a file straight into a split.", "ctx": "in a picker",
+   "rows": [
+    {"keys": ["<CR>"], "desc": "Open", "ess": true},
+    {"keys": ["<C-v>"], "desc": "Open in a vertical split", "ess": true},
+    {"keys": ["<C-s>"], "desc": "Open in a horizontal split"},
+    {"keys": ["<C-t>"], "desc": "Open in a new tab"},
+    {"keys": ["<C-j>", "<C-k>"], "desc": "Move down / up the list"},
+    {"keys": ["<S-Down>", "<S-Up>"], "desc": "Scroll the preview"},
+    {"keys": ["<A-q>"], "desc": "Send the results to the quickfix list"},
+    {"keys": ["<Esc>"], "desc": "Close"}
+   ]
+  },
+  {
+   "id": "explorer", "title": "File explorer", "mode": "n", "ctx": "in the explorer", "blurb": "snacks explorer, opened with <leader>e. Press ? inside it for the full list.",
+   "rows": [
+    {"keys": ["<leader>e"], "desc": "Open / close the explorer", "ess": true, "src": "live"},
+    {"keys": ["l", "<CR>"], "desc": "Open the file / expand the folder", "ess": true, "src": "plugin"},
+    {"keys": ["h"], "desc": "Collapse the folder", "src": "plugin"},
+    {"keys": ["<BS>"], "desc": "Up a directory", "src": "plugin"},
+    {"keys": ["a"], "desc": "Add a file. End the name with / for a folder", "ess": true, "src": "plugin"},
+    {"keys": ["r"], "desc": "Rename", "ess": true, "src": "plugin"},
+    {"keys": ["d"], "desc": "Delete", "ess": true, "src": "plugin"},
+    {"keys": ["c", "m"], "desc": "Copy / move", "src": "plugin"},
+    {"keys": ["y", "p"], "desc": "Copy the path / paste the copied files here", "src": "plugin"},
+    {"keys": ["<C-v>", "<C-s>"], "desc": "Open in a vertical / horizontal split", "src": "plugin"},
+    {"keys": ["o"], "desc": "Open with the system app", "src": "plugin"},
+    {"keys": ["H", "I"], "desc": "Show hidden / git-ignored files", "src": "plugin"},
+    {"keys": ["Z"], "desc": "Collapse everything", "src": "plugin"},
+    {"keys": ["P"], "desc": "Toggle the preview", "src": "plugin"},
+    {"keys": ["/"], "desc": "Filter by typing", "src": "plugin"},
+    {"keys": ["]g", "[g"], "desc": "Next / previous git change", "src": "plugin"},
+    {"keys": ["]d", "[d"], "desc": "Next / previous diagnostic", "src": "plugin"},
+    {"keys": ["?", "q"], "desc": "All explorer keys / close", "src": "plugin"}
+   ]
+  },
+  {
+   "id": "tabs", "title": "Tabs", "mode": "n", "blurb": "A tab is a whole layout of splits. Most people barely use them.",
+   "rows": [
+    {"keys": [":tabnew"], "desc": "New tab (optionally with a file)"},
+    {"keys": ["gt", "gT"], "desc": "Next / previous tab"},
+    {"keys": ["{n}gt"], "desc": "Go to tab n"},
+    {"keys": [":tabclose"], "desc": "Close the tab"},
+    {"keys": [":tab split"], "desc": "Open this window in a new tab (handy for a temporary full-screen look)"}
+   ]
+  },
+  {
+   "id": "brackets", "title": "Previous / next: [ and ]", "mode": "n", "blurb": "] goes forward, [ goes back. The second key says what to jump to.",
+   "rows": [
+    {"keys": ["]d", "[d"], "desc": "Diagnostic (error / warning)", "ess": true},
+    {"keys": ["]D", "[D"], "desc": "Last / first diagnostic"},
+    {"keys": ["]c", "[c"], "desc": "Git change (hunk)", "ess": true, "src": "live"},
+    {"keys": ["]b", "[b"], "desc": "Buffer", "ess": true, "src": "live"},
+    {"keys": ["]t", "[t"], "desc": "TODO comment", "src": "live"},
+    {"keys": ["]a", "[a"], "desc": "Symbol (function, class) via aerial", "src": "live"},
+    {"keys": ["]]", "[["], "desc": "Next / previous use of the word under the cursor", "src": "live"},
+    {"keys": ["]s", "[s"], "desc": "Misspelled word"},
+    {"keys": ["]q", "[q"], "desc": "Quickfix entry"},
+    {"keys": ["]y", "[y"], "desc": "Cycle the pasted yank", "src": "live"},
+    {"keys": ["]<Space>", "[<Space>"], "desc": "Add a blank line below / above"},
+    {"keys": ["]p", "[p"], "desc": "PDF page (when viewing a PDF)", "src": "plugin"}
+   ]
+  },
+  {
+   "id": "quickfix", "title": "Quickfix list", "mode": "n", "blurb": "One list of places (grep hits, errors, references) to step through. Pickers send results here with Alt+q.",
+   "rows": [
+    {"keys": [":copen", ":cclose"], "desc": "Open / close the quickfix window", "ess": true},
+    {"keys": ["]q", "[q"], "desc": "Next / previous entry", "ess": true},
+    {"keys": ["]Q", "[Q"], "desc": "Last / first entry"},
+    {"keys": ["<CR>"], "desc": "In the quickfix window: jump to that entry"},
+    {"keys": [":cdo s/old/new/ | update"], "desc": "Run a command on every entry: replace and save across files"},
+    {"keys": [":colder", ":cnewer"], "desc": "Back / forward to earlier lists"},
+    {"keys": ["]l", "[l"], "desc": "Same for the location list, which belongs to one window"},
+    {"keys": ["grr"], "desc": "LSP references straight into the quickfix list"},
+    {"keys": [":vimgrep /text/ **"], "desc": "Search all files into the list (live grep is usually nicer)"}
+   ]
+  },
+  {
+   "id": "lsp", "title": "Code: LSP and diagnostics", "mode": "n", "blurb": "Active when a language server is attached.",
+   "rows": [
+    {"keys": ["gd"], "desc": "Go to definition", "ess": true, "src": "live"},
+    {"keys": ["K"], "desc": "Hover docs (press K again to jump inside)", "ess": true, "src": "live"},
+    {"keys": ["gr"], "desc": "References", "ess": true, "src": "live", "sub": "Waits about 1s, because built-in grn/grr/gra/gri/grt also start with gr. Use <code>grr</code> for an instant (quickfix) list."},
+    {"keys": ["gD"], "desc": "Go to declaration", "src": "live"},
+    {"keys": ["gi"], "desc": "Implementations", "src": "live"},
+    {"keys": ["gy"], "desc": "Type definition", "src": "live"},
+    {"keys": ["<leader>rn", "grn"], "desc": "Rename the symbol everywhere", "ess": true, "src": "live"},
+    {"keys": ["<leader>ca", "gra"], "desc": "Code action (quick fixes, imports)", "ess": true, "src": "live"},
+    {"keys": ["gri", "grt"], "desc": "Built-in: implementations / type definition into the quickfix list"},
+    {"keys": ["<C-w>d"], "desc": "Show the diagnostic under the cursor in a popup", "ess": true},
+    {"keys": ["]d", "[d"], "desc": "Next / previous diagnostic", "ess": true},
+    {"keys": ["<leader>fd"], "desc": "List diagnostics in this file", "src": "live"},
+    {"keys": ["<leader>fs", "gO"], "desc": "Symbols in this file", "src": "live"},
+    {"keys": ["<C-s>"], "desc": "Signature help (in Insert mode)"},
+    {"keys": ["<leader>ud"], "desc": "Toggle diagnostics on / off", "src": "live"},
+    {"keys": ["<leader>uh"], "desc": "Toggle inlay hints", "src": "live"},
+    {"note": "Formatting and linting run automatically through conform and nvim-lint, with no keys to press."}
+   ]
+  },
+  {
+   "id": "outline", "title": "Code outline", "mode": "n", "ctx": "in the outline", "blurb": "aerial, opened with <leader>o: a sidebar of the functions and classes in this file.",
+   "rows": [
+    {"keys": ["<leader>o"], "desc": "Open / close the outline", "src": "live"},
+    {"keys": ["<CR>"], "desc": "Jump to the symbol", "src": "plugin"},
+    {"keys": ["<C-v>", "<C-s>"], "desc": "Jump to it in a vertical / horizontal split", "src": "plugin"},
+    {"keys": ["p"], "desc": "Show it in the code without leaving the outline", "src": "plugin"},
+    {"keys": ["{", "}"], "desc": "Previous / next symbol", "src": "plugin"},
+    {"keys": ["o", "za"], "desc": "Expand / collapse a symbol", "src": "plugin"},
+    {"keys": ["zR", "zM"], "desc": "Expand / collapse everything", "src": "plugin"},
+    {"keys": ["?", "q"], "desc": "Help / close", "src": "plugin"}
+   ]
+  },
+  {
+   "id": "git", "title": "Git", "mode": "n", "blurb": "lazygit for the big stuff, mini.diff for hunks in the buffer.",
+   "rows": [
+    {"keys": ["<leader>gg"], "desc": "Open lazygit", "ess": true, "src": "live"},
+    {"keys": ["<leader>gb"], "desc": "Open this file / selection on GitHub", "src": "live"},
+    {"keys": ["]c", "[c"], "desc": "Next / previous hunk", "ess": true, "src": "live"},
+    {"keys": ["]H", "[H"], "desc": "Last / first hunk", "src": "live"},
+    {"keys": ["<leader>hs"], "desc": "Stage the hunk under the cursor", "src": "live"},
+    {"keys": ["<leader>hr"], "desc": "Reset (discard) the hunk", "src": "live"},
+    {"keys": ["<leader>hp"], "desc": "Toggle the inline diff overlay", "src": "live"},
+    {"keys": ["gh{motion}", "gH{motion}"], "desc": "Stage / reset over a motion, e.g. <code>ghgh</code> stages a whole hunk", "src": "live"}
+   ]
+  },
+  {
+   "id": "undo", "title": "Undo history", "mode": "n", "blurb": "Your config keeps undo history on disk (undofile), so it survives closing a file.",
+   "rows": [
+    {"keys": ["u"], "desc": "Undo", "ess": true},
+    {"keys": ["<C-r>"], "desc": "Redo", "ess": true},
+    {"keys": ["U"], "desc": "Undo every change on the last edited line"},
+    {"keys": ["g-", "g+"], "desc": "Back / forward in time, including undo branches u cannot reach"},
+    {"keys": [":earlier 10m", ":later 10m"], "desc": "Move the whole file back / forward in time"},
+    {"keys": [":earlier 1f"], "desc": "Back to how the file was at the last save"}
+   ]
+  },
+  {
+   "id": "registers", "title": "Registers", "mode": "n", "blurb": "Vim's many clipboards. Pick one with \" before y, d or p. Yours sends the plain ones to the system clipboard.",
+   "rows": [
+    {"keys": ["\"{a-z}y{motion}"], "desc": "Copy into a named register, e.g. <code>\"ayy</code> then <code>\"ap</code>"},
+    {"keys": ["\"{A-Z}y{motion}"], "desc": "Capital letter appends to it instead of replacing"},
+    {"keys": ["\"0p"], "desc": "The last yank, untouched by deletes since", "ess": true},
+    {"keys": ["\"1p"], "desc": "The last deleted line(s). \"2 to \"9 hold older ones; <code>\"1p</code> then <code>u.</code> steps back"},
+    {"keys": ["\"_"], "desc": "Black hole: delete without saving anything"},
+    {"keys": ["\"+"], "desc": "System clipboard. Your config uses it by default (unnamedplus)"},
+    {"keys": ["\"%"], "desc": "The current file's name"},
+    {"keys": ["\":", "\"/", "\"."], "desc": "The last command / last search / last inserted text"},
+    {"keys": ["\"="], "desc": "Expression: <code>\"=2+2&lt;CR&gt;p</code> pastes 4"},
+    {"keys": ["<C-r>{reg}"], "desc": "In Insert or Command-line mode: type a register's contents"},
+    {"keys": [":reg"], "desc": "Show what's in every register", "ess": true}
+   ]
+  },
+  {
+   "id": "marks", "title": "Marks and macros", "mode": "n", "blurb": "Bookmarks inside your files, and recorded keystrokes to replay.",
+   "rows": [
+    {"keys": ["m{a-z}"], "desc": "Set a mark here"},
+    {"keys": ["'{a-z}", "`{a-z}"], "desc": "Jump to the mark's line / exact spot"},
+    {"keys": ["m{A-Z}"], "desc": "Capital marks are global: <code>'A</code> jumps back to that file too"},
+    {"keys": ["''"], "desc": "Back to where you were before the last jump"},
+    {"keys": ["`.", "g;", "g,"], "desc": "Last change / step back / forward through earlier changes", "ess": true},
+    {"keys": ["`^"], "desc": "Where you last left Insert mode (gi goes there and types)"},
+    {"keys": ["`[", "`]"], "desc": "Start / end of what you last yanked or changed"},
+    {"keys": [":marks", ":delm!"], "desc": "List marks / delete your lowercase marks"},
+    {"keys": ["q{a-z}"], "desc": "Start recording a macro, press q again to stop", "ess": true},
+    {"keys": ["@{a-z}"], "desc": "Play it back (<code>10@a</code> runs it 10 times)", "ess": true},
+    {"keys": ["@@"], "desc": "Replay the last macro"},
+    {"keys": ["q{A-Z}"], "desc": "Record more onto the end of an existing macro"},
+    {"keys": [":'<,'>norm @a"], "desc": "Run macro a on every selected line"},
+    {"keys": ["@:"], "desc": "Repeat the last : command"},
+    {"note": "Macros live in registers: \"ap pastes macro a as text so you can fix it, then \"ayy stores it back."}
+   ]
+  },
+  {
+   "id": "view", "title": "View and folds: z", "mode": "n", "blurb": "Scroll the view without moving the cursor, and fold code.",
+   "rows": [
+    {"keys": ["zz"], "desc": "Center the screen on the cursor", "ess": true},
+    {"keys": ["zt", "zb"], "desc": "Cursor line to top / bottom of the screen"},
+    {"keys": ["za"], "desc": "Toggle the fold under the cursor"},
+    {"keys": ["zo", "zc"], "desc": "Open / close a fold"},
+    {"keys": ["zR", "zM"], "desc": "Open / close every fold"},
+    {"keys": ["zh", "zl"], "desc": "Scroll sideways (wrap is off in code)"}
+   ]
+  },
+  {
+   "id": "cmdline", "title": "Command line", "mode": "c", "blurb": "Press : first. Tab completes almost everything.",
+   "rows": [
+    {"keys": ["<Tab>", "<Up>"], "desc": "Complete / previous command starting with what you typed", "ess": true},
+    {"keys": ["<C-r><C-w>"], "desc": "Insert the word under the cursor"},
+    {"keys": ["q:"], "desc": "Command history in an editable window (from Normal)"},
+    {"keys": [":wa", ":qa!"], "desc": "Save all / quit all without saving"},
+    {"keys": [":!{cmd}"], "desc": "Run a shell command"},
+    {"keys": [":r !{cmd}"], "desc": "Insert a shell command's output"},
+    {"keys": ["<C-f>"], "desc": "Open the command you're typing in an editable window"},
+    {"keys": [":norm {keys}"], "desc": "Run Normal-mode keys on each selected line, e.g. <code>:'&lt;,'&gt;norm A;</code>"},
+    {"keys": [":bufdo {cmd}"], "desc": "Run a command in every buffer (<code>:wa</code> afterwards to save)"},
+    {"keys": [":!{cmd} %"], "desc": "% is the current file: <code>:!python %</code> runs it"},
+    {"keys": [":cd %:h"], "desc": "Change directory to the current file's folder"},
+    {"keys": [":terminal"], "desc": "Open a terminal in this window"},
+    {"keys": [":messages"], "desc": "Show recent messages you missed"},
+    {"keys": [":Lazy", ":Mason"], "desc": "Plugin manager / LSP tool installer"},
+    {"keys": [":checkhealth"], "desc": "Diagnose setup problems"}
+   ]
+  },
+  {
+   "id": "help", "title": "Getting help", "mode": "n", "blurb": "Vim's manual is in the editor, and it's good. Help tags spell keys the same way this sheet does.",
+   "rows": [
+    {"keys": [":h {topic}"], "desc": "Help on anything: <code>:h ciw</code>, <code>:h splitright</code>", "ess": true},
+    {"keys": [":h i_<C-w>"], "desc": "Prefixes say the mode: i_ Insert, v_ Visual, c_ Command line, none for Normal"},
+    {"keys": [":FzfLua helptags"], "desc": "Fuzzy-search every help topic"},
+    {"keys": ["<C-]>", "<C-t>"], "desc": "Follow a |link| / come back (works in code too)"},
+    {"keys": ["gO"], "desc": "Table of contents for this help page"},
+    {"keys": [":helpgrep {text}"], "desc": "Search all help text into the quickfix list"},
+    {"keys": [":Tutor"], "desc": "The interactive tutorial"}
+   ]
+  },
+  {
+   "id": "terminal", "title": "Terminal mode", "mode": "t", "blurb": "nvim's built-in terminal. Inside tmux, a tmux split is often simpler.",
+   "rows": [
+    {"keys": [":term", ":vsp | term"], "desc": "Open a terminal here / in a split"},
+    {"keys": ["i", "a"], "desc": "Start typing into it"},
+    {"keys": ["<C-\\><C-n>"], "desc": "Back to Normal mode, to scroll, search and copy the output", "ess": true},
+    {"keys": ["<C-\\><C-o>{cmd}"], "desc": "Run one Normal command and carry on"}
+   ]
+  },
+  {
+   "id": "diff", "title": "Diff mode", "mode": "n", "blurb": "Compare two files side by side, or run nvim -d a b from the shell.",
+   "rows": [
+    {"keys": [":diffsplit {file}"], "desc": "Diff this file against another"},
+    {"keys": [":diffthis"], "desc": "Mark this window for diffing (do it in two windows)"},
+    {"keys": ["do", "dp"], "desc": "Diff obtain / put: take the other side's change, or push this one over"},
+    {"keys": [":diffupdate"], "desc": "Recompute the diff after edits"},
+    {"keys": [":diffoff!"], "desc": "Leave diff mode"}
+   ]
+  },
+  {
+   "id": "debug", "title": "Debugging", "mode": "n", "blurb": "nvim-dap with dap-view. F-keys or <leader>d.",
+   "rows": [
+    {"keys": ["<F5>", "<leader>dc"], "desc": "Start / continue", "src": "live"},
+    {"keys": ["<F10>"], "desc": "Step over", "src": "live"},
+    {"keys": ["<F11>"], "desc": "Step into", "src": "live"},
+    {"keys": ["<F12>"], "desc": "Step out", "src": "live"},
+    {"keys": ["<leader>db"], "desc": "Toggle breakpoint", "src": "live"},
+    {"keys": ["<leader>dB"], "desc": "Conditional breakpoint", "src": "live"},
+    {"keys": ["<leader>dC"], "desc": "Run to cursor", "src": "live"},
+    {"keys": ["<leader>dl"], "desc": "Run the last config again", "src": "live"},
+    {"keys": ["<leader>dt"], "desc": "Terminate", "src": "live"},
+    {"keys": ["<leader>du"], "desc": "Toggle the debug view", "src": "live"},
+    {"keys": ["<leader>dw"], "desc": "Watch expression (works on a selection)", "src": "live"},
+    {"keys": ["<leader>dr"], "desc": "Toggle the REPL", "src": "live"}
+   ]
+  },
+  {
+   "id": "dapview", "title": "Debug view", "mode": "n", "ctx": "in the debug view", "blurb": "nvim-dap-view, opened with <leader>du. A capital letter switches tabs.",
+   "rows": [
+    {"keys": ["W", "S", "B"], "desc": "Watches / Scopes / Breakpoints", "src": "plugin"},
+    {"keys": ["E", "T", "R"], "desc": "Exceptions / Threads / REPL", "src": "plugin"},
+    {"keys": ["<CR>"], "desc": "Expand or collapse a value", "src": "plugin"},
+    {"keys": ["i", "e", "d"], "desc": "In Watches: add / edit / delete an expression", "src": "plugin"},
+    {"keys": ["s", "c"], "desc": "Set / copy a value", "src": "plugin"}
+   ]
+  },
+  {
+   "id": "cmake", "title": "CMake", "mode": "n", "blurb": "cmake-tools under <leader>m.",
+   "rows": [
+    {"keys": ["<leader>mg"], "desc": "Generate", "src": "live"},
+    {"keys": ["<leader>mb"], "desc": "Build", "src": "live"},
+    {"keys": ["<leader>mr"], "desc": "Run", "src": "live"},
+    {"keys": ["<leader>md"], "desc": "Debug", "src": "live"},
+    {"keys": ["<leader>mt"], "desc": "Select build target", "src": "live"},
+    {"keys": ["<leader>ml"], "desc": "Select launch target", "src": "live"},
+    {"keys": ["<leader>my"], "desc": "Select build type", "src": "live"},
+    {"keys": ["<leader>mk"], "desc": "Stop the runner", "src": "live"},
+    {"keys": ["<leader>mc"], "desc": "Clean", "src": "live"},
+    {"keys": ["<leader>ms"], "desc": "Settings", "src": "live"}
+   ]
+  },
+  {
+   "id": "vault", "title": "Obsidian vault", "mode": "n", "blurb": "obsidian.nvim under <leader>v. Enter and ]o / [o only work inside vault notes.",
+   "rows": [
+    {"keys": ["<CR>"], "desc": "Smart action: follow a link, toggle a checkbox, or fold a heading", "src": "plugin"},
+    {"keys": ["]o", "[o"], "desc": "Next / previous link in the note", "src": "plugin"},
+    {"keys": ["<leader>vo"], "desc": "Open a note", "src": "live"},
+    {"keys": ["<leader>vn"], "desc": "New note", "src": "live"},
+    {"keys": ["<leader>vd"], "desc": "Today's daily note", "src": "live"},
+    {"keys": ["<leader>vf"], "desc": "Search the vault", "src": "live"},
+    {"keys": ["<leader>vt"], "desc": "Browse tags", "src": "live"},
+    {"keys": ["<leader>vb"], "desc": "Backlinks to this note", "src": "live"},
+    {"keys": ["<leader>vl"], "desc": "Links in this note", "src": "live"},
+    {"keys": ["<leader>vT"], "desc": "Insert a template", "src": "live"},
+    {"keys": ["<leader>vp"], "desc": "Paste an image", "src": "live"},
+    {"keys": ["<leader>vi"], "desc": "Turn the selection into a link (Visual)", "src": "live"},
+    {"keys": ["<leader>vN"], "desc": "Extract the selection into a new note (Visual)", "src": "live"}
+   ]
+  },
+  {
+   "id": "latex", "title": "LaTeX (vimtex)", "mode": "n", "ctx": "in .tex files", "blurb": "Only in .tex files. <localleader> is \\ (backslash) in your config.",
+   "rows": [
+    {"keys": ["<localleader>ll"], "desc": "Start / stop compiling on every save (latexmk)", "ess": true, "src": "plugin"},
+    {"keys": ["<localleader>lv"], "desc": "Show the PDF at the cursor (zathura)", "ess": true, "src": "plugin"},
+    {"keys": ["<localleader>le"], "desc": "Errors and warnings", "src": "plugin"},
+    {"keys": ["<localleader>lt"], "desc": "Table of contents", "src": "plugin"},
+    {"keys": ["<localleader>lk", "<localleader>lc"], "desc": "Stop compiling / clean the aux files", "src": "plugin"},
+    {"keys": ["<localleader>la"], "desc": "Menu of actions for whatever is under the cursor", "src": "plugin"},
+    {"keys": ["dse", "cse"], "desc": "Delete / change the surrounding environment", "src": "plugin"},
+    {"keys": ["tss"], "desc": "Toggle the star: equation ↔ equation*", "src": "plugin"},
+    {"keys": ["dsc", "csc"], "desc": "Delete / change the surrounding command (\\textbf{x} → x)", "src": "plugin"},
+    {"keys": ["ds$", "cs$"], "desc": "Delete / change the surrounding math", "src": "plugin"},
+    {"keys": ["tsf"], "desc": "Toggle \\frac{a}{b} ↔ a/b", "src": "plugin"},
+    {"keys": ["ie", "ae"], "desc": "Text object: environment (<code>cie</code> rewrites its body)", "src": "plugin"},
+    {"keys": ["i$", "a$"], "desc": "Text object: inline math", "src": "plugin"},
+    {"keys": ["ic", "ac"], "desc": "Text object: command", "src": "plugin"},
+    {"keys": ["]]", "[["], "desc": "Next / previous section (replaces the reference jump in .tex files)", "src": "plugin"},
+    {"keys": ["%"], "desc": "Jump between \\begin and \\end", "src": "plugin"},
+    {"keys": ["K"], "desc": "Docs for the package under the cursor", "src": "plugin"}
+   ]
+  },
+  {
+   "id": "toggles", "title": "Toggles and spelling", "mode": "n", "blurb": "<leader>u switches things on and off. Spell check is on by default.",
+   "rows": [
+    {"keys": ["<leader>us"], "desc": "Spell check on / off", "src": "live"},
+    {"keys": ["<leader>uw"], "desc": "Line wrap on / off", "src": "live"},
+    {"keys": ["<leader>ud"], "desc": "Diagnostics on / off", "src": "live"},
+    {"keys": ["<leader>uh"], "desc": "Inlay hints on / off", "src": "live"},
+    {"keys": ["<leader>uz", "z="], "desc": "Spelling suggestions for the word under the cursor", "ess": true, "src": "live"},
+    {"keys": ["zg"], "desc": "Add the word to your dictionary (saved in the dotfiles repo)", "ess": true},
+    {"keys": ["zug"], "desc": "Undo that add"},
+    {"keys": ["]s", "[s"], "desc": "Next / previous misspelling"}
+   ]
+  },
+  {
+   "id": "dash", "title": "Start screen", "mode": "n", "blurb": "The snacks dashboard shown when nvim starts without a file.", "ctx": "start screen",
+   "rows": [
+    {"keys": ["f"], "desc": "Find file", "src": "plugin"},
+    {"keys": ["g"], "desc": "Find text", "src": "plugin"},
+    {"keys": ["r"], "desc": "Recent files", "src": "plugin"},
+    {"keys": ["e"], "desc": "File explorer", "src": "plugin"},
+    {"keys": ["v"], "desc": "Vault", "src": "plugin"},
+    {"keys": ["n"], "desc": "New file", "src": "plugin"},
+    {"keys": ["c"], "desc": "Nvim config files", "src": "plugin"},
+    {"keys": ["L"], "desc": "Lazy (plugins)", "src": "plugin"},
+    {"keys": ["q"], "desc": "Quit", "src": "plugin"}
+   ]
+  }
+ ]
+}

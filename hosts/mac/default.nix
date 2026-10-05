@@ -353,6 +353,18 @@ in
         :root {
           --tab-min-height: 24px !important;
         }
+
+        /* Web-app (Taskbar Tab) windows. browser-shared.css floors them at 804px wide
+           because their toolbar has no overflow menu to shed buttons into -- wider than
+           a half tile on this panel (653 logical at 2.25), so Hyprland tiled the window
+           narrower than Firefox would draw it and cropped the right side off, page and
+           window controls alike. Back to the normal window's 500px floor, with the
+           address bar's own minimum (275px for these windows) cut so the toolbar still
+           fits at that width. */
+        :root[taskbartab]:not([popup-window]) {
+          min-width: 500px !important;
+          --urlbar-container-min-width: 160px !important;
+        }
       '';
 
       thunderbirdProfile = "%h/.config/thunderbird/7uftjt3v.default";
