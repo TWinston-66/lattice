@@ -34,6 +34,26 @@ let
       KERNEL=="hidraw*", ATTRS{idVendor}=="19f5", ATTRS{idProduct}=="3315", TAG+="uaccess"
     '';
   };
+
+  # Vesktop passes itself off as desktop Chrome, and on Linux it hardcodes the x86_64
+  # string whatever the arch. Discord's edge 403s exactly that string (2026-10-04, Vesktop
+  # 1.6.7): the window shows a "Temporary Network Error" page with a Request ID that
+  # reload never clears, while discordstatus.com reports everything up. The same UA with
+  # "Linux aarch64" loads fine, so this sends the machine's real arch. The Chrome major
+  # tracks the Electron Vesktop runs on, like Vesktop's own string does.
+  #
+  # Not seen on the Dell, where the substitution is a no-op: if Discord blocks the x86_64
+  # string there too, --user-agent-os=windows is Vesktop's own escape hatch.
+  vesktop = pkgs.symlinkJoin {
+    name = "vesktop-${pkgs.vesktop.version}";
+    paths = [ pkgs.vesktop ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/vesktop --add-flag ${
+        lib.escapeShellArg "--user-agent=Mozilla/5.0 (X11; Linux ${pkgs.stdenv.hostPlatform.uname.processor}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${lib.versions.major pkgs.electron.unwrapped.info.chrome}.0.0.0 Safari/537.36"
+      }
+    '';
+  };
 in
 {
   ### APPS ###
@@ -98,7 +118,7 @@ in
     #
     # Popsicle, for Impression: Impression is not merely unbuilt on ARM, it depends on
     # syslinux, which is genuinely x86-only, so this one has no way back.
-    vesktop
+    vesktop # the wrapped one from the let above
     cryptomator-cli
     popsicle
 
