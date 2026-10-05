@@ -1172,6 +1172,198 @@ let
       done
     '';
   };
+
+  # The Obsidian vault's git state, as one pill: what is uncommitted, what is committed but
+  # not pushed, and what is on GitHub but not here. Only that one repo -- it is the one
+  # edited all day outside a terminal, so it is the one that drifts unnoticed.
+  #
+  # The local half is `git status`, run on waybar's interval. GIT_OPTIONAL_LOCKS=0 stops it
+  # refreshing the index on the way, which takes index.lock and would make a commit typed
+  # at the same moment fail. The remote half needs a fetch, which is a round trip to
+  # GitHub through Bitwarden's SSH agent, so `status` never waits on it: once the last
+  # attempt is five minutes old it starts `fetch` detached, and that signals the bar when
+  # it lands. BatchMode keeps a locked agent from turning into a prompt -- the fetch just
+  # fails, and the tooltip says how long ago the remote was last seen.
+  #
+  # RTMIN+7 matches the "signal" of custom/vault in ~/.dotfiles/waybar. 1 to 6 are taken.
+  vault = pkgs.writeShellApplication {
+    name = "lattice-vault";
+    runtimeInputs = [
+      pkgs.git
+      pkgs.openssh
+      pkgs.jq
+      pkgs.coreutils
+      pkgs.util-linux
+      pkgs.procps
+      config.programs.uwsm.package
+    ];
+    text = ''
+      repo=$HOME/Documents/vault
+      state=''${XDG_RUNTIME_DIR:-/tmp}/lattice
+      attempted=$state/vault-fetch-attempted
+      fetched=$state/vault-fetched
+      failure=$state/vault-fetch-error
+      every=300
+
+      ago() {
+        local s=$1
+        if ((s < 60)); then
+          echo "just now"
+        elif ((s < 3600)); then
+          echo "$((s / 60))m ago"
+        elif ((s < 86400)); then
+          echo "$((s / 3600))h ago"
+        else
+          echo "$((s / 86400))d ago"
+        fi
+      }
+
+      fetch() {
+        mkdir -p "$state"
+        exec 9>"$state/vault-fetch.lock"
+        flock -n 9 || return 0
+        touch "$attempted"
+        if out=$(GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10" \
+          timeout 60 git -C "$repo" fetch --quiet --prune 2>&1); then
+          touch "$fetched"
+          rm -f "$failure"
+        else
+          printf '%s\n' "''${out:-timed out}" | tail -n 1 >"$failure"
+        fi
+        pkill -RTMIN+7 -x waybar || true
+      }
+
+      status() {
+        if ! git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+          printf '{"text": ""}\n'
+          return
+        fi
+
+        local now age
+        now=$(date +%s)
+        age=$((now - $(stat -c %Y "$attempted" 2>/dev/null || echo 0)))
+        if ((age >= every)); then
+          setsid -f "$0" fetch >/dev/null 2>&1 </dev/null
+        fi
+
+        local branch="" upstream="" ahead=0 behind=0 changed=0 untracked=0 conflicts=0
+        local -a files=()
+        while IFS= read -r line; do
+          case $line in
+          "# branch.head "*) branch=''${line#\# branch.head } ;;
+          "# branch.upstream "*) upstream=''${line#\# branch.upstream } ;;
+          "# branch.ab "*)
+            read -r _ _ a b <<<"$line"
+            ahead=''${a#+}
+            behind=''${b#-}
+            ;;
+          "? "*)
+            untracked=$((untracked + 1))
+            files+=("?  ''${line#? }")
+            ;;
+          "u "*)
+            conflicts=$((conflicts + 1))
+            files+=("!  ''${line#* * * * * * * * * * }")
+            ;;
+          [12]" "*)
+            changed=$((changed + 1))
+            local xy=''${line:2:2}
+            local path=''${line#* * * * * * * * }
+            [[ $line == 2* ]] && path=''${line#* * * * * * * * * }
+            files+=("''${xy//./ } ''${path%%$'\t'*}")
+            ;;
+          esac
+        done < <(GIT_OPTIONAL_LOCKS=0 git -C "$repo" status --porcelain=v2 --branch)
+
+        local gitdir operation=""
+        gitdir=$(git -C "$repo" rev-parse --absolute-git-dir)
+        if [[ -d $gitdir/rebase-merge || -d $gitdir/rebase-apply ]]; then
+          operation="rebase"
+        elif [[ -f $gitdir/MERGE_HEAD ]]; then
+          operation="merge"
+        fi
+
+        local dirty=$((changed + untracked + conflicts))
+        local text="󰊢" class tip
+        ((dirty > 0)) && text+=" $dirty"
+        ((ahead > 0)) && text+=" ↑$ahead"
+        ((behind > 0)) && text+=" ↓$behind"
+
+        if ((conflicts > 0)) || [[ -n $operation ]]; then
+          class=conflict
+        elif ((ahead > 0 && behind > 0)); then
+          class=diverged
+        elif ((dirty > 0)); then
+          class=dirty
+        elif ((ahead > 0)); then
+          class=ahead
+        elif ((behind > 0)); then
+          class=behind
+        else
+          class=clean
+        fi
+
+        tip="Vault: $branch"
+        [[ -n $upstream ]] && tip+=" → $upstream"
+        [[ -n $operation ]] && tip+=$'\n'"A $operation is in progress"
+        if ((dirty == 0)); then
+          tip+=$'\n'"Nothing uncommitted"
+        else
+          tip+=$'\n'"$dirty uncommitted"
+          ((changed > 0)) && tip+=", $changed changed"
+          ((untracked > 0)) && tip+=", $untracked new"
+          ((conflicts > 0)) && tip+=", $conflicts conflicted"
+        fi
+        if [[ -z $upstream ]]; then
+          tip+=$'\n'"No upstream branch"
+        elif ((ahead == 0 && behind == 0)); then
+          tip+=$'\n'"In step with $upstream"
+        else
+          ((ahead > 0)) && tip+=$'\n'"$ahead commit$( ((ahead == 1)) || echo s) not pushed"
+          ((behind > 0)) && tip+=$'\n'"$behind commit$( ((behind == 1)) || echo s) on $upstream not pulled"
+        fi
+
+        # How fresh the remote half is. Stale means the last good fetch is more than three
+        # attempts old, so the arrows can no longer be trusted to be complete.
+        local seen
+        seen=$(stat -c %Y "$fetched" 2>/dev/null || echo 0)
+        if ((seen == 0)); then
+          tip+=$'\n'"Remote not checked yet"
+        else
+          tip+=$'\n'"Remote checked $(ago $((now - seen)))"
+        fi
+        if [[ -s $failure ]]; then
+          tip+=$'\n'"Last fetch failed: $(<"$failure")"
+        fi
+        if ((now - seen > 3 * every + 60)); then
+          class+=" stale"
+        fi
+
+        if ((''${#files[@]} > 0)); then
+          tip+=$'\n'
+          local f
+          for f in "''${files[@]:0:12}"; do
+            tip+=$'\n'"$f"
+          done
+          ((''${#files[@]} > 12)) && tip+=$'\n'"… and $((''${#files[@]} - 12)) more"
+        fi
+        tip+=$'\n\n'"Click to fetch now, right-click for lazygit"
+
+        jq -nc --arg text "$text" --arg tip "$tip" --arg class "$class" \
+          '{text: $text, tooltip: $tip, class: ($class | split(" "))}'
+      }
+
+      case ''${1:-status} in
+      status) status ;;
+      fetch) fetch ;;
+      open) exec uwsm app -- ghostty --working-directory="$repo" -e lazygit ;;
+      *)
+        echo "usage: lattice-vault [status|fetch|open]" >&2
+        exit 2
+        ;;
+      esac
+    '';
+  };
 in
 {
   programs.waybar.enable = true;
@@ -1217,6 +1409,8 @@ in
       capsLock
       # The battery pill's.
       batteryPill
+      # The vault pill's status, its click-to-fetch and its right-click into lazygit.
+      vault
       pkgs.wireplumber
       config.programs.firefox.finalPackage
     ];
@@ -1263,6 +1457,12 @@ in
       summary = "The battery pill's output";
       group = "session";
       hidden = true;
+    };
+    vault = {
+      exec = lib.getExe vault;
+      args = "[status|fetch|open]";
+      summary = "The Obsidian vault's git state; fetch checks GitHub, open starts lazygit";
+      group = "session";
     };
   };
 }
