@@ -1,0 +1,25 @@
+{
+ "tmux": {
+  "sections": [
+   {"id": "tmux-panes", "title": "Panes", "blurb": "A pane is one terminal inside a window. Splitting a pane makes two.", "match": "pane|split|zoom|layout|evenly"},
+   {"id": "tmux-windows", "title": "Windows", "blurb": "A window is a full-screen tab, listed along the bottom bar.", "match": "window"},
+   {"id": "tmux-sessions", "title": "Sessions", "blurb": "A session is a whole set of windows. It keeps running after Ghostty closes, and resurrect brings it back after a reboot.", "match": "session|detach|sesh"},
+   {"id": "tmux-copy", "title": "Copy mode and scrollback", "blurb": "Scroll back through output, search it and copy from it. Emacs-style keys here; the mouse works too.", "match": "^copy:|copy|paste|scroll|wheel"},
+   {"id": "tmux-other", "title": "Everything else", "blurb": "Commands, help and plugins.", "match": ""}
+  ],
+  "ess": ["C-a \\", "C-a -", "C-a arrows", "C-a z", "C-a x", "C-a c", "C-a 1-9", "C-a n / p", "C-a o", "C-a d", "C-a [", "copy: C-Space", "copy: M-w", "copy: q", "C-a ?"]
+ },
+ "hypr": {
+  "sections": [
+   {"id": "hypr-mouse", "title": "Mouse and trackpad", "blurb": "The MX Master's buttons (Solaar rules) and trackpad gestures.", "from": ["mouse"], "match": ""},
+   {"id": "hypr-session", "title": "Screen and session", "blurb": "Lock, capture and power.", "match": "lock|screenshot|power"},
+   {"id": "hypr-apps", "title": "Apps and menus", "blurb": "Launchers and the pickers on top of them.", "match": "terminal|browser|file manager|launcher|calculator|clipboard|cheatsheet"},
+   {"id": "hypr-notify", "title": "Notifications", "blurb": "mako, the notification pills at the top right.", "match": "notification|disturb"},
+   {"id": "hypr-media", "title": "Sound, light and media", "blurb": "The function-row keys. Shift moves them from the speakers to the microphone.", "match": "volume|mute|bright|backlight|track|play"},
+   {"id": "hypr-workspaces", "title": "Workspaces and monitors", "blurb": "Numbered desktops, the scratchpad and moving between screens.", "match": "workspace|scratchpad|monitor"},
+   {"id": "hypr-windows", "title": "Windows", "blurb": "Windows tile on their own. These move, float, resize and close them.", "match": "window|focus|float|tile|split|fullscreen|resize"},
+   {"id": "hypr-other", "title": "Everything else", "blurb": "", "match": ""}
+  ],
+  "ess": ["SUPER + T", "ALT + Space", "SUPER + C", "SUPER + Arrows", "SUPER + SHIFT + Arrows", "SUPER + 0-9", "SUPER + SHIFT + 0-9", "SUPER + F", "SUPER + V", "SUPER + R", "SUPER + L", "SUPER + /", "SUPER + S", "Print", "3-finger swipe"]
+ }
+}

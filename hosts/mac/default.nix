@@ -240,6 +240,9 @@ in
   # back where the Dell has it.
   lattice.display.sunsetTemperature = 2800;
 
+  # Firefox's 80% default zoom (below), for the pages lattice opens in Chromium.
+  lattice.display.webZoom = 0.8;
+
   # Gecko sizes both its chrome and its content in nominal pixels, and devPixelsPerPx pins
   # that to an absolute ratio rather than to a multiple of the desktop scale -- so a single
   # number cannot be right on two monitors at once. The old 1.8 was tuned against this

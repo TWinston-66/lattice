@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neovim Cheatsheet</title>
+<title>lattice keys</title>
 <style>
 :root {
   --bg: #282828; --panel: #32302f; --raised: #3c3836; --line: #45403d;
@@ -269,37 +269,76 @@ body.filtering .intro { display: none; }
   .intro { grid-template-columns: 1fr; }
   .sec td.k { width: 120px; }
 }
+.bar nav.jump { padding: 0; margin: 0; flex: 1 1 300px; min-width: 0; }
+
+/* ---------- tools ---------- */
+.tools { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.tools button {
+  font: 600 13px var(--sans); padding: 6px 14px; border-radius: 7px; border: 0; cursor: pointer;
+  background: transparent; color: var(--muted); display: inline-flex; gap: 6px; align-items: center;
+}
+.tools button:hover { color: var(--fg); }
+.tools button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 20%, var(--raised)); color: var(--fg); }
+.tools .cnt {
+  font: 600 10.5px var(--mono); padding: 0 5px; border-radius: 999px; min-width: 18px; text-align: center;
+  background: var(--raised); color: var(--muted);
+}
+.tools .cnt:empty { display: none; }
+.tools .cnt.zero { opacity: .5; }
+.intro .wide { grid-column: 1 / -1; }
+.mlabel {
+  font: 600 10px var(--sans); text-transform: uppercase; letter-spacing: .05em; margin-right: 4px;
+  padding: 1px 6px; border-radius: 4px; color: var(--purple);
+  background: color-mix(in srgb, var(--purple) 15%, transparent);
+}
+.plus { color: var(--muted); font-size: 11px; margin: 0 1px; }
+code.raw { font-size: 12.5px; padding: 2px 6px; border-radius: 5px; background: var(--raised); white-space: nowrap; }
+.macnote {
+  margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.tree { display: grid; gap: 6px; margin-top: 8px; font-size: 13px; }
+.tree div { display: grid; grid-template-columns: 82px 1fr; gap: 10px; align-items: baseline; }
+.tree b { color: var(--accent); }
 </style>
 </head>
 <body>
 
 <header>
   <div class="bar">
-    <div class="brand"><h1><span>nvim</span> cheatsheet</h1><small>built-ins + your config</small></div>
+    <div class="brand"><h1><span>lattice</span> keys</h1></div>
+    <div class="tools" role="tablist" aria-label="Tool">
+      <button data-tool="nvim" aria-pressed="true">Neovim <span class="cnt"></span></button>
+      <button data-tool="tmux" aria-pressed="false">tmux <span class="cnt"></span></button>
+      <button data-tool="hypr" aria-pressed="false">Hyprland <span class="cnt"></span></button>
+    </div>
     <label class="search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Search keys or actions… (split, delete, git)" autocomplete="off">
+      <input id="q" type="search" placeholder="Search keys or actions… (split, copy, workspace)" autocomplete="off">
       <span class="hint"><kbd>/</kbd></span>
     </label>
+    <button class="primary" id="practice" title="Flashcards from whatever is showing (p)">Practice</button>
+    <div class="progress" title="Essentials on this tab you've ticked off. Tick any row with the circle on its right."><div class="track"><div class="fill" id="pfill"></div></div><span id="ptext"></span></div>
+  </div>
+  <div class="bar" style="padding-top: 0">
     <div class="seg" role="group" aria-label="Show">
       <button data-show="all" aria-pressed="true">Everything</button>
       <button data-show="ess" aria-pressed="false">★ Essentials</button>
       <button data-show="learn" aria-pressed="false" title="Essentials you haven't ticked off yet">To learn</button>
       <button data-show="mine" aria-pressed="false">Your config</button>
     </div>
-    <button class="primary" id="practice" title="Flashcards from whatever is showing (p)">Practice</button>
-    <div class="progress" title="Essentials you've ticked off. Tick any row with the circle on its right."><div class="track"><div class="fill" id="pfill"></div></div><span id="ptext"></span></div>
     <div class="seg" role="group" aria-label="Notation">
       <button data-nota="friendly" aria-pressed="true" title="Show keys as Ctrl+w">Ctrl+w</button>
-      <button data-nota="vim" aria-pressed="false" title="Show keys in Vim notation">&lt;C-w&gt;</button>
+      <button data-nota="vim" aria-pressed="false" title="Show keys the way the config writes them">&lt;C-w&gt;</button>
     </div>
     <select id="theme" aria-label="Theme"></select>
+    <nav class="jump" id="jump"></nav>
   </div>
-  <nav class="jump" id="jump"></nav>
 </header>
 
 <main>
-  <div class="intro">
+  <!-- ======================= Neovim ======================= -->
+  <div class="intro" data-tool="nvim">
     <div class="card">
       <h2><span class="num">01</span> Modes</h2>
       <p class="lead">The same key does different things depending on the mode. You start in Normal mode, and Esc always brings you back.</p>
@@ -324,6 +363,7 @@ body.filtering .intro { display: none; }
         <span><kbd class="named"><span class="mod">Shift</span>Tab</kbd> <kbd class="named"><span class="mod">Alt</span>q</kbd></span><div class="what"><code>&lt;S-…&gt;</code> is Shift, <code>&lt;A-…&gt;</code> or <code>&lt;M-…&gt;</code> is Alt, <code>&lt;CR&gt;</code> is Enter.</div>
         <span class="ph">{char}</span><div class="what">A placeholder you fill in: <code>f{char}</code> could be <code>f(</code>.</div>
       </div>
+      <div class="macnote" hidden>On this MacBook's own keyboard, <b>Ctrl is the ⌘ key</b> beside the space bar.</div>
     </div>
 
     <div class="card">
@@ -358,8 +398,72 @@ body.filtering .intro { display: none; }
     </div>
   </div>
 
+  <!-- ======================= tmux ======================= -->
+  <div class="intro" data-tool="tmux" hidden>
+    <div class="card">
+      <h2><span class="num">01</span> Sessions, windows, panes</h2>
+      <p class="lead">tmux runs inside Ghostty and keeps your terminals alive, even when Ghostty closes.</p>
+      <div class="tree">
+        <div><b>Session</b><span>A project: a set of windows with one name. Survives closing the terminal; resurrect and continuum restore it after a reboot.</span></div>
+        <div><b>Window</b><span>A full-screen tab in the session, listed along the bottom bar.</span></div>
+        <div><b>Pane</b><span>One terminal inside a window. Split a window to get more.</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">02</span> The prefix: Ctrl+a</h2>
+      <p class="lead">Almost every tmux key starts with the prefix, so tmux doesn't steal keys from the programs inside it.</p>
+      <div class="notation">
+        <span><kbd><span class="mod">Ctrl</span>a</kbd> <kbd>c</kbd></span><div class="what"><code>C-a c</code>: hold Ctrl, tap a, <b>let go</b>, then tap c.</div>
+        <span><kbd><span class="mod">Ctrl</span>a</kbd> <kbd><span class="mod">Ctrl</span>a</kbd></span><div class="what">Twice sends a real Ctrl+a to the program: the shell's start of line.</div>
+        <span><kbd><span class="mod">Alt</span>w</kbd></span><div class="what"><code>M-w</code> is Alt+w (M for Meta).</div>
+        <span><kbd><span class="mod">Ctrl</span>a</kbd> <kbd>?</kbd></span><div class="what">Lists every key tmux knows, defaults included.</div>
+      </div>
+      <div class="macnote" hidden>On this MacBook's own keyboard, <b>Ctrl is the ⌘ key</b>, so the prefix is ⌘+a.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">03</span> Copy mode</h2>
+      <p class="lead">Scrollback lives in copy mode. Scroll the wheel up or press <kbd><span class="mod">Ctrl</span>a</kbd> <kbd>[</kbd> to get in, and <kbd>q</kbd> to get out.</p>
+      <p>Your tmux uses <b>emacs-style</b> copy keys: <kbd><span class="mod">Ctrl</span>Space</kbd> starts a selection and <kbd><span class="mod">Alt</span>w</kbd> copies it. Dragging with the mouse selects and copies straight to the clipboard, and double-click copies a word.</p>
+    </div>
+
+    <div class="card wide">
+      <h2><span class="num">04</span> tmux splits or nvim splits?</h2>
+      <p class="lead">Both split the screen, but they split different things.</p>
+      <p><b>nvim splits</b> (<kbd><span class="mod">Ctrl</span>w</kbd> <kbd>v</kbd>) are views into files, all inside one nvim. Use them to read two files side by side. <b>tmux panes</b> (<kbd><span class="mod">Ctrl</span>a</kbd> <kbd>\</kbd>) are separate terminals. Use them to keep a dev server, tests or git running next to your editor. The rows below come straight from <code>tmux list-keys</code> and <code>keys.tsv</code>, the same rows <kbd class="named"><span class="mod">Super</span>/</kbd> searches.</p>
+    </div>
+  </div>
+
+  <!-- ======================= Hyprland ======================= -->
+  <div class="intro" data-tool="hypr" hidden>
+    <div class="card">
+      <h2><span class="num">01</span> The SUPER key</h2>
+      <p class="lead">Nearly every desktop key is SUPER plus something, so it never clashes with keys inside apps.</p>
+      <p>Add <b>Shift</b> to a SUPER key and it usually moves the window instead of the focus: SUPER+3 goes to workspace 3, SUPER+Shift+3 sends the window there.</p>
+      <div class="macnote" hidden>On this MacBook's own keyboard, <b>SUPER is the corner key labelled control</b>, and Ctrl is ⌘ (hid_apple swaps them). An external non-Apple keyboard keeps its normal keys.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">02</span> Workspaces</h2>
+      <p class="lead">Numbered desktops, each with its own windows. A 3-finger swipe moves between them.</p>
+      <p>The <b>scratchpad</b> is a hidden workspace that slides over whatever you're doing: park a terminal or a music player there and toggle it with SUPER+S.</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">03</span> Tiling</h2>
+      <p class="lead">New windows tile on their own, side by side. You don't drag them around.</p>
+      <p>Float one with SUPER+V, fill the screen with SUPER+F, and flip how a pair is split with SUPER+J. SUPER+R enters resize mode: arrows resize, Esc leaves. SUPER plus a mouse drag moves or resizes anything.</p>
+    </div>
+
+    <div class="card wide">
+      <h2><span class="num">04</span> Where these rows come from</h2>
+      <p>Every bind with a <code>description</code> in <code>hyprland.lua</code> is read live from <code>hyprctl binds</code>, so a new bind appears here as soon as you describe it. The mouse rows and the gesture come from <code>keys.tsv</code>. <kbd class="named"><span class="mod">Super</span>/</kbd> searches the same rows in rofi; <kbd class="named"><span class="mod">Super</span><span class="mod">Shift</span>/</kbd> opens this page.</p>
+    </div>
+  </div>
+
   <div class="grid" id="grid"></div>
-  <div class="empty" id="empty">Nothing matches. Try another word, or <code>:FzfLua keymaps</code> inside nvim.</div>
+  <div class="empty" id="empty">Nothing matches on this tab. The counts on the tabs show matches elsewhere.</div>
 </main>
 
 <div class="overlay" id="overlay" hidden>
@@ -367,7 +471,7 @@ body.filtering .intro { display: none; }
     <div class="meta"><span id="f-sec"></span><span id="f-mode"></span><span class="count" id="f-count"></span></div>
     <div class="q" id="f-q"></div>
     <div class="sub" id="f-sub"></div>
-    <div class="answer" id="f-a"><span class="hint">Think of the keys, then press <kbd>Space</kbd> to check.</span></div>
+    <div class="answer" id="f-a"></div>
     <div class="actions">
       <button id="f-close">Done<kbd>Esc</kbd></button>
       <button id="f-show">Show<kbd>Space</kbd></button>
@@ -379,12 +483,12 @@ body.filtering .intro { display: none; }
 
 <footer>
   <span id="generated"></span> <span class="tag">yours</span> marks a binding from your config.
-  Regenerate with <code>lattice keys sheet</code> or <kbd><span class="mod">Super</span><span class="mod">Shift</span>/</kbd>. Search the same rows in rofi with <kbd><span class="mod">Super</span>/</kbd>.
+  Regenerate with <code>lattice cheatsheet</code>, <kbd><span class="mod">Super</span><span class="mod">Shift</span>/</kbd> or <b>Keybinding Cheatsheet</b> in the app launcher. Search the same rows in rofi with <kbd><span class="mod">Super</span>/</kbd>.
   <div id="stale"></div>
 </footer>
 
-<!-- Filled in by lattice-keys: the curated rows (keys.json, at build time) and the maps the
-     live nvim config describes (at generation time). -->
+<!-- Filled in by lattice-keys: the curated rows (nvim.json, groups.json, at build time) and
+     every row the SUPER+/ picker shows (at generation time). -->
 <script type="application/json" id="sheet">
 @SHEET@
 </script>
@@ -394,26 +498,38 @@ body.filtering .intro { display: none; }
 
 <script>
 /* ======================================================================
-   Rows come from keys.json in lattice (modules/nixos/desktop/nvim-sheet), the same file
-   the SUPER+/ rofi menu reads its Neovim built-ins from. A row is
-     {keys: [...alternatives], desc, ess?, src?, sub?, mode?}  or  {note}
-   keys starting with ":" or "/text" render as commands, everything else as keystrokes.
-   src "live"   – described in your config; checked against the live dump below
-   src "plugin" – from your config, but nothing a dump can see (plugin-internal, buffer-local)
+   Source: lattice's modules/nixos/desktop/cheatsheet. The page is written by
+   `lattice cheatsheet` (lattice-keys sheet) and shows the same rows as the SUPER+/ picker.
+
+   #sheet  {nvim: nvim.json, groups: groups.json}
+     nvim rows: {keys: [...alternatives], desc, ess?, src?, sub?, mode?} or {note}
+       src "live"   – described in your config; checked against the live dump
+       src "plugin" – from your config, but nothing a dump can see
+   #live   {generated, theme, swap, rows: [{s: section, k: keys, d: desc, o: "live"?}]}
+     exactly the picker's rows: Hyprland binds, tmux notes, keys.tsv, the nvim dump
+     (o "live") and nvim.json's own rows (which the page takes from #sheet instead).
    ====================================================================== */
 const readJSON = id => { try { return JSON.parse(document.getElementById(id).textContent); } catch { return null; } };
-const SHEET = readJSON("sheet") || { sections: [] };
+const SHEET = readJSON("sheet") || { nvim: { sections: [] }, groups: {} };
 const LIVE = readJSON("live");
-const SECTIONS = SHEET.sections;
+const IN = (LIVE && LIVE.rows) || [];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-/* ---------- reconcile with the live config ---------- */
+const TOOLS = { nvim: "Neovim", tmux: "tmux", hypr: "Hyprland" };
+const SECTIONS = [];
+
+/* ---------- Neovim: nvim.json, reconciled with the live dump ---------- */
 // Placeholders drop out and <...> is case-folded, so "gh{motion}" matches gh and <C-W> matches <C-w>.
 const norm = k => k.replace(/\{[^}]+\}/g, "").replace(/<[^>]+>/g, m => m.toLowerCase());
+const nvimLive = IN.filter(r => r.s === "nvim" && r.o === "live").map(r => {
+  const m = /^(.*?)(?:  \[([a-z,]+)\])?$/.exec(r.d);
+  return { lhs: r.k, desc: m[1], modes: (m[2] || "n").split(",") };
+});
 const stale = [];
-if (LIVE && LIVE.maps && LIVE.maps.length) {
-  const live = new Set(LIVE.maps.map(m => norm(m.lhs)));
+if (nvimLive.length) {
+  const live = new Set(nvimLive.map(m => norm(m.lhs)));
   const covered = new Set();
-  for (const sec of SECTIONS) {
+  for (const sec of SHEET.nvim.sections) {
     sec.rows = sec.rows.filter(r => {
       if (!r.keys) return true;
       r.keys.forEach(k => covered.add(norm(k)));
@@ -423,21 +539,40 @@ if (LIVE && LIVE.maps && LIVE.maps.length) {
     });
   }
   // Whatever the config describes that no row covers yet still belongs on the sheet.
-  const extra = LIVE.maps.filter(m => !covered.has(norm(m.lhs)));
-  if (extra.length) SECTIONS.push({
+  const extra = nvimLive.filter(m => !covered.has(norm(m.lhs)));
+  if (extra.length) SHEET.nvim.sections.push({
     id: "more", title: "More from your config", mode: "n",
     blurb: "Described in your config but not sorted into a section yet. Descriptions are the config's own.",
-    rows: extra.map(m => ({ keys: [m.lhs], desc: m.desc, src: "live", mode: m.modes.join(",") })),
+    rows: extra.map(m => ({ keys: [m.lhs], desc: esc(m.desc), src: "live", mode: m.modes.join(",") })),
   });
+}
+for (const s of SHEET.nvim.sections) SECTIONS.push({ ...s, tool: "nvim" });
+
+/* ---------- tmux and Hyprland: the picker's rows, sorted by groups.json ---------- */
+const FROM = { tmux: "tmux", hypr: "hypr", mouse: "hypr" };
+for (const tool of ["tmux", "hypr"]) {
+  const g = (SHEET.groups || {})[tool]; if (!g) continue;
+  const secs = g.sections.map(s => ({ ...s, tool, rows: [], re: s.match ? new RegExp(s.match, "i") : null }));
+  const ess = new Set(g.ess || []);
+  for (const r of IN) {
+    if (FROM[r.s] !== tool) continue;
+    const sec = secs.find(s => (!s.from || s.from.includes(r.s)) && (!s.re || s.re.test(r.k + " " + r.d)));
+    if (!sec) continue;
+    // keys.tsv's tmux rows are tmux's own defaults; everything else here is your config.
+    const mine = r.o === "live" || r.s !== "tmux";
+    sec.rows.push({ keys: [r.k], desc: esc(r.d), ess: ess.has(r.k) || undefined, src: mine ? "live" : undefined });
+  }
+  for (const s of secs) if (s.rows.length) SECTIONS.push(s);
 }
 
 const MODE = { n: ["Normal", "b-n"], i: ["Insert", "b-i"], v: ["Visual", "b-v"], c: ["Command", "b-c"], t: ["Terminal", "b-t"] };
 
 /* ---------- learned rows (this browser only) ---------- */
-const LEARNED_KEY = "nvim-cheatsheet-learned";
-let learned = new Set();
-try { learned = new Set(JSON.parse(localStorage.getItem(LEARNED_KEY) || "[]")); } catch {}
-const saveLearned = () => { try { localStorage.setItem(LEARNED_KEY, JSON.stringify([...learned])); } catch {} };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let learned = new Set(store.get("cheatsheet-learned", []));
 // Every row, with a stable id: section plus keys survives description edits and regeneration.
 const ROWS = [];
 for (const sec of SECTIONS) for (const r of sec.rows) if (r.keys) {
@@ -451,8 +586,6 @@ const BY_ID = Object.fromEntries(ROWS.map(r => [r.id, r]));
 const NAMED = { CR: "Enter", Esc: "Esc", Tab: "Tab", BS: "Backspace", Space: "Space", Up: "↑", Down: "↓", Left: "←", Right: "→", Bslash: "\\" };
 const MODS = { C: "Ctrl", S: "Shift", A: "Alt", M: "Alt" };
 let notation = "friendly";
-
-const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function tokenize(s) {
   const out = [];
@@ -483,23 +616,56 @@ function renderToken(tok) {
 }
 
 const isCmd = s => s[0] === ":" && s.length > 1 || (s[0] === "/" || s[0] === "?") && s.length > 1;
+const cap = (k, mod, title) => `<kbd class="${k.length > 1 ? "named" : ""}"${title ? ` title="${esc(title)}"` : ""}>${mod ? `<span class="mod">${mod}</span>` : ""}${esc(k)}</kbd>`;
+const SUPER_TITLE = LIVE && LIVE.swap ? "The corner key labelled control on this MacBook" : "";
+
+// "copy: C-Space", "resize: Arrows": a key table / submap, shown as a label.
+function modeLabel(s) {
+  const m = /^([a-z]+): (.*)$/.exec(s);
+  if (!m) return ["", s];
+  return [`<span class="mlabel">${m[1] === "copy" ? "copy mode" : esc(m[1])}</span>`, m[2]];
+}
+
+// tmux: space-separated presses, each maybe C-/M-/S- chorded. "/" between them means "or".
+const TMUX_NAMED = { arrows: "Arrows", Up: "↑", Down: "↓", Left: "←", Right: "→", BSpace: "Backspace", PPage: "PgUp", NPage: "PgDn", DC: "Del", Escape: "Esc", WheelUp: "Wheel ↑", WheelDown: "Wheel ↓", "1-9": "1–9" };
+function renderTmux(s) {
+  const [label, rest] = modeLabel(s);
+  return label + rest.split(" ").map(t => {
+    if (t === "/") return '<span class="or">/</span>';
+    const m = /^([CMS])-(.+)$/.exec(t);
+    return m ? cap(TMUX_NAMED[m[2]] || m[2], MODS[m[1]]) : cap(TMUX_NAMED[t] || t);
+  }).join("");
+}
+
+// Hyprland: "SUPER + SHIFT + Arrows" is one chord; " / " separates alternatives.
+const HYPR_MODS = { SUPER: "Super", CTRL: "Ctrl", ALT: "Alt", SHIFT: "Shift" };
+function renderHypr(s) {
+  const [label, rest] = modeLabel(s);
+  return label + rest.split(" / ").map(alt =>
+    `<span class="alt">${alt.split(" + ").map(p => cap(HYPR_MODS[p] || p, "", p === "SUPER" ? SUPER_TITLE : "")).join('<span class="plus">+</span>')}</span>`
+  ).join('<span class="or">/</span>');
+}
 
 function renderAlt(s) {
   if (isCmd(s)) return `<code class="cmd">${esc(s)}</code>`;
   return `<span class="alt">${tokenize(s).map(renderToken).join("")}</span>`;
 }
-function renderKeys(keys) {
-  const list = Array.isArray(keys) ? keys : [keys];
-  return `<span class="keys">${list.map(renderAlt).join('<span class="or">/</span>')}</span>`;
+function renderKeys(keys, tool = "nvim") {
+  if (tool !== "nvim") {
+    const inner = notation === "vim" ? `<code class="raw">${esc(keys[0])}</code>` : tool === "tmux" ? renderTmux(keys[0]) : renderHypr(keys[0]);
+    return `<span class="keys">${inner}</span>`;
+  }
+  return `<span class="keys">${keys.map(renderAlt).join('<span class="or">/</span>')}</span>`;
 }
 
 /* ---------- build sections ---------- */
 const grid = document.getElementById("grid");
 const jump = document.getElementById("jump");
+let tool = "nvim";
 
 function build() {
   grid.innerHTML = SECTIONS.map(sec => {
-    const [mname, mcls] = MODE[sec.mode];
+    const badge = sec.mode ? `<span class="badge ${MODE[sec.mode][1]}">${MODE[sec.mode][0]}</span>` : "";
     const rows = sec.rows.map(r => {
       if (r.note) return `<tr class="note"><td colspan="3">${r.note}</td></tr>`;
       const plain = s => (s || "").replace(/<[^>]+>/g, "");
@@ -507,15 +673,16 @@ function build() {
       const mine = Boolean(r.src);
       const cls = [r.ess ? "ess" : "", mine ? "mine" : "", learned.has(r.id) ? "learned" : ""].join(" ").trim();
       const modes = r.mode && r.mode !== "n" ? ` <span class="rmode">${esc(r.mode)}</span>` : "";
-      return `<tr class="${cls}" data-id="${esc(r.id)}" data-text="${esc(text)}"><td class="k">${renderKeys(r.keys)}</td>` +
-        `<td class="d">${r.desc}${modes}${mine ? '<span class="tag">yours</span>' : ""}` +
+      return `<tr class="${cls}" data-id="${esc(r.id)}" data-text="${esc(text)}"><td class="k">${renderKeys(r.keys, sec.tool)}</td>` +
+        // Every Hyprland row is your config, so the tag would only be noise there.
+        `<td class="d">${r.desc}${modes}${mine && sec.tool !== "hypr" ? '<span class="tag">yours</span>' : ""}` +
         `${r.sub ? `<span class="sub">${r.sub}</span>` : ""}</td>` +
         `<td class="c"><button class="tick" title="I know this one" aria-label="Mark as learned">✓</button></td></tr>`;
     }).join("");
-    return `<section class="sec" id="${sec.id}"><div class="head"><h3>${esc(sec.title)} <span class="badge ${mcls}">${mname}</span></h3>` +
-      `<p>${esc(sec.blurb)}</p></div><table>${rows}</table></section>`;
+    return `<section class="sec" id="${sec.id}" data-tool="${sec.tool}"><div class="head"><h3>${esc(sec.title)} ${badge}</h3>` +
+      (sec.blurb ? `<p>${esc(sec.blurb)}</p>` : "") + `</div><table>${rows}</table></section>`;
   }).join("");
-  jump.innerHTML = SECTIONS.map(s => `<a href="#${s.id}">${esc(s.title.replace(/:.*$/, ""))}</a>`).join("");
+  jump.innerHTML = SECTIONS.map(s => `<a href="#${s.id}" data-tool="${s.tool}">${esc(s.title.replace(/:.*$/, ""))}</a>`).join("");
   filter();
   progress();
 }
@@ -527,12 +694,29 @@ grid.addEventListener("click", e => {
 });
 function setLearned(id, on) {
   on ? learned.add(id) : learned.delete(id);
-  saveLearned();
+  store.set("cheatsheet-learned", [...learned]);
   const tr = grid.querySelector(`tr[data-id="${CSS.escape(id)}"]`);
   if (tr) tr.classList.toggle("learned", on);
   progress();
   if (show === "learn") filter();
 }
+
+/* ---------- tabs ---------- */
+function setTool(t, scroll = true) {
+  if (!TOOLS[t]) t = "nvim";
+  tool = t;
+  document.querySelectorAll(".tools button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tool === t));
+  document.querySelectorAll(".intro[data-tool]").forEach(el => el.hidden = el.dataset.tool !== t);
+  document.title = `${TOOLS[t]} · lattice keys`;
+  try { history.replaceState(null, "", "#" + t); } catch {}
+  store.set("cheatsheet-tool", t);
+  filter();
+  progress();
+  if (scroll) window.scrollTo({ top: 0 });
+}
+document.querySelector(".tools").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tool]"); if (b) setTool(b.dataset.tool);
+});
 
 /* ---------- progress + learning path ---------- */
 const STEPS = [
@@ -546,12 +730,12 @@ const STEPS = [
 ];
 
 function progress() {
-  const ess = ROWS.filter(r => r.ess);
+  const ess = ROWS.filter(r => r.ess && r.sec.tool === tool);
   const got = ess.filter(r => learned.has(r.id)).length;
   document.getElementById("pfill").style.width = (100 * got / Math.max(ess.length, 1)) + "%";
   document.getElementById("ptext").textContent = `${got} / ${ess.length} essentials`;
-  // A path key counts as known when any row listing it is ticked.
-  const known = new Set(ROWS.filter(r => learned.has(r.id)).flatMap(r => r.keys));
+  // A path key counts as known when any nvim row listing it is ticked.
+  const known = new Set(ROWS.filter(r => r.sec.tool === "nvim" && learned.has(r.id)).flatMap(r => r.keys));
   document.getElementById("steps").innerHTML = STEPS.map((st, i) => {
     const n = st.k.filter(k => known.has(k)).length;
     return `<div class="step${n === st.k.length ? " complete" : ""}"><h4><span class="n">${String(i + 1).padStart(2, "0")}</span>${esc(st.t)}` +
@@ -568,7 +752,7 @@ function renderPlain(t) {
 document.getElementById("steps").addEventListener("click", e => {
   const c = e.target.closest(".chip"); if (!c) return;
   q.value = c.dataset.key; filter();
-  const hit = grid.querySelector("tr:not([hidden])[data-id]");
+  const hit = grid.querySelector("section:not([hidden]) tr:not([hidden])[data-id]");
   if (hit) hit.scrollIntoView({ block: "center", behavior: "smooth" });
 });
 
@@ -578,7 +762,7 @@ let show = "all";
 
 function filter() {
   const terms = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  let any = false;
+  const counts = { nvim: 0, tmux: 0, hypr: 0 };
   document.body.classList.toggle("filtering", terms.length > 0 || show !== "all");
   for (const sec of grid.querySelectorAll("section.sec")) {
     let visible = 0;
@@ -592,11 +776,18 @@ function filter() {
       tr.hidden = !ok;
       if (ok && !isNote) visible++;
     }
-    sec.hidden = visible === 0;
-    if (visible) any = true;
+    counts[sec.dataset.tool] += visible;
+    sec.hidden = sec.dataset.tool !== tool || visible === 0;
   }
+  // While searching, each tab says how many rows match there.
+  const searching = terms.length > 0;
+  document.querySelectorAll(".tools button").forEach(b => {
+    const c = b.querySelector(".cnt");
+    c.textContent = searching ? counts[b.dataset.tool] : "";
+    c.classList.toggle("zero", searching && counts[b.dataset.tool] === 0);
+  });
   for (const a of jump.querySelectorAll("a")) a.hidden = document.getElementById(a.hash.slice(1)).hidden;
-  document.getElementById("empty").style.display = any ? "none" : "block";
+  document.getElementById("empty").style.display = counts[tool] ? "none" : "block";
 }
 q.addEventListener("input", filter);
 document.addEventListener("keydown", e => {
@@ -604,6 +795,7 @@ document.addEventListener("keydown", e => {
   const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
   if (e.key === "/" && !typing) { e.preventDefault(); q.focus(); q.select(); }
   else if (e.key === "p" && !typing && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openPractice(); }
+  else if (/^[123]$/.test(e.key) && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) setTool(["nvim", "tmux", "hypr"][e.key - 1]);
   else if (e.key === "Escape" && document.activeElement === q) { q.value = ""; filter(); q.blur(); }
 });
 
@@ -613,9 +805,8 @@ const $ = id => document.getElementById(id);
 let deck = [], card = 0, shown = false;
 
 function openPractice() {
-  // Whatever the search and filter leave on screen, so "window" + Practice drills splits.
-  deck = [...grid.querySelectorAll("tr[data-id]:not([hidden])")]
-    .filter(tr => !tr.closest("section").hidden)
+  // Whatever the tab, search and filter leave on screen, so "split" + Practice drills splits.
+  deck = [...grid.querySelectorAll("section:not([hidden]) tr[data-id]:not([hidden])")]
     .map(tr => BY_ID[tr.dataset.id]).filter(Boolean);
   if (!deck.length) return;
   for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
@@ -625,10 +816,10 @@ function openPractice() {
 }
 function showCard() {
   if (card >= deck.length) { closePractice(); return; }
-  const r = deck[card], [mname, mcls] = MODE[r.mode && MODE[r.mode] ? r.mode : r.sec.mode];
+  const r = deck[card], mode = MODE[r.mode] ? r.mode : r.sec.mode;
   shown = false;
-  $("f-sec").textContent = r.sec.title;
-  $("f-mode").innerHTML = `<span class="badge ${mcls}">${mname}</span>`;
+  $("f-sec").textContent = `${TOOLS[r.sec.tool]} · ${r.sec.title}`;
+  $("f-mode").innerHTML = mode ? `<span class="badge ${MODE[mode][1]}">${MODE[mode][0]}</span>` : "";
   $("f-count").textContent = `${card + 1} / ${deck.length}`;
   $("f-q").innerHTML = r.desc;
   $("f-sub").innerHTML = "";
@@ -637,7 +828,7 @@ function showCard() {
 }
 function reveal() {
   const r = deck[card]; shown = true;
-  $("f-a").innerHTML = renderKeys(r.keys);
+  $("f-a").innerHTML = renderKeys(r.keys, r.sec.tool);
   $("f-sub").innerHTML = r.sub || "";
   $("f-show").hidden = true; $("f-got").hidden = false; $("f-again").hidden = false;
 }
@@ -664,7 +855,7 @@ $("f-close").addEventListener("click", closePractice);
 overlay.addEventListener("click", e => { if (e.target === overlay) closePractice(); });
 
 function segment(attr, cb) {
-  const btns = document.querySelectorAll(`[data-${attr}]`);
+  const btns = document.querySelectorAll(`.seg [data-${attr}]`);
   btns.forEach(b => b.addEventListener("click", () => {
     btns.forEach(x => x.setAttribute("aria-pressed", x === b));
     cb(b.dataset[attr]);
@@ -728,41 +919,48 @@ function renderBuilder() {
     (quirk ? `<span class="quirk">${esc(quirk)}</span>` : "");
 }
 
-/* ---------- themes (the six lattice themes) ---------- */
+/* ---------- themes: lattice's eight, following `lattice theme` unless one is picked ---------- */
 const THEMES = {
-  "Gruvbox Material": ["#282828","#32302f","#3c3836","#45403d","#d4be98","#928374","#d8a657","#7daea3","#a9b665","#ea6962","#d3869b","#89b482","#e78a4e"],
-  "Catppuccin Mocha": ["#1e1e2e","#262637","#313244","#45475a","#cdd6f4","#7f849c","#cba6f7","#89b4fa","#a6e3a1","#f38ba8","#f5c2e7","#94e2d5","#fab387"],
-  "Catppuccin Macchiato": ["#24273a","#2b2e43","#363a4f","#494d64","#cad3f5","#8087a2","#c6a0f6","#8aadf4","#a6da95","#ed8796","#f5bde6","#8bd5ca","#f5a97f"],
-  "Catppuccin Frappé": ["#303446","#373b50","#414559","#51576d","#c6d0f5","#838ba7","#ca9ee6","#8caaee","#a6d189","#e78284","#f4b8e4","#81c8be","#ef9f76"],
-  "Tokyo Night": ["#1a1b26","#202231","#292e42","#3b4261","#c0caf5","#737aa2","#7aa2f7","#7dcfff","#9ece6a","#f7768e","#bb9af7","#73daca","#ff9e64"],
-  "Rosé Pine": ["#191724","#1f1d2e","#26233a","#403d52","#e0def4","#908caa","#ebbcba","#9ccfd8","#31748f","#eb6f92","#c4a7e7","#9ccfd8","#f6c177"],
+  "gruvbox-material": ["Gruvbox Material", "#282828","#32302f","#3c3836","#45403d","#d4be98","#928374","#d8a657","#7daea3","#a9b665","#ea6962","#d3869b","#89b482","#e78a4e"],
+  "mocha": ["Catppuccin Mocha", "#1e1e2e","#262637","#313244","#45475a","#cdd6f4","#7f849c","#cba6f7","#89b4fa","#a6e3a1","#f38ba8","#f5c2e7","#94e2d5","#fab387"],
+  "macchiato": ["Catppuccin Macchiato", "#24273a","#2b2e43","#363a4f","#494d64","#cad3f5","#8087a2","#c6a0f6","#8aadf4","#a6da95","#ed8796","#f5bde6","#8bd5ca","#f5a97f"],
+  "frappe": ["Catppuccin Frappé", "#303446","#373b50","#414559","#51576d","#c6d0f5","#838ba7","#ca9ee6","#8caaee","#a6d189","#e78284","#f4b8e4","#81c8be","#ef9f76"],
+  "tokyonight-night": ["Tokyo Night", "#1a1b26","#202231","#292e42","#3b4261","#c0caf5","#737aa2","#7aa2f7","#7dcfff","#9ece6a","#f7768e","#bb9af7","#73daca","#ff9e64"],
+  "tokyonight-storm": ["Tokyo Night Storm", "#24283b","#1f2335","#292e42","#3b4261","#c0caf5","#737aa2","#7aa2f7","#7dcfff","#9ece6a","#f7768e","#bb9af7","#73daca","#ff9e64"],
+  "rose-pine": ["Rosé Pine", "#191724","#1f1d2e","#26233a","#403d52","#e0def4","#908caa","#ebbcba","#9ccfd8","#31748f","#eb6f92","#c4a7e7","#9ccfd8","#f6c177"],
+  "rose-pine-moon": ["Rosé Pine Moon", "#232136","#2a273f","#393552","#44415a","#e0def4","#908caa","#ea9a97","#9ccfd8","#3e8fb0","#eb6f92","#c4a7e7","#9ccfd8","#f6c177"],
 };
 const VARS = ["bg","panel","raised","line","fg","muted","accent","blue","green","red","purple","aqua","orange"];
+const latticeTheme = THEMES[LIVE && LIVE.theme] ? LIVE.theme : "gruvbox-material";
 const sel = document.getElementById("theme");
-sel.innerHTML = Object.keys(THEMES).map(t => `<option>${t}</option>`).join("");
-function applyTheme(name) {
-  if (!THEMES[name]) name = "Gruvbox Material";
-  THEMES[name].forEach((c, i) => document.documentElement.style.setProperty(`--${VARS[i]}`, c));
-  sel.value = name;
-  try { localStorage.setItem("nvim-cheatsheet-theme", name); } catch {}
+sel.innerHTML = `<option value="">Follow lattice (${THEMES[latticeTheme][0]})</option>` +
+  Object.entries(THEMES).map(([id, t]) => `<option value="${id}">${t[0]}</option>`).join("");
+function applyTheme(pick) {
+  const id = THEMES[pick] ? pick : latticeTheme;
+  THEMES[id].slice(1).forEach((c, i) => document.documentElement.style.setProperty(`--${VARS[i]}`, c));
+  sel.value = THEMES[pick] ? pick : "";
 }
-sel.addEventListener("change", () => applyTheme(sel.value));
-let saved = null;
-try { saved = localStorage.getItem("nvim-cheatsheet-theme"); } catch {}
-applyTheme(saved || "Gruvbox Material");
+sel.addEventListener("change", () => { store.set("cheatsheet-theme", sel.value); applyTheme(sel.value); });
+applyTheme(store.get("cheatsheet-theme", ""));
 
+/* ---------- footer ---------- */
 const gen = document.getElementById("generated");
-if (LIVE && LIVE.maps && LIVE.maps.length) {
-  gen.textContent = `Generated ${LIVE.generated} against your live nvim config (${LIVE.maps.length} described maps).`;
+if (IN.length) {
+  const n = s => IN.filter(r => s.includes(r.s) && (r.o === "live" || s[0] !== "nvim")).length;
+  gen.textContent = `Generated ${LIVE.generated} from your live configs: ${n(["hypr", "mouse"])} Hyprland, ${n(["tmux"])} tmux and ${nvimLive.length} described nvim rows.`;
 } else {
-  gen.textContent = "Not checked against your nvim config: this copy was never generated, or the dump failed.";
+  gen.textContent = "Not checked against your configs: this copy was never generated.";
   gen.style.color = "var(--red)";
 }
 if (stale.length) document.getElementById("stale").textContent =
-  `Dropped, no longer in your config: ${stale.join(", ")}. Update keys.json in lattice.`;
+  `Dropped, no longer in your nvim config: ${stale.join(", ")}. Update nvim.json in lattice.`;
+if (LIVE && LIVE.swap) document.querySelectorAll(".macnote").forEach(el => el.hidden = false);
+// lattice.display.webZoom: the size Firefox draws pages at on this host.
+if (LIVE && LIVE.zoom && LIVE.zoom !== 1) document.documentElement.style.zoom = LIVE.zoom;
 
 build();
 renderBuilder();
+setTool(location.hash.slice(1) || store.get("cheatsheet-tool", "nvim"), false);
 </script>
 </body>
 </html>

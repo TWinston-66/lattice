@@ -36,6 +36,9 @@
   hardware.graphics.extraPackages = [ pkgs.intel-media-driver ];
 
   ### DISPLAY ###
+  # devPixelsPerPx below, for the pages lattice opens in Chromium.
+  lattice.display.webZoom = 1.1;
+
   programs = {
     firefox = {
       preferences."layout.css.devPixelsPerPx" = "1.1";

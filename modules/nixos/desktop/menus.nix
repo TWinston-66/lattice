@@ -556,8 +556,8 @@ let
   # ~/.config/hypr/keys.tsv (the hypr stow package) adds what no config can report -- the
   # trackpad gesture, the mouse's Solaar rules -- and hides rows not worth the space.
   # Vim's own keys are the exception, with no config to read them from: they come from
-  # nvim-sheet/keys.json, which `lattice keys sheet` also turns into a browser page, so
-  # the picker and the page list the same nvim keys.
+  # cheatsheet/nvim.json. `lattice cheatsheet` writes the same rows out as a browser page,
+  # so the picker and the page never disagree.
   #
   # tmux and nvim come from PATH rather than runtimeInputs: tmux has to be the build the
   # server is running, and nvim has to be the one the config and its plugins were set up for.
@@ -658,7 +658,7 @@ let
     end
   '';
 
-  # The one place nvim keys are written down by hand: nvim-sheet/keys.json. Vim's own keys
+  # The one place nvim keys are written down by hand: cheatsheet/nvim.json. Vim's own keys
   # have no config to read them from, and plugin keys that live inside a picker or a
   # buffer-local map never show up in the dump above. Both halves of the cheatsheet read
   # it -- rofi gets its rows as TSV here, the browser page embeds the whole file -- so the
@@ -673,18 +673,20 @@ let
            + (if $s.ctx then " (" + $s.ctx + ")" else "" end)
            + (if $m == "n" then "" else "  [" + $m + "]" end)]
       | @tsv
-    ' ${./nvim-sheet/keys.json} > $out
+    ' ${./cheatsheet/nvim.json} > $out
   '';
 
-  # sheet.html with keys.json inlined, so the page opens from file:// with nothing to fetch.
-  # The live dump goes in at @LIVE@ when `lattice keys sheet` writes it out. "</" is escaped
-  # so a </code> in a description can't close the script element early.
-  nvimSheet =
-    pkgs.runCommand "lattice-keys-nvim-sheet.html" { nativeBuildInputs = [ pkgs.jq pkgs.gawk pkgs.gnused ]; }
+  # The browser cheatsheet: sheet.html with nvim.json and groups.json (how the Hyprland and
+  # tmux rows are sorted into sections) inlined, so the page opens from file:// with nothing
+  # to fetch. The picker's rows go in at @LIVE@ when `lattice cheatsheet` writes it out.
+  # "</" is escaped so a </code> in a description can't close the script element early.
+  cheatsheetPage =
+    pkgs.runCommand "lattice-cheatsheet.html" { nativeBuildInputs = [ pkgs.jq pkgs.gawk pkgs.gnused ]; }
       ''
-        jq -c . ${./nvim-sheet/keys.json} | sed 's#</#<\\/#g' > rows.json
-        awk -v f=rows.json '$0 == "@SHEET@" { while ((getline l < f) > 0) print l; next } { print }' \
-          ${./nvim-sheet/sheet.html} > $out
+        jq -c -s '{nvim: .[0], groups: .[1]}' ${./cheatsheet/nvim.json} ${./cheatsheet/groups.json} \
+          | sed 's#</#<\\/#g' > sheet.json
+        awk -v f=sheet.json '$0 == "@SHEET@" { while ((getline l < f) > 0) print l; next } { print }' \
+          ${./cheatsheet/sheet.html} > $out
       '';
 
   keybindings = pkgs.writeShellApplication {
@@ -697,7 +699,8 @@ let
       pkgs.gnugrep
       pkgs.gnused
       pkgs.coreutils
-      pkgs.xdg-utils
+      # The browser page opens as an app window: see `sheet` below.
+      pkgs.ungoogled-chromium
     ];
     text = ''
       extras="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/keys.tsv"
@@ -711,32 +714,10 @@ let
           -c "luafile ${nvimKeys}" -c 'qa!' 2>/dev/null) || true
       }
 
-      # `sheet [path]`: the browser half. keys.json's rows plus what the live config
-      # describes, written out (by default into the vault, beside the lattice notes) and
-      # opened. The page drops "live" rows the dump no longer has and lists described maps
-      # no row covers yet, so it says itself when it was last checked and what changed. An
-      # empty dump still writes the page; it then says it was not checked.
-      if [[ ''${1-} == sheet ]]; then
-        out=''${2:-$HOME/Documents/vault/Projects/lattice/nvim-cheatsheet.html}
-        tmp=$(mktemp -d)
-        trap 'rm -rf "$tmp"' EXIT
-        nvim_maps \
-          | jq -R -s -c --arg generated "$(date '+%Y-%m-%d %H:%M')" '
-              {generated: $generated, maps: [split("\n")[] | select(length > 0) | split("\t")
-                | (.[1] | capture("^(?<desc>.*?)(  \\[(?<modes>[a-z,]+)\\])?$")) as $d
-                | {lhs: .[0], desc: $d.desc, modes: (($d.modes // "n") | split(","))}]}' \
-          | sed 's#</#<\\/#g' > "$tmp/live.json"
-        awk -v f="$tmp/live.json" '$0 == "@LIVE@" { while ((getline l < f) > 0) print l; next } { print }' \
-          ${nvimSheet} > "$tmp/sheet.html"
-        mkdir -p "$(dirname "$out")"
-        cp "$tmp/sheet.html" "$out"
-        xdg-open "$out" >/dev/null 2>&1 &
-        exit 0
-      fi
-
       # What is in front of you decides which section leads: nvim if the tmux pane last typed
       # into is running it, tmux if a terminal has focus, the desktop otherwise. Everything is
-      # still listed and searchable; this only saves scrolling past the rest.
+      # still listed and searchable; this only saves scrolling past the rest. The browser
+      # page opens on the same tool's tab.
       focus=hypr
       if [[ $(hyprctl activewindow -j 2>/dev/null | jq -r '.class // ""') == com.mitchellh.ghostty ]]; then
         focus=tmux
@@ -750,8 +731,11 @@ let
         *) order=(hypr mouse tmux nvim) ;;
       esac
 
+      # A fourth column, "live", marks rows read from a running config rather than a file;
+      # the picker shows the first three, the page uses it to tell your binds from defaults
+      # and to check nvim.json's rows against the dump.
       live() {
-        hyprctl binds -j | jq -r -f ${hyprKeys} | sed 's/^/hypr\t/'
+        hyprctl binds -j | jq -r -f ${hyprKeys} | sed 's/^/hypr\t/; s/$/\tlive/'
 
         # Only binds the config itself notes: tmux notes every default too, so those are listed
         # by a throwaway server that has read no config and taken out. The prefix is set on it
@@ -761,12 +745,13 @@ let
           tmux list-keys -N \
             | grep -vxFf <(tmux -L "lattice-keys-$$" -f /dev/null start-server \; \
                 set -g prefix "$prefix" \; list-keys -N \; kill-server 2>/dev/null) \
-            | sed -E 's/^([^ ]+ [^ ]+) +/tmux\t\1\t/' || true
+            | sed -E 's/^([^ ]+ [^ ]+) +(.*)$/tmux\t\1\t\2\tlive/' || true
         fi
 
         # What the config describes, then Vim's own keys and the plugin keys no dump can see,
-        # from keys.json -- the same rows the browser sheet shows.
-        { nvim_maps; cat ${nvimBuiltins}; } | sed 's/^/nvim\t/'
+        # from nvim.json -- the same rows the browser sheet shows.
+        nvim_maps | sed 's/^/nvim\t/; s/$/\tlive/'
+        sed 's/^/nvim\t/' ${nvimBuiltins}
       }
 
       # keys.tsv rows are added, and a "-" description takes the matching live row out. awk
@@ -787,6 +772,47 @@ let
           | sort -t$'\t' -k1,1n -k2,2n | cut -f3-
       )
 
+      # `sheet [nvim|tmux|hypr]`: the same rows as a browser page, written to the cache and
+      # opened on the focused tool's tab (or the one named). The page sorts the Hyprland and
+      # tmux rows into sections, drops nvim.json rows the dump no longer has and lists
+      # described maps no row covers yet. It also follows the lattice theme, and says which
+      # physical keys are which when hid_apple has swapped Ctrl and Cmd.
+      if [[ ''${1-} == sheet ]]; then
+        case ''${2-} in nvim | tmux | hypr) focus=$2 ;; esac
+        out="''${XDG_CACHE_HOME:-$HOME/.cache}/lattice/cheatsheet.html"
+        theme=$(lattice theme current 2>/dev/null) || theme=""
+        swap=false
+        [[ $(cat /sys/module/hid_apple/parameters/swap_ctrl_cmd 2>/dev/null) == 1 ]] && swap=true
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        printf '%s\n' "$rows" \
+          | jq -R -s -c --arg generated "$(date '+%Y-%m-%d %H:%M')" --arg theme "$theme" --argjson swap "$swap" \
+              --argjson zoom ${toString config.lattice.display.webZoom} '
+              {generated: $generated, theme: $theme, swap: $swap, zoom: $zoom,
+               rows: [split("\n")[] | select(length > 0) | split("\t")
+                 | {s: .[0], k: .[1], d: .[2]} + (if .[3] == "live" then {o: "live"} else {} end)]}' \
+          | sed 's#</#<\\/#g' > "$tmp/live.json"
+        awk -v f="$tmp/live.json" '$0 == "@LIVE@" { while ((getline l < f) > 0) print l; next } { print }' \
+          ${cheatsheetPage} > "$tmp/sheet.html"
+        mkdir -p "$(dirname "$out")"
+        cp "$tmp/sheet.html" "$out"
+
+        # An app window -- no tabs, no address bar -- in Chromium, which is already here for
+        # WebHID (apps.nix). Firefox's Taskbar Tabs are how lattice's other web apps get one,
+        # but they only take http(s) pages: a file:// URL has no host for a scope to match
+        # (TaskbarTabsRegistry.sys.mjs), and a local server just for this would be a daemon
+        # for a static page. Chromium names the window after the URL, chrome-<host>_<path with
+        # / as _>-Default -- an empty host here, so chrome-__home_...-Default -- which is how
+        # an open one is found again. It is
+        # closed rather than raised, because the page it shows was written from the old rows.
+        while read -r addr; do
+          hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })" >/dev/null 2>&1 || true
+        done < <(hyprctl clients -j 2>/dev/null \
+          | jq -r --arg c "chrome-_''${out//\//_}-Default" '.[] | select(.class == $c) | .address')
+        chromium --app="file://$out#$focus" >/dev/null 2>&1 &
+        exit 0
+      fi
+
       # Read-only: picking a row does nothing, it is the search that is the point.
       # Padded into columns rather than rofi's -display-columns, which joins but never aligns.
       # The font is monospace (config.rasi), so spaces line up.
@@ -801,6 +827,26 @@ let
             -theme-str 'window { width: 960px; } listview { lines: 14; }' \
         >/dev/null || true
     '';
+  };
+
+  # The cheatsheet in the launcher, under the names someone looking for it would type.
+  cheatsheetItem = pkgs.makeDesktopItem {
+    name = "lattice-cheatsheet";
+    desktopName = "Keybinding Cheatsheet";
+    genericName = "Neovim, tmux and Hyprland keys";
+    exec = "${lib.getExe keybindings} sheet";
+    icon = "preferences-desktop-keyboard-shortcuts";
+    categories = [ "Utility" ];
+    keywords = [
+      "keys"
+      "keybindings"
+      "shortcuts"
+      "hotkeys"
+      "neovim"
+      "nvim"
+      "tmux"
+      "hyprland"
+    ];
   };
 
   # Resuming needs somewhere to resume from, so a host without a resume device has no
@@ -922,6 +968,7 @@ in
     audioMenu
     powerMenu
     keybindings
+    cheatsheetItem
   ];
 
   systemd.user.services.waybar.path = [
@@ -1035,10 +1082,10 @@ in
       summary = "Search every Hyprland, tmux and Neovim binding";
       group = "session";
     };
-    "keys sheet" = {
+    cheatsheet = {
       exec = "${lib.getExe keybindings} sheet";
-      args = "[path]";
-      summary = "Write the Neovim cheatsheet page, checked against the live config, and open it";
+      args = "[nvim|tmux|hypr]";
+      summary = "Open the keybinding cheatsheet in the browser, fresh from the live configs";
       group = "session";
     };
   };

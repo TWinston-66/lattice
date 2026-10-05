@@ -272,6 +272,20 @@ in
     '';
   };
 
+  options.lattice.display.webZoom = lib.mkOption {
+    type = lib.types.numbers.between 0.5 2.0;
+    default = 1.0;
+    example = 0.8;
+    description = ''
+      Zoom for lattice's own pages shown outside Firefox -- the keybinding cheatsheet, in a
+      Chromium app window -- so they come out the size Firefox draws pages at on this host.
+      Chromium follows the output's scale with nothing on top, while Firefox carries a
+      per-host factor: devPixelsPerPx 1.1 on the Dell, and on the Mac the 80% default zoom
+      that lives in the Firefox profile rather than in any pref (hosts/mac/default.nix).
+      This is that factor, applied by the page itself as CSS zoom.
+    '';
+  };
+
   config = lib.mkMerge [
     # Written even when the host sets nothing, unlike the hypr file below: ~/.dotfiles/mako
     # includes this unconditionally, and mako has no `loadfile` guard to hide a missing one
