@@ -450,6 +450,118 @@ let
       done
     '';
   };
+  # The panel follows the room the other way round: dim in the dark, full in daylight. Same
+  # override rule as the keyboard above -- a change this script did not make (the brightness
+  # keys through swayosd, mostly) pauses it until the light moves 20 lux or 40%.
+  #
+  # Eyes read light logarithmically, so the curve is a table of lux breakpoints rather than a
+  # straight line, interpolated between them. 30 lux -> 35% is the level picked by hand in
+  # the evening lamp light this was tuned in. A change is only made once the target is a
+  # whole step away from where the panel is, so sensor jitter of a few lux never moves it.
+  #
+  # Nothing is written with the lid shut or the built-in panel powered off by DPMS: the
+  # sensor reads near 0 under a closed lid, and there is no reason to poke a panel that is
+  # off.
+  screenBacklightAuto = pkgs.writeShellApplication {
+    name = "lattice-screen-backlight-auto";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+      pkgs.hyprland
+      pkgs.jq
+    ];
+    text = ''
+      # lux:percent, ascending. Below the first point the first level holds, above the last
+      # the last.
+      curve="0:15 10:25 30:35 100:55 300:75 1000:100"
+      step=5
+      poll=5
+
+      als=""
+      for d in /sys/bus/iio/devices/iio:device*; do
+        [ -r "$d/name" ] && [ -r "$d/in_illuminance_input" ] || continue
+        read -r name < "$d/name"
+        case "$name" in *als*) als="$d/in_illuminance_input"; break ;; esac
+      done
+      panel=""
+      for candidate in /sys/class/backlight/*; do
+        [ -w "$candidate/brightness" ] || continue
+        panel="$candidate"
+        break
+      done
+      if [ -z "$als" ] || [ -z "$panel" ]; then
+        echo "no ambient light sensor or writable panel backlight" >&2
+        exit 0
+      fi
+      read -r max < "$panel/max_brightness"
+
+      lidClosed() {
+        [ "$(busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+          org.freedesktop.login1.Manager LidClosed 2>/dev/null)" = "b true" ]
+      }
+      # The built-in panel is eDP-* on both hosts. No hyprctl (outside Hyprland, or a
+      # stale socket) counts as on, so the loop still works under anything else.
+      panelOff() {
+        hyprctl -j monitors 2>/dev/null \
+          | jq -e 'any(.[]; (.name | startswith("eDP")) and (.dpmsStatus | not))' >/dev/null
+      }
+
+      percentFor() {
+        local lux=$1 prevLux="" prevPct="" point l p
+        for point in $curve; do
+          l=''${point%%:*}
+          p=''${point##*:}
+          if [ "$lux" -le "$l" ]; then
+            if [ -z "$prevLux" ]; then echo "$p"; else
+              echo $(( prevPct + (p - prevPct) * (lux - prevLux) / (l - prevLux) ))
+            fi
+            return
+          fi
+          prevLux=$l
+          prevPct=$p
+        done
+        echo "$prevPct"
+      }
+
+      lastSet=""
+      paused=0
+      pauseLux=0
+      while :; do
+        read -r lux < "$als" || lux=""
+        lux=''${lux%%.*}
+        read -r current < "$panel/brightness" || current=""
+        case "$lux$current" in "" | *[!0-9]*) sleep "$poll"; continue ;; esac
+
+        if [ -n "$lastSet" ] && [ "$current" != "$lastSet" ]; then
+          paused=1
+          pauseLux=$lux
+          lastSet=$current
+          echo "manual change to $current at $lux lux, pausing"
+        fi
+
+        if [ "$paused" = 1 ]; then
+          delta=$(( lux > pauseLux ? lux - pauseLux : pauseLux - lux ))
+          threshold=$(( pauseLux * 40 / 100 > 20 ? pauseLux * 40 / 100 : 20 ))
+          if [ "$delta" -ge "$threshold" ]; then
+            paused=0
+            echo "light moved to $lux lux, resuming"
+          fi
+        fi
+
+        if [ "$paused" = 0 ]; then
+          percent=$(percentFor "$lux")
+          have=$(( current * 100 / max ))
+          diff=$(( percent > have ? percent - have : have - percent ))
+          if [ "$diff" -ge "$step" ] && ! lidClosed && ! panelOff; then
+            printf '%s\n' "$(( max * percent / 100 ))" > "$panel/brightness"
+            echo "$lux lux: $percent%"
+          fi
+          read -r lastSet < "$panel/brightness" || lastSet=$current
+        fi
+        sleep "$poll"
+      done
+    '';
+  };
   # What each suspend actually cost, as a number in the journal rather than a feeling.
   #
   # Recovering this after the fact meant reading upower's history as root and diffing it
@@ -694,6 +806,18 @@ in
       unitConfig.ConditionPathExistsGlob = "/sys/bus/iio/devices/iio:device*/in_illuminance_input";
       serviceConfig = {
         ExecStart = lib.getExe kbdBacklightAuto;
+        Restart = "on-failure";
+      };
+    };
+
+    lattice-screen-backlight-auto = {
+      description = "Screen brightness from the ambient light sensor";
+      partOf = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      unitConfig.ConditionPathExistsGlob = "/sys/bus/iio/devices/iio:device*/in_illuminance_input";
+      serviceConfig = {
+        ExecStart = lib.getExe screenBacklightAuto;
         Restart = "on-failure";
       };
     };
