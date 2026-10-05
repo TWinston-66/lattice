@@ -397,9 +397,11 @@ let
   # The power-profile pill, as a custom module rather than waybar's own
   # power-profiles-daemon. What the swap buys is the tooltip: four sparklines over a
   # two-minute window -- load, each core cluster's clock and the package's own draw in watts
-  # -- under the profile's name, and below them the fans, the hottest sensor that names
-  # itself and what the battery is doing. None of that could hang off the built-in module,
-  # whose tooltip-format takes exactly one placeholder, {profile}.
+  # -- under the profile's name, with any cap the profile has put on a cluster's clock. Below
+  # them, every readout the machine exposes: the battery (charge limit, wear, cycles), the
+  # adapter, the fans, the heatpipe and each named temperature sensor. None of that could
+  # hang off the built-in module, whose tooltip-format takes exactly one placeholder,
+  # {profile}.
   #
   # What it costs is the D-Bus subscription: the built-in module watched
   # net.hadess.PowerProfiles and repainted the instant anything else set a profile, where
@@ -435,6 +437,7 @@ let
       c_balanced=''${c[mauve]}
       c_perf=''${c[peach]}
       c_none=''${c[overlay0]}
+      c_warn=''${c[red]}
       # The graph is `width` samples of the waybar interval, so these two are the window: 60 at
       # 2s is the last two minutes. Keep `period` in step with "interval" on custom/power-profile
       # in ~/.dotfiles/waybar/config.jsonc -- it is only used to say how long the window is.
@@ -500,8 +503,10 @@ let
       # cpufreq, grouped by the ceiling each policy reports: one group on a machine whose cores
       # are all alike, two where the clusters differ -- this Mac's E- and P-cores, or a hybrid
       # x86 part. A third ceiling, if one ever turns up, folds into the fastest and the slowest.
-      p_max=0 p_min=0 p_sum=0 p_n=0 p_gov=""
-      e_max=0 e_min=0 e_sum=0 e_n=0
+      # `cap` is scaling_max_freq, the ceiling a power profile has set below the hardware's -- on
+      # this Mac the whole difference between the three levels.
+      p_max=0 p_min=0 p_sum=0 p_n=0 p_gov="" p_cap=0
+      e_max=0 e_min=0 e_sum=0 e_n=0 e_cap=0
       for policy in /sys/devices/system/cpu/cpufreq/policy*; do
         rd "$policy/cpuinfo_max_freq"
         uint "$val" || continue
@@ -511,20 +516,22 @@ let
         cur=$val
         rd "$policy/cpuinfo_min_freq"
         if uint "$val"; then lo=$val; else lo=0; fi
+        rd "$policy/scaling_max_freq"
+        if uint "$val"; then cap=$val; else cap=$hi; fi
 
         if [ "$hi" -gt "$p_max" ]; then
           # A faster group than anything seen so far. What was the fastest becomes the slowest,
           # unless something slower has already claimed that.
           if [ "$p_max" -gt 0 ] && { [ "$e_max" -eq 0 ] || [ "$p_max" -lt "$e_max" ]; }; then
-            e_max=$p_max e_min=$p_min e_sum=$p_sum e_n=$p_n
+            e_max=$p_max e_min=$p_min e_sum=$p_sum e_n=$p_n e_cap=$p_cap
           fi
-          p_max=$hi p_min=$lo p_sum=$cur p_n=1
+          p_max=$hi p_min=$lo p_sum=$cur p_n=1 p_cap=$cap
           rd "$policy/scaling_governor"
           p_gov=$val
         elif [ "$hi" -eq "$p_max" ]; then
           p_sum=$((p_sum + cur)) p_n=$((p_n + 1))
         elif [ "$e_max" -eq 0 ] || [ "$hi" -lt "$e_max" ]; then
-          e_max=$hi e_min=$lo e_sum=$cur e_n=1
+          e_max=$hi e_min=$lo e_sum=$cur e_n=1 e_cap=$cap
         elif [ "$hi" -eq "$e_max" ]; then
           e_sum=$((e_sum + cur)) e_n=$((e_n + 1))
         fi
@@ -649,11 +656,14 @@ let
       ex=()
       [ -r "$extras" ] && mapfile -t ex < "$extras"
       stamp=0
-      uint "''${ex[0]-}" && stamp=''${ex[0]}
+      [ "''${#ex[@]}" -eq 17 ] && uint "''${ex[0]-}" && stamp=''${ex[0]}
 
       if [ $((now / 1000000 - stamp)) -ge "$extras_every" ]; then
-        fan_rpm=() heat_mw="" hot_c="" hot_label=""
+        fan_rpm=() heat_mw="" ac_mw="" ac_mv="" temps=()
         for hwmon in /sys/class/hwmon/hwmon*; do
+          rd "$hwmon/name"
+          chip=$val
+
           for f in "$hwmon"/fan*_input; do
             [ -e "$f" ] || continue
             rd "$f"
@@ -663,33 +673,54 @@ let
             uint "$val" && fan_rpm+=("$val")
           done
 
-          for lbl in "$hwmon"/power*_label; do
+          # The SMC's other rails. "3.8 V Rail Power" is left out: it reads 0 on this Mac.
+          for lbl in "$hwmon"/power*_label "$hwmon"/in*_label; do
             [ -e "$lbl" ] || continue
             rd "$lbl"
-            [ "$val" = "Heatpipe Power" ] || continue
+            label=$val
             rd "''${lbl%_label}_input"
-            uint "$val" && heat_mw=$((val / 1000))
+            uint "$val" || continue
+            case "$label" in
+            "Heatpipe Power") heat_mw=$((val / 1000)) ;;
+            "AC Input Power") ac_mw=$((val / 1000)) ;;
+            "Charger Input Voltage") ac_mv=$val ;;
+            esac
           done
 
-          # The hottest sensor that names itself. Unlabelled ones are skipped deliberately: on
-          # this Mac they are the six speaker amplifiers, which say nothing about the SoC -- and
-          # there is no die temperature to prefer over them, because Asahi's SMC does not expose
-          # one. So the row names the sensor it used rather than claiming to be a CPU temperature.
+          # Every temperature sensor that names itself, hottest first. Unlabelled ones are skipped:
+          # on this Mac they are the six speaker amplifiers. The battery's own sensor is left to
+          # the Health row. There is no die temperature among them -- Asahi's SMC does not expose
+          # one -- which is why the row names each sensor rather than claiming a CPU reading.
+          [ "$chip" = macsmc_battery ] && continue
           for lbl in "$hwmon"/temp*_label; do
             [ -e "$lbl" ] || continue
             rd "$lbl"
             [ -n "$val" ] || continue
-            label=$val
+            label=''${val% Temperature}
+            label=''${label% Temp}
+            # nvme's only label is "Composite", which says nothing without the chip's name.
+            [ "$chip" = nvme ] && label="NVMe ''${label,,}"
             rd "''${lbl%_label}_input"
             uint "$val" || continue
-            if [ -z "$hot_c" ] || [ "$((val / 1000))" -gt "$hot_c" ]; then
-              hot_c=$((val / 1000))
-              hot_label=$label
-            fi
+            temps+=("$((val / 1000))|$label")
           done
         done
 
+        # Insertion sort on the leading number: there are a handful, and sort(1) is a fork.
+        sorted=()
+        for t in "''${temps[@]}"; do
+          i=''${#sorted[@]}
+          while [ "$i" -gt 0 ] && [ "''${sorted[i - 1]%%|*}" -lt "''${t%%|*}" ]; do
+            sorted[i]=''${sorted[i - 1]}
+            i=$((i - 1))
+          done
+          sorted[i]=$t
+        done
+        temps_line=""
+        [ "''${#sorted[@]}" -gt 0 ] && printf -v temps_line '%s;' "''${sorted[@]}"
+
         batt_state="" batt_mw="" batt_pct="" batt_min=""
+        batt_end="" batt_start="" batt_health="" batt_cycles="" batt_dc=""
         for supply in /sys/class/power_supply/*; do
           rd "$supply/type"
           [ "$val" = Battery ] || continue
@@ -707,6 +738,43 @@ let
             # Microwatt-hours over milliwatts, in minutes.
             batt_min=$((val * 60 / 1000 / batt_mw))
           fi
+          # The charge limit: without it, "not charging" at 80% on AC reads like a fault.
+          rd "$supply/charge_control_end_threshold"
+          uint "$val" && batt_end=$val
+          rd "$supply/charge_control_start_threshold"
+          uint "$val" && batt_start=$val
+          # Wear, as what a full charge holds now against what it held new. Energy where the
+          # driver has it, charge where it does not; the ratio is the same either way.
+          rd "$supply/energy_full"
+          full=$val
+          rd "$supply/energy_full_design"
+          design=$val
+          if ! uint "$full" || ! uint "$design"; then
+            rd "$supply/charge_full"
+            full=$val
+            rd "$supply/charge_full_design"
+            design=$val
+          fi
+          uint "$full" && uint "$design" && [ "$design" -gt 0 ] &&
+            batt_health=$(((full * 200 / design + 1) / 2))
+          rd "$supply/cycle_count"
+          uint "$val" && batt_cycles=$val
+          # Tenths of a degree.
+          rd "$supply/temp"
+          uint "$val" && batt_dc=$val
+          break
+        done
+
+        ac_online="" ac_limit_mw=""
+        for supply in /sys/class/power_supply/*; do
+          rd "$supply/type"
+          [ "$val" = Mains ] || continue
+          rd "$supply/online"
+          [ "$val" = 1 ] || continue
+          ac_online=1
+          # What the adapter negotiated, which is the most the machine may draw from it.
+          rd "$supply/input_power_limit"
+          uint "$val" && ac_limit_mw=$((val / 1000))
           break
         done
 
@@ -714,12 +782,20 @@ let
           "$((now / 1000000))"
           "''${fan_rpm[*]-}"
           "$heat_mw"
-          "$hot_c"
-          "$hot_label"
+          "$temps_line"
           "$batt_state"
           "$batt_mw"
           "$batt_pct"
           "$batt_min"
+          "$batt_end"
+          "$batt_start"
+          "$batt_health"
+          "$batt_cycles"
+          "$batt_dc"
+          "$ac_online"
+          "$ac_mw"
+          "$ac_mv"
+          "$ac_limit_mw"
         )
         printf '%s\n' "''${ex[@]}" > "$extras"
       fi
@@ -728,18 +804,29 @@ let
 
       # The active profile, off the same interface the deck's key reads: net.hadess.PowerProfiles,
       # which power-profiles-daemon serves on the Dell and tuned-ppd on this Mac, so neither end
-      # has to know which daemon is behind it. --json=short rather than jq, because the whole reply
-      # is {"type":"s","data":"balanced"} and two trims take that apart -- this runs every two
-      # seconds, and the busctl is already the one fork it cannot do without.
-      profile=""
-      reply=$(busctl --json=short get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles \
-        net.hadess.PowerProfiles ActiveProfile 2>/dev/null) || reply=""
-      case "$reply" in
-      *'"data":"'*)
-        reply=''${reply##*'"data":"'}
-        profile=''${reply%%'"'*}
-        ;;
-      esac
+      # has to know which daemon is behind it. GetAll rather than the one property, for the same
+      # single busctl: it also carries PerformanceDegraded and the holds apps have placed. Trims
+      # rather than jq take the reply apart -- this runs every two seconds, and the busctl is
+      # already the one fork it cannot do without.
+      profile="" degraded="" holders=""
+      reply=$(busctl --json=short call net.hadess.PowerProfiles /net/hadess/PowerProfiles \
+        org.freedesktop.DBus.Properties GetAll s net.hadess.PowerProfiles 2>/dev/null) || reply=""
+      key='"ActiveProfile":{"type":"s","data":"'
+      if [[ $reply == *"$key"* ]]; then
+        rest=''${reply#*"$key"}
+        profile=''${rest%%'"'*}
+      fi
+      key='"PerformanceDegraded":{"type":"s","data":"'
+      if [[ $reply == *"$key"* ]]; then
+        rest=''${reply#*"$key"}
+        degraded=''${rest%%'"'*}
+      fi
+      key='"ApplicationId":{"type":"s","data":"'
+      rest=$reply
+      while [[ $rest == *"$key"* ]]; do
+        rest=''${rest#*"$key"}
+        holders+="''${holders:+, }''${rest%%'"'*}"
+      done
 
       case "$profile" in
       power-saver) glyph=󰾆 name="Power saver" colour=$c_saver ;;
@@ -805,6 +892,10 @@ let
 
       tip="<span foreground='$colour'>$glyph  $name</span>"
       [ -n "$p_gov" ] && tip+="<span foreground='$c_dim'>  ·  $p_gov</span>"
+      # An app holding a profile (powerprofilesctl launch, a game launcher) pins it until it lets go.
+      [ -n "$holders" ] && tip+="<span foreground='$c_dim'>  ·  held by $holders</span>"
+      # The daemon's own word that performance is being throttled, e.g. lap-detected on a laptop.
+      [ -n "$degraded" ] && tip+="\n<span foreground='$c_warn'>degraded: $degraded</span>"
       tip+='\n\n'
 
       sparkline 100 "''${cpus[@]}"
@@ -813,25 +904,33 @@ let
       # Both frequency rows are scaled to their own cluster's floor and ceiling rather than to a
       # shared axis. What a frequency graph is asked is "how much of what this core can do is it
       # doing", and on this Mac the E-cores' ceiling is barely above the P-cores' idle.
-      freqrow() { # label, colour, floor, ceiling, current, series...
-        local label=$1 colour=$2 lo=$3 hi=$4 cur=$5 span f
+      # The axis stays the hardware's floor and ceiling even under a profile's cap, so a capped
+      # cluster shows as a graph that never reaches the top -- and the note says where it stops.
+      freqrow() { # label, colour, floor, ceiling, cap, current, series...
+        local label=$1 colour=$2 lo=$3 hi=$4 cap=$5 cur=$6 span f note=""
         local scaled=()
-        shift 5
+        shift 6
         span=$((hi - lo))
         [ "$span" -gt 0 ] || span=1
         for f in "$@"; do scaled+=("$(((f - lo) * 100 / span))"); done
         sparkline 100 "''${scaled[@]}"
+        if [ "$cap" -gt 0 ] && [ "$cap" -lt "$hi" ]; then
+          tenths "$cap" 1000000
+          note="capped at $dec of "
+          tenths "$hi" 1000000
+          note+="$dec"
+        fi
         tenths "$cur" 1000000
-        row "$label" "$colour" "$spark" "$dec GHz"
+        row "$label" "$colour" "$spark" "$dec GHz" "$note"
       }
 
       if [ "$p_max" -gt 0 ]; then
         # "Freq" rather than "P-core" on a machine with only the one kind of core.
         if [ "$e_max" -gt 0 ]; then p_label=P-core; else p_label=Freq; fi
-        freqrow "$p_label" "$c_pcore" "$p_min" "$p_max" "$p_cur" "''${pfreqs[@]}"
+        freqrow "$p_label" "$c_pcore" "$p_min" "$p_max" "$p_cap" "$p_cur" "''${pfreqs[@]}"
       fi
       if [ "$e_max" -gt 0 ]; then
-        freqrow E-core "$c_ecore" "$e_min" "$e_max" "$e_cur" "''${efreqs[@]}"
+        freqrow E-core "$c_ecore" "$e_min" "$e_max" "$e_cap" "$e_cur" "''${efreqs[@]}"
       fi
 
       if [ "$power_mw" -ge 0 ]; then
@@ -856,33 +955,82 @@ let
       fi
 
       # The readouts, from the cached block. Each is drawn only if this machine has the sensor.
-      fans=''${ex[1]-} heat_mw=''${ex[2]-} hot_c=''${ex[3]-} hot_label=''${ex[4]-}
-      batt_state=''${ex[5]-} batt_mw=''${ex[6]-} batt_pct=''${ex[7]-} batt_min=''${ex[8]-}
+      fans=''${ex[1]-} heat_mw=''${ex[2]-} temps_line=''${ex[3]-}
+      batt_state=''${ex[4]-} batt_mw=''${ex[5]-} batt_pct=''${ex[6]-} batt_min=''${ex[7]-}
+      batt_end=''${ex[8]-} batt_start=''${ex[9]-} batt_health=''${ex[10]-}
+      batt_cycles=''${ex[11]-} batt_dc=''${ex[12]-}
+      ac_online=''${ex[13]-} ac_mw=''${ex[14]-} ac_mv=''${ex[15]-} ac_limit_mw=''${ex[16]-}
+
+      # Readout pieces are joined with the same dot the header uses.
+      acc=""
+      add() {
+        [ -n "$acc" ] && acc+="  ·  "
+        acc+=$1
+        return 0
+      }
 
       tip+='\n'
 
       if [ -n "$batt_state" ]; then
-        batt="''${batt_pct:-?}%"
+        acc="''${batt_pct:-?}%"
+        limited=""
+        uint "$batt_end" && [ "$batt_end" -lt 100 ] && limited=1
         case "$batt_state" in
         Discharging)
           if uint "$batt_mw"; then
             tenths "$batt_mw" 1000
-            batt+="  ·  $dec W out"
+            add "$dec W out"
           fi
           if uint "$batt_min" && [ "$batt_min" -gt 0 ]; then
-            batt+="  ·  $((batt_min / 60))h $((batt_min % 60))m left"
+            add "$((batt_min / 60))h $((batt_min % 60))m left"
           fi
           ;;
         Charging)
-          batt+="  ·  charging"
+          piece="charging"
           if uint "$batt_mw" && [ "$batt_mw" -gt 0 ]; then
             tenths "$batt_mw" 1000
-            batt+=" at $dec W"
+            piece+=" at $dec W"
+          fi
+          [ -n "$limited" ] && piece+=" to $batt_end%"
+          add "$piece"
+          ;;
+        "Not charging")
+          # On AC with a charge limit, this is the limit doing its job rather than a fault.
+          if [ -n "$limited" ]; then
+            piece="held at the $batt_end% limit"
+            uint "$batt_start" && piece+=", recharges below $batt_start%"
+            add "$piece"
+          else
+            add "not charging"
           fi
           ;;
-        *) batt+="  ·  ''${batt_state,,}" ;;
+        *) add "''${batt_state,,}" ;;
         esac
-        row Battery "$c_text" "" "$batt"
+        row Battery "$c_text" "" "$acc"
+
+        acc=""
+        uint "$batt_health" && add "$batt_health% of design capacity"
+        uint "$batt_cycles" && add "$batt_cycles cycles"
+        if uint "$batt_dc"; then
+          tenths "$batt_dc" 10
+          add "$dec°C"
+        fi
+        [ -n "$acc" ] && row Health "$c_text" "" "$acc"
+      fi
+
+      if [ -n "$ac_online" ]; then
+        acc=""
+        if uint "$ac_mw"; then
+          tenths "$ac_mw" 1000
+          add "$dec W in"
+        fi
+        if uint "$ac_mv"; then
+          tenths "$ac_mv" 1000
+          add "$dec V"
+        fi
+        uint "$ac_limit_mw" && [ "$ac_limit_mw" -gt 0 ] && add "$((ac_limit_mw / 1000)) W adapter"
+        [ -n "$acc" ] || acc="plugged in"
+        row AC "$c_text" "" "$acc"
       fi
 
       if [ -n "$fans" ]; then
@@ -892,16 +1040,27 @@ let
         esac
       fi
 
-      heat=""
+      # The SoC's share of the system figure above, as the SMC splits it out.
       if uint "$heat_mw"; then
         tenths "$heat_mw" 1000
-        heat="$dec W heatpipe"
+        row Heatpipe "$c_text" "" "$dec W"
       fi
-      if [ -n "$hot_c" ] && [ -n "$hot_label" ]; then
-        [ -n "$heat" ] && heat+="  ·  "
-        heat+="$hot_c°C $hot_label"
+
+      # Three sensors to a line, the label only on the first.
+      if [ -n "$temps_line" ]; then
+        IFS=';' read -r -a temps <<<"$temps_line"
+        acc="" n=0 label=Temps
+        for t in "''${temps[@]}"; do
+          [ -n "$t" ] || continue
+          add "''${t%%|*}°C ''${t#*|}"
+          n=$((n + 1))
+          if [ $((n % 3)) -eq 0 ]; then
+            row "$label" "$c_text" "" "$acc"
+            acc="" label=""
+          fi
+        done
+        [ -n "$acc" ] && row "$label" "$c_text" "" "$acc"
       fi
-      [ -n "$heat" ] && row Heat "$c_text" "" "$heat"
 
       tip+="\n<span foreground='$c_dim'>last $((width * period / 60)) min  ·  click to cycle</span>"
 
