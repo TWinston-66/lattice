@@ -866,12 +866,19 @@ let
       }
 
       # bash has no floats, and printf cannot round one it never had: fixed point by hand, to the
-      # one decimal every reading on this tooltip is quoted at.
+      # one decimal most readings on this tooltip are quoted at. Clock ceilings get two, since
+      # 1.97 and 2.40 GHz are the numbers the profiles are set by.
       dec=""
       tenths() {
         dec=$((($1 * 10 + $2 / 2) / $2))
         dec="''${dec%?}.''${dec: -1}"
         [ "''${dec:0:1}" = . ] && dec="0$dec"
+        return 0
+      }
+      hundredths() {
+        dec=$((($1 * 100 + $2 / 2) / $2))
+        [ "''${#dec}" -lt 3 ] && printf -v dec '%03d' "$dec"
+        dec="''${dec%??}.''${dec: -2}"
         return 0
       }
 
@@ -891,11 +898,48 @@ let
       }
 
       tip="<span foreground='$colour'>$glyph  $name</span>"
-      [ -n "$p_gov" ] && tip+="<span foreground='$c_dim'>  ·  $p_gov</span>"
+      # The tuned profile behind the level, on the Mac; power-profiles-daemon has no such file.
+      rd /etc/tuned/active_profile
+      [ -n "$val" ] && tip+="<span foreground='$c_dim'>  ·  tuned $val</span>"
       # An app holding a profile (powerprofilesctl launch, a game launcher) pins it until it lets go.
       [ -n "$holders" ] && tip+="<span foreground='$c_dim'>  ·  held by $holders</span>"
       # The daemon's own word that performance is being throttled, e.g. lap-detected on a laptop.
       [ -n "$degraded" ] && tip+="\n<span foreground='$c_warn'>degraded: $degraded</span>"
+
+      # What the level is doing, read back from the kernel rather than restated from the config,
+      # so it is true whichever daemon set it. These are the settings that differ between the
+      # Mac's three levels (2026-10-04); boost, laptop_mode and audio power-save read the same
+      # under all of them or do not exist here, so they are left out.
+      doing=()
+      [ -n "$p_gov" ] && doing+=("$p_gov governor")
+      caps=""
+      if [ "$p_cap" -gt 0 ] && [ "$p_cap" -lt "$p_max" ]; then
+        hundredths "$p_cap" 1000000
+        if [ "$e_max" -gt 0 ]; then caps="P-cores"; else caps="clocks"; fi
+        caps+=" capped at $dec GHz"
+      fi
+      if [ "$e_cap" -gt 0 ] && [ "$e_cap" -lt "$e_max" ]; then
+        hundredths "$e_cap" 1000000
+        caps+="''${caps:+, }E-cores capped at $dec GHz"
+      fi
+      doing+=("''${caps:-clocks uncapped}")
+      # How long dirty pages may sit before the flusher writes them; longer means the disk wakes
+      # less often, at the risk of losing more on a crash.
+      rd /proc/sys/vm/dirty_writeback_centisecs
+      if uint "$val" && [ "$val" -gt 0 ]; then
+        tenths "$val" 100
+        doing+=("disk writeback every ''${dec%.0} s")
+      fi
+      # The hard-lockup detector's periodic perf interrupt, which powersave turns off.
+      rd /proc/sys/kernel/nmi_watchdog
+      case "$val" in
+      0) doing+=("lockup watchdog off") ;;
+      1) doing+=("lockup watchdog on") ;;
+      esac
+      # Two to a line, under the name.
+      for ((i = 0; i < ''${#doing[@]}; i += 2)); do
+        tip+="\n<span foreground='$c_dim'>''${doing[i]}''${doing[i + 1]:+  ·  ''${doing[i + 1]}}</span>"
+      done
       tip+='\n\n'
 
       sparkline 100 "''${cpus[@]}"
@@ -915,9 +959,9 @@ let
         for f in "$@"; do scaled+=("$(((f - lo) * 100 / span))"); done
         sparkline 100 "''${scaled[@]}"
         if [ "$cap" -gt 0 ] && [ "$cap" -lt "$hi" ]; then
-          tenths "$cap" 1000000
+          hundredths "$cap" 1000000
           note="capped at $dec of "
-          tenths "$hi" 1000000
+          hundredths "$hi" 1000000
           note+="$dec"
         fi
         tenths "$cur" 1000000
