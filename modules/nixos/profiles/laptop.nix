@@ -320,13 +320,17 @@ let
   # unconditionally at configure time, so KEY_KBDILLUMDOWN/UP show as supported on a
   # keyboard that never emits them.
   #
-  # No OSD call: swayosd's server watches the LED itself (keyboard_backlight = true, its
-  # default) and raises its own pill, with the keyboard-brightness icons it bundles,
-  # whenever anything else moves the value. swayosd-client has no flag for this -- the
-  # KBD-BACKLIGHT action exists but is only reachable from the server's own watcher.
+  # The OSD is raised by hand with --custom-progress, with the same icons swayosd picks for
+  # its own keyboard pill. That built-in pill cannot be reached: swayosd-client has no flag
+  # for it, and the server only raises it on UPower's BrightnessChangedWithSource when the
+  # source is "internal" -- the firmware changing the light itself. A write from here, even
+  # through UPower's SetBrightness ("external"), is deliberately ignored.
   kbdBacklight = pkgs.writeShellApplication {
     name = "lattice-kbd-backlight";
-    runtimeInputs = [ pkgs.brightnessctl ];
+    runtimeInputs = [
+      pkgs.brightnessctl
+      pkgs.swayosd
+    ];
     text = ''
       # kbd_backlight on the Mac, vendor-prefixed elsewhere (dell::kbd_backlight and so
       # on), and absent entirely on a machine without one -- where the bind should be a
@@ -351,6 +355,21 @@ let
         exit 2
         ;;
       esac
+
+      # -m prints name,class,current,percent,max.
+      IFS=, read -r _ _ current _ max < <(brightnessctl -m -d "$led" -c leds)
+      if [ "$current" = 0 ]; then
+        icon=keyboard-brightness-off-symbolic
+      elif [ "$current" = "$max" ]; then
+        icon=keyboard-brightness-high-symbolic
+      else
+        icon=keyboard-brightness-medium-symbolic
+      fi
+      # --custom-progress wants 0.0-1.0; the shell only has integers.
+      percent=$(( current * 100 / max ))
+      progress="$(( percent / 100 )).$(printf '%02d' $(( percent % 100 )))"
+      # Best effort: no OSD server (a TTY, a crashed swayosd) must not fail the step.
+      swayosd-client --custom-icon "$icon" --custom-progress "$progress" >/dev/null 2>&1 || true
     '';
   };
   # The keyboard backlight follows the room, the inverse of auto-brightness: lit in the dark,
@@ -361,8 +380,8 @@ let
   # more.
   #
   # Two departures. Levels snap to the 10% steps of lattice-kbd-backlight, and a change is
-  # only made when that step differs. swayosd's LED watcher raises its pill on every write,
-  # so a continuous ramp would flash the OSD every few seconds as a cloud passed. And
+  # only made when that step differs, so the light does not creep every few seconds as a
+  # cloud passes. (It raises no OSD, unlike the manual step.) And
   # nothing is written with the lid shut: the sensor sits in the bezel and reads near 0
   # there, which would light the keys up under a closed, docked lid.
   #
