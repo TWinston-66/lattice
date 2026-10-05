@@ -736,27 +736,70 @@ in
   services.tuned = {
     enable = true;
 
-    # `throughput-performance`, tuned's stock target for the performance profile, is a
-    # server profile: alongside the governor it sets vm.swappiness=10, dirty_bytes=40% and a
-    # 4096-sector readahead, which fight the zram tuning in the laptop profile. This does
-    # the one thing wanted here. The stock profile's other cpu keys -- energy_perf_bias,
-    # energy_performance_preference, boost -- are x86/ACPI only and would just log
-    # "not supported" on this machine, so they are left out.
-    profiles.lattice-performance = {
-      main.summary = "Performance without throughput-performance's server sysctls";
-      cpu.governor = "performance";
+    # The three levels differ only in a P-core frequency ceiling. Nothing else in tuned's
+    # stock profiles bites here: powersave and balanced both resolve to the schedutil
+    # governor (apple-cpufreq has neither `powersave` nor `conservative`), their other levers
+    # are x86/ACPI/SATA ones (energy_perf_bias, EPP, platform_profile, ALPM) this machine
+    # lacks, and boost stays 0 whatever they write -- tuned swallows the EINVAL. Measured on
+    # 2026-10-04 with a fixed Python loop pinned to the P-cores (policy4 and policy8; the
+    # E-cluster, policy0 at 2.42 GHz max, is left alone throughout):
+    #
+    #   P-core ceiling   slowdown   SoC energy per job   8-core SoC peak
+    #   3.26 GHz         1.0x       1.0x                 50 W
+    #   2.40 GHz         1.35x      ~0.6x                28 W
+    #   1.97 GHz         1.65x      ~0.5x                21 W
+    #
+    # Idle and light use moved by about 1 W across all three; the ceiling only shows under
+    # sustained load. The `performance` governor was tried for the top level and dropped:
+    # every core pinned at max cost ~8 W at idle and was no faster than schedutil.
+    #
+    # tuned's sysfs plugin globs the key and puts the old values back when the profile is
+    # switched away. Each level needs its own profile name, since tuned-ppd maps the active
+    # tuned profile back to a PPD one and two levels sharing a name would read as one.
+    profiles = {
+      # Not `throughput-performance`, tuned's stock target: that is a server profile whose
+      # swappiness, dirty_bytes and readahead fight the zram tuning in the laptop profile.
+      lattice-performance = {
+        main = {
+          summary = "balanced with the P-cores uncapped";
+          include = "balanced";
+        };
+      };
+      lattice-balanced = {
+        main = {
+          summary = "balanced with the P-cores capped at 2.40 GHz";
+          include = "balanced";
+        };
+        sysfs."/sys/devices/system/cpu/cpufreq/policy[48]/scaling_max_freq" = 2400000;
+      };
+      lattice-powersave = {
+        main = {
+          summary = "powersave with the P-cores capped at 1.97 GHz";
+          include = "powersave";
+        };
+        sysfs."/sys/devices/system/cpu/cpufreq/policy[48]/scaling_max_freq" = 1968000;
+      };
     };
 
-    # The stock powersave and balanced profiles both resolve to the schedutil governor here,
-    # since apple-cpufreq has neither `powersave` nor `conservative` and schedutil heads both
-    # of their fallback lists. They still differ in what the rest of the profile touches:
-    # vm.laptop_mode, dirty_writeback_centisecs, the audio timeout and SCSI ALPM.
-    ppdSettings.profiles = {
-      power-saver = "powersave";
-      balanced = "balanced";
-      performance = "lattice-performance";
+    ppdSettings = {
+      profiles = {
+        power-saver = "lattice-powersave";
+        balanced = "lattice-balanced";
+        performance = "lattice-performance";
+      };
+      # The default swaps balanced for balanced-battery on battery, which only changes EPP
+      # and the panel power-saving level -- neither exists here -- and would drop the cap.
+      battery.balanced = "lattice-balanced";
     };
   };
+
+  # The nixpkgs module writes these files to /etc but gives neither unit a restart trigger,
+  # so a rebuild left tuned-ppd on the old level mapping (it reads ppd.conf only at start)
+  # and tuned on whatever it had already loaded for the active profile.
+  systemd.services.tuned.restartTriggers = map (
+    name: config.environment.etc."tuned/profiles/${name}/tuned.conf".source
+  ) (builtins.attrNames config.services.tuned.profiles);
+  systemd.services.tuned-ppd.restartTriggers = [ config.environment.etc."tuned/ppd.conf".source ];
 
   ### CHARGE LIMIT ###
   # Stop charging at 80%. This laptop spends most of its time docked, and a lithium cell
