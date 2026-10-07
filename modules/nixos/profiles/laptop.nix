@@ -459,7 +459,10 @@ let
           fi
           percent=$(( (percent + step / 2) / step * step ))
           target=$(( max * percent / 100 ))
-          if [ "$(( current * 100 / max / step ))" != "$(( percent / step ))" ] && ! lidClosed; then
+          # Against the value itself, not its step: 70% of 255 is 178, which reads back as 69%,
+          # so comparing steps found the odd levels one short on every pass and rewrote (and
+          # logged) them every five seconds forever.
+          if [ "$current" != "$target" ] && ! lidClosed; then
             printf '%s\n' "$target" > "$led/brightness"
             echo "$lux lux: $percent%"
           fi
