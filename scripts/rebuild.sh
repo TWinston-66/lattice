@@ -106,11 +106,11 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     # Every wallpaper in the pool lands on a new store path whenever the artwork or the
     # canvases change, and hyprpaper goes on showing the old one -- which the next `nh clean`
     # deletes, taking hyprlock's background with it, since that is read from
-    # ~/.cache/lattice at launch. Re-applying the index that is already up re-points both at
-    # this generation's copy of the same image.
-    wallpaper_state="${XDG_RUNTIME_DIR:-/tmp}/lattice-wallpaper"
-    if [[ -r "$wallpaper_state" ]]; then
-        lattice-wallpaper "$(cat "$wallpaper_state")" >/dev/null || true
+    # ~/.cache/lattice at launch. Re-applying the pick that is already up re-points both at
+    # this generation's copy of the same image. Only once the session has made a pick: before
+    # that, `apply` would put up the plain one over the login's choice.
+    if [[ "$(lattice-wallpaper current 2>/dev/null)" -ge 0 ]] 2>/dev/null; then
+        lattice-wallpaper apply >/dev/null || true
     fi
 fi
 
