@@ -41,7 +41,7 @@
 
   # The bar is 1280 logical px here, and full-size pills left the right block no room
   # before the clock.
-  lattice.display.barScale = 0.85;
+  lattice.display.barScale = 0.9;
 
   programs = {
     firefox = {
