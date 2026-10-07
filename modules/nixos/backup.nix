@@ -218,6 +218,27 @@ let
       # reason to hand.
       r() { restic "$@" 2>"$run/stderr"; }
 
+      # What is on the drive, as the state file carries it: this host's snapshot count, the
+      # newest snapshot of every host, and the space used and left. Needs the password, so
+      # only a run can find it out; everything else reads it back from the state file.
+      drive_facts() {
+        local snapshots hosts count repo_bytes free size
+        snapshots=$(r snapshots --json)
+        count=$(jq --arg h "$host" '[.[] | select(.hostname == $h)] | length' <<<"$snapshots")
+        # The newest snapshot of every host, timed in epoch seconds for the pill's sake.
+        hosts=$(jq -r 'group_by(.hostname) | map(max_by(.time)) | .[] | "\(.hostname)\t\(.time)"' <<<"$snapshots" |
+          while IFS=$'\t' read -r h t; do
+            jq -nc --arg h "$h" --argjson t "$(date -d "$t" +%s)" '{host: $h, time: $t}'
+          done | jq -sc .)
+        repo_bytes=$(du -sb ${repo} | cut -f1)
+        read -r free size < <(df -B1 --output=avail,size ${mountPoint} | tail -n 1)
+        save --argjson hosts "$hosts" --argjson count "$count" \
+          --argjson repo "$repo_bytes" --argjson free "$free" --argjson size "$size" \
+          '.snapshots = $count | .hosts = $hosts
+           | .repo_bytes = $repo | .free_bytes = $free | .size_bytes = $size'
+        signal
+      }
+
       drop_snapshots() {
         local s
         for s in ${snapshotDir}/*; do
@@ -351,6 +372,10 @@ let
         fi
         # Only locks whose process is gone: one left by a run cut off by an unplug.
         r unlock >/dev/null
+        # Read the drive up front too, so the pill and the menu describe what is on it for
+        # the length of the run rather than what was there when this host last finished one
+        # -- which, before its first, is nothing at all, other hosts' backups included.
+        drive_facts
 
         phase snapshot
         drop_snapshots
@@ -420,28 +445,17 @@ let
 
         phase finishing
         [[ -s $run/summary.json ]] || echo '{}' >"$run/summary.json"
-        local snapshots hosts count repo_bytes free size ended
-        snapshots=$(r snapshots --json)
-        count=$(jq --arg h "$host" '[.[] | select(.hostname == $h)] | length' <<<"$snapshots")
-        # The newest snapshot of every host, timed in epoch seconds for the pill's sake.
-        hosts=$(jq -r 'group_by(.hostname) | map(max_by(.time)) | .[] | "\(.hostname)\t\(.time)"' <<<"$snapshots" |
-          while IFS=$'\t' read -r h t; do
-            jq -nc --arg h "$h" --argjson t "$(date -d "$t" +%s)" '{host: $h, time: $t}'
-          done | jq -sc .)
-        repo_bytes=$(du -sb ${repo} | cut -f1)
-        read -r free size < <(df -B1 --output=avail,size ${mountPoint} | tail -n 1)
+        drive_facts
+        local ended
         ended=$(now)
 
         save --argjson t "$ended" --argjson d "$((ended - started))" \
-          --slurpfile s "$run/summary.json" --argjson hosts "$hosts" --argjson count "$count" \
-          --argjson repo "$repo_bytes" --argjson free "$free" --argjson size "$size" \
-          --argjson unreadable "$unreadable" \
+          --slurpfile s "$run/summary.json" --argjson unreadable "$unreadable" \
           --argjson uncovered "$(printf '%s\n' "''${uncovered[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
           '.last_run = $t | .last_success = $t | .last_result = "ok" | .last_error = null
            | .last_duration = $d | .last_added = ($s[0].data_added // 0)
            | .last_files_new = ($s[0].files_new // 0) | .last_files_changed = ($s[0].files_changed // 0)
-           | .last_unreadable = $unreadable | .snapshots = $count | .hosts = $hosts
-           | .repo_bytes = $repo | .free_bytes = $free | .size_bytes = $size | .uncovered = $uncovered'
+           | .last_unreadable = $unreadable | .uncovered = $uncovered'
         rm -f "$run/progress.json"
 
         local body urgency=normal icon=document-save
