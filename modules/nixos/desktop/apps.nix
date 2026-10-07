@@ -249,6 +249,12 @@ in
   # re-login -- until then KeyPress fails silently, which is its only failure mode.
   hardware.uinput.enable = true;
 
+  # The module's unit is WantedBy graphical-session.target but not ordered after it, so it
+  # started with the rest of the login transaction, before Hyprland had a display to hand
+  # it: "cannot open display" and a failed start on every boot, rescued only by the restart
+  # five seconds later.
+  systemd.user.services.solaar.after = [ "graphical-session.target" ];
+
   users.users.winston.extraGroups = [
     "video"
     "uinput"
