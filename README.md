@@ -114,7 +114,8 @@
 
 - **Hyprland** under UWSM, with **waybar** as a row of pills: workspaces, weather from
   Open-Meteo (no API key), a calendar clock, Tailscale, Wi-Fi, audio, brightness, battery,
-  a power-profile pill with sparkline history, caps-lock and do-not-disturb indicators.
+  a power-profile pill with sparkline history, caps-lock and do-not-disturb indicators, the
+  git state of an Obsidian vault, and Bitwarden's lock state in place of its tray icon.
 - **Clickable pills that open menus.** Wi-Fi picker, output and input device switchers,
   wallpaper and theme pickers, Tailscale status, keep-awake and a wlogout power menu.
 - **Notifications** through mako, with do-not-disturb, a browsable history, and alerts for
@@ -155,7 +156,11 @@
 - Suspend drain logged per sleep, hibernate-after-delay on the Dell, and a suspend guard
   for sleeps that never wake.
 - Captive-portal detection that opens the sign-in page for you.
-- Keyboard-backlight control on both hosts, including the Mac that has no key for it.
+- Keyboard-backlight control on both hosts, including the Mac that has no key for it. On the
+  Mac, the ambient light sensor drives both the keyboard light and the panel, and steps back
+  whenever you set either by hand.
+- On the Mac, tuned stands in for power-profiles-daemon: the three levels cap the P-cores at
+  full speed, 2.40 GHz or 1.97 GHz, and every boot and resume starts in power saver.
 
 ### Development
 
@@ -168,15 +173,17 @@
 ### Security
 
 - Root is locked, and passwords come only from **sops-nix**, decrypted with each host's SSH key.
-- A declared firewall with SSH reachable **only over Tailscale**.
-- **Bitwarden** with browser unlock through polkit.
+- A declared firewall. Hosts that run an SSH server are reachable **only over Tailscale**;
+  the Mac runs none.
+- **Bitwarden** with browser unlock through polkit, and its SSH agent holds the SSH key,
+  so no private key sits in `~/.ssh`.
 
 ## Hosts
 
 | Host | Hardware | Notes |
 | --- | --- | --- |
 | `dell` | Dell laptop | Hibernation tuned for a day of classes, Thunderbolt via bolt |
-| `mac` | MacBook | Asahi kernel next to macOS, aarch64 Widevine, carried DRM patch |
+| `mac` | MacBook | Asahi kernel next to macOS, aarch64 Widevine, carried DRM patch, VA-API video decode, hourly snapper snapshots of `/home` |
 
 Each host imports a small core (`base.nix`) and layers on the `laptop`, `graphical`
 and `server` profiles plus feature modules.
@@ -295,7 +302,8 @@ has the details; in short:
 Root is locked and passwords only come from sops, so a host that can't decrypt
 its secrets locks you out entirely. Keep a NixOS USB stick around.
 
-1. Boot the stick, `cryptsetup open` the LUKS devices, and mount under `/mnt`.
+1. Boot the stick, `cryptsetup open` the LUKS devices if the host has any, and mount
+   under `/mnt`.
 2. From an admin machine, either add the host's key
    (`/mnt/etc/ssh/ssh_host_ed25519_key.pub`) and run `updatekeys`, or set a new
    password with `scripts/set-password.sh`.
