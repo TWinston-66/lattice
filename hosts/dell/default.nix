@@ -39,6 +39,10 @@
   # devPixelsPerPx below, for the pages lattice opens in Chromium.
   lattice.display.webZoom = 1.1;
 
+  # The bar is 1280 logical px here, and full-size pills left the right block no room
+  # before the clock.
+  lattice.display.barScale = 0.85;
+
   programs = {
     firefox = {
       preferences."layout.css.devPixelsPerPx" = "1.1";
