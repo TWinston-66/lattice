@@ -15,6 +15,7 @@
     ../desktop/apps.nix
     ../desktop/theming.nix
     ../desktop/bar.nix
+    ../desktop/backup.nix
     ../desktop/menus.nix
     ../desktop/notifications.nix
     ../desktop/lock.nix

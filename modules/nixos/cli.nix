@@ -640,6 +640,14 @@ in
             | sort | uniq -c | sort -rn | head -n 5 \
             | awk 'NF > 1 { n = $1; $1 = ""; printf "  %6dx %s\n", n, substr($0, 2, 110) }' || true
 
+          section "Backups"
+          # backup.nix: a failed run, a week without a backup, a nested subvolume left out
+          # or a check that found damage.
+          if ! backups=$(${lib.getExe config.lattice.backup.internal.cli} status); then
+            problems=1
+          fi
+          awk '{ print "  " $0 }' <<< "$backups"
+
           section "Disk"
           df -h --output=target,avail,pcent / /nix 2>/dev/null | awk 'NR > 1 && !seen[$1]++ { print "  " $1 "  " $2 " free, " $3 " used" }'
           if df --output=pcent / /nix 2>/dev/null | awk 'NR > 1 && $1 + 0 >= 90 { found = 1 } END { exit !found }'; then
@@ -676,7 +684,7 @@ in
 
           exit "$problems"
         '';
-        summary = "Health check: units, crashes, last shutdown, drift, persistence, boot errors, disk";
+        summary = "Health check: units, crashes, last shutdown, drift, persistence, boot errors, backups, disk";
         group = "system";
       };
     };

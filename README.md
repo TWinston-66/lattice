@@ -177,6 +177,11 @@
   the Mac runs none.
 - **Bitwarden** with browser unlock through polkit, and its SSH agent holds the SSH key,
   so no private key sits in `~/.ssh`.
+- **Backups** to an external drive whenever it's plugged in, then hourly: every host into
+  one encrypted, deduplicated restic repository, from btrfs snapshots so each copy is
+  consistent. They cover the whole machine except what the flake rebuilds, so a reinstall
+  plus a restore puts it back as it was. A bar pill shows progress and failures, and a
+  week without a backup turns it orange and sends a daily reminder.
 
 ## Hosts
 
@@ -217,7 +222,8 @@ lattice update [input...]                # move flake.lock, then offer a rebuild
 lattice secrets password [user]          # set a login password
 lattice secrets edit                     # edit secrets in sops
 lattice version                          # what is running, and whether the checkout has moved
-lattice doctor                           # failed units, config drift, boot errors, disk
+lattice doctor                           # failed units, config drift, boot errors, backups, disk
+lattice backup [status|now|browse|eject] # the backup drive; also check, stop, unbrowse
 ```
 
 `lattice deploy` evaluates locally and builds on the target, reaching it by MagicDNS
@@ -293,6 +299,56 @@ has the details; in short:
 5. Back in macOS, add the key and run `updatekeys` (step 3 of *Adding a host*), and push.
 6. Back on NixOS, pull, pin the firmware hash (see the comment in `hosts/mac/default.nix`)
    and run `scripts/rebuild.sh mac`. The first switch builds the kernel.
+
+</details>
+
+<details>
+<summary><b>Backups</b></summary>
+
+`modules/nixos/backup.nix` backs up any host the drive labelled `lattice-backup` is
+plugged into. The password is `restic-password` in sops, and a copy is in Bitwarden. The
+Bitwarden copy is the one that counts: a lost machine takes its host key, and so its
+sops copy, with it.
+
+**Setting up a drive.** This erases it. Use the `/dev/disk/by-id` name so it's the right disk:
+
+```sh
+scripts/set-backup-password.sh           # once, ever; then save it in Bitwarden
+sudo wipefs -a /dev/disk/by-id/<drive>
+echo 'label: gpt
+type=linux, name=lattice-backup' | sudo sfdisk /dev/disk/by-id/<drive>
+sudo mkfs.btrfs -L lattice-backup /dev/disk/by-id/<drive>-part1
+```
+
+The first backup creates the repository. A second drive formatted the same way works
+too, with its own repository.
+
+**Restoring a machine.** This puts back everything but `/nix` and `/boot`, which the install
+recreates:
+
+1. Commit and push any config the new install needs, such as a new
+   `hardware-configuration.nix`.
+2. Install as usual, up to the point where the new system is mounted at `/mnt`. Then
+   mount the drive and put the old host keys back first, so sops decrypts with the key
+   it already knows:
+
+   ```sh
+   mount /dev/disk/by-label/lattice-backup /media
+   export RESTIC_REPOSITORY=/media/restic     # the password is in Bitwarden
+   nix run nixpkgs#restic -- snapshots --host <hostname>
+   nix run nixpkgs#restic -- restore latest --host <hostname> --include /etc/ssh --target /mnt
+   ```
+
+3. `nixos-install --flake .#<host>`, then restore everything else over it. `/etc/static`
+   is left out because it points into the old store; the first activation relinks it:
+
+   ```sh
+   nix run nixpkgs#restic -- restore latest --host <hostname> --target /mnt --exclude /etc/static
+   ```
+
+4. Boot, `git pull` in the restored checkout, and `lattice rebuild`.
+
+`lattice backup browse` mounts every backup as folders for copying single files back.
 
 </details>
 

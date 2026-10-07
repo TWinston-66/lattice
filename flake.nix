@@ -59,6 +59,7 @@
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShellNoCC {
           packages = with pkgs; [
+            jq
             mkpasswd
             sops
             ssh-to-age
