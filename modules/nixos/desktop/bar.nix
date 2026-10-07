@@ -56,21 +56,36 @@ let
           return 0
         fi
 
-        local backend text
-        local -a classes lines
+        # One jq pass for every field. The status runs to most of a megabyte with Mullvad's
+        # exit nodes in the peer list -- 837 KB, 536 peers on 2026-10-06 -- and a jq per field
+        # parsed all of it nine times over: about 0.35s of CPU per tick, on each bar. One field
+        # per line, health warnings last, with newlines inside a value flattened so nothing can
+        # shift the fields after it.
+        local -a f
+        mapfile -t f < <(jq -r '
+          . as $root
+          | ((.BackendState // "NoState"),
+          (.Self.HostName // "this device"),
+          (.Self.TailscaleIPs[0] // ""),
+          (.Self.DNSName // "" | sub("\\.$"; "")),
+          (.CurrentTailnet.Name // ""),
+          (.Self.ExitNode // false),
+          ([.Peer[]? | select((.ExitNodeOption | not) and .Online)] | length),
+          ([.Peer[]? | select(.ExitNodeOption | not)] | length),
+          (.ExitNodeStatus.ID // "" | . as $id
+            | if $id == "" then "" else [$root.Peer[]? | select(.ID == $id)][0].HostName // $id end),
+          (.AuthURL // ""),
+          (.Health // [] | .[]))
+          | tostring | gsub("[\n\r]"; " ")
+        ' <<<"$json")
 
-        backend="$(jq -r '.BackendState // "NoState"' <<<"$json")"
+        local backend="''${f[0]:-NoState}" text
+        local -a classes lines
 
         case "$backend" in
         Running)
-          local host ip tailnet dns advertise online devs exit_id exit_name health
-          host="$(jq -r '.Self.HostName // "this device"' <<<"$json")"
-          ip="$(jq -r '.Self.TailscaleIPs[0] // ""' <<<"$json")"
-          dns="$(jq -r '.Self.DNSName // "" | sub("\\.$"; "")' <<<"$json")"
-          tailnet="$(jq -r '.CurrentTailnet.Name // ""' <<<"$json")"
-          advertise="$(jq -r '.Self.ExitNode // false' <<<"$json")"
-
-          read -r online devs <<<"$(jq -r '[([.Peer[] | select((.ExitNodeOption | not) and .Online)] | length), ([.Peer[] | select(.ExitNodeOption | not)] | length)] | @tsv' <<<"$json")"
+          local host=''${f[1]} ip=''${f[2]} dns=''${f[3]} tailnet=''${f[4]} advertise=''${f[5]}
+          local online=''${f[6]} devs=''${f[7]} exit_name=''${f[8]}
 
           lines=("Tailscale: Connected" "$host  $ip")
           if [ -n "$tailnet" ]; then lines+=("tailnet: $tailnet"); fi
@@ -80,10 +95,8 @@ let
           # is actually going through Mullvad", so it gets its own class for style.css to
           # colour on: teal with one, red without. ExitNodeStatus is null unless this node
           # is routing through one; its ID names the peer to show in the tooltip.
-          exit_id="$(jq -r '.ExitNodeStatus.ID // empty' <<<"$json")"
           local exit_class
-          if [ -n "$exit_id" ]; then
-            exit_name="$(jq -r --arg id "$exit_id" '[.Peer[] | select(.ID == $id)][0].HostName // $id' <<<"$json")"
+          if [ -n "$exit_name" ]; then
             lines+=("exit node: $exit_name")
             exit_class=exit-node
           else
@@ -97,11 +110,10 @@ let
 
           # Health is where tailscaled reports route conflicts and the like. Showing it as
           # a second class is the whole reason the running state isn't just the vpn glyph.
-          health="$(jq -r '.Health // [] | .[]' <<<"$json")"
-          if [ -n "$health" ]; then
+          if [ "''${#f[@]}" -gt 10 ]; then
             text="$glyph_alert"
             classes=(running warning)
-            while IFS= read -r line; do lines+=("warning: $line"); done <<<"$health"
+            for line in "''${f[@]:10}"; do lines+=("warning: $line"); done
           else
             text="$glyph_connected"
             classes=(running "$exit_class")
@@ -118,7 +130,7 @@ let
           local authurl
           text="$glyph_login"
           classes=(needs-login)
-          authurl="$(jq -r '.AuthURL // empty' <<<"$json")"
+          authurl=''${f[9]}
           if [ "$backend" = NeedsMachineAuth ]; then
             lines=("Tailscale: waiting for approval")
           else
@@ -609,41 +621,51 @@ let
       uint "''${prev[2]-}" && prev_total=''${prev[2]}
       uint "''${prev[3]-}" && prev_energy=''${prev[3]}
 
-      d_busy=$((busy - prev_busy))
-      d_total=$((total - prev_total))
-      if [ "$prev_total" -gt 0 ] && [ "$d_total" -gt 0 ] && [ "$d_busy" -ge 0 ]; then
-        cpu=$((d_busy * 100 / d_total))
+      # Docked, there is a bar on each screen and each runs this on every tick, against the one
+      # history file -- so the samples interleaved, one bar's two-second delta beside the other's
+      # fraction of a second, and the load graph zig-zagged over half the window it claimed. A
+      # tick within 1.5s of the last sample is the other bar's: it draws the window as it stands,
+      # with the newest sample as the reading, and leaves the sampling to whichever bar got there
+      # first.
+      if [ "$prev_ts" -gt 0 ] && [ $((now - prev_ts)) -lt 1500000 ] && [ "''${#cpus[@]}" -gt 0 ]; then
+        cpu=''${cpus[-1]} p_cur=''${pfreqs[-1]} e_cur=''${efreqs[-1]} power_mw=''${watts[-1]}
       else
-        # First sample after a boot, or after a window that did not survive its sanity check. The
-        # counters' lifetime average is not what this pill is for, so the graph starts at the floor
-        # and the next tick is the first real reading.
-        cpu=0
+        d_busy=$((busy - prev_busy))
+        d_total=$((total - prev_total))
+        if [ "$prev_total" -gt 0 ] && [ "$d_total" -gt 0 ] && [ "$d_busy" -ge 0 ]; then
+          cpu=$((d_busy * 100 / d_total))
+        else
+          # First sample after a boot, or after a window that did not survive its sanity check. The
+          # counters' lifetime average is not what this pill is for, so the graph starts at the floor
+          # and the next tick is the first real reading.
+          cpu=0
+        fi
+        [ "$cpu" -gt 100 ] && cpu=100
+
+        if [ "$power_src" = rapl ] && [ "$prev_energy" -ge 0 ] && [ "$prev_ts" -gt 0 ]; then
+          d_us=$((now - prev_ts))
+          d_uj=$((energy_uj - prev_energy))
+          # The counter wraps at max_energy_range_uj, which shows up as a negative delta. Dropping
+          # that one sample is cheaper than carrying the range around to correct it.
+          if [ "$d_us" -gt 0 ] && [ "$d_uj" -ge 0 ]; then power_mw=$((d_uj * 1000 / d_us)); fi
+        fi
+
+        cpus+=("$cpu")
+        pfreqs+=("$p_cur")
+        efreqs+=("$e_cur")
+        watts+=("$power_mw")
+        [ "''${#cpus[@]}" -gt "$width" ] && cpus=("''${cpus[@]: -$width}")
+        [ "''${#pfreqs[@]}" -gt "$width" ] && pfreqs=("''${pfreqs[@]: -$width}")
+        [ "''${#efreqs[@]}" -gt "$width" ] && efreqs=("''${efreqs[@]: -$width}")
+        [ "''${#watts[@]}" -gt "$width" ] && watts=("''${watts[@]: -$width}")
+
+        printf '%s\n' \
+          "$now $busy $total $energy_uj" \
+          "''${cpus[*]}" \
+          "''${pfreqs[*]}" \
+          "''${efreqs[*]}" \
+          "''${watts[*]}" > "$history"
       fi
-      [ "$cpu" -gt 100 ] && cpu=100
-
-      if [ "$power_src" = rapl ] && [ "$prev_energy" -ge 0 ] && [ "$prev_ts" -gt 0 ]; then
-        d_us=$((now - prev_ts))
-        d_uj=$((energy_uj - prev_energy))
-        # The counter wraps at max_energy_range_uj, which shows up as a negative delta. Dropping
-        # that one sample is cheaper than carrying the range around to correct it.
-        if [ "$d_us" -gt 0 ] && [ "$d_uj" -ge 0 ]; then power_mw=$((d_uj * 1000 / d_us)); fi
-      fi
-
-      cpus+=("$cpu")
-      pfreqs+=("$p_cur")
-      efreqs+=("$e_cur")
-      watts+=("$power_mw")
-      [ "''${#cpus[@]}" -gt "$width" ] && cpus=("''${cpus[@]: -$width}")
-      [ "''${#pfreqs[@]}" -gt "$width" ] && pfreqs=("''${pfreqs[@]: -$width}")
-      [ "''${#efreqs[@]}" -gt "$width" ] && efreqs=("''${efreqs[@]: -$width}")
-      [ "''${#watts[@]}" -gt "$width" ] && watts=("''${watts[@]: -$width}")
-
-      printf '%s\n' \
-        "$now $busy $total $energy_uj" \
-        "''${cpus[*]}" \
-        "''${pfreqs[*]}" \
-        "''${efreqs[*]}" \
-        "''${watts[*]}" > "$history"
 
       ### EXTRAS ###
 
@@ -1253,10 +1275,14 @@ let
   # sysfs attributes do not raise inotify events, so it polls; five reads of a few bytes a
   # second is nothing, and it only prints when the state flips. The glob is expanded on
   # every pass so a keyboard plugged in later is picked up. Empty text hides the pill.
+  #
+  # The wait between passes is a `read -t` on a pipe nothing ever writes to, not `sleep`:
+  # the same pause without forking a process five times a second, on each bar, all day.
   capsLock = pkgs.writeShellApplication {
     name = "lattice-capslock";
     runtimeInputs = [ pkgs.coreutils ];
     text = ''
+      exec {tick}<> <(:)
       last=
       while true; do
         state=off
@@ -1277,7 +1303,7 @@ let
           fi
           last=$state
         fi
-        sleep 0.2
+        read -rt 0.2 -u "$tick" _ || true
       done
     '';
   };
