@@ -108,269 +108,61 @@
   <br><sub>The wallpapers aren't downloaded. <code>lattice art</code> draws them at build time, one per accent in each flavour, sized for each screen.</sub>
 </p>
 
-## Features
+## What's inside
 
-### Desktop
+**Desktop.** Hyprland under UWSM, a waybar of clickable pills (Wi-Fi, audio, Tailscale,
+weather, backups, power profiles with live graphs), mako notifications with do-not-disturb
+and alerts for any failed unit, HyprQuickFrame screenshots with OCR, and chromeless web apps
+that share your Firefox logins.
 
-- **Hyprland** under UWSM, with **waybar** as a row of pills: workspaces, weather from
-  Open-Meteo (no API key), a calendar clock, Tailscale, Wi-Fi, audio, brightness, battery,
-  a power-profile pill with sparkline history, caps-lock and do-not-disturb indicators, the
-  git state of an Obsidian vault, and Bitwarden's lock state in place of its tray icon.
-- **Clickable pills that open menus.** Wi-Fi picker, output and input device switchers,
-  wallpaper and theme pickers, Tailscale status, keep-awake and a wlogout power menu.
-- **Notifications** through mako, with do-not-disturb, a browsable history, and alerts for
-  battery levels, network changes, finished Taildrop transfers, and any systemd unit that
-  fails, in the session or system-wide.
-- **Screenshots** with HyprQuickFrame's overlay, satty for annotation, and a patched-in
-  **OCR** toggle that copies the text in a selection.
-- **hyprlock** and **hypridle** for the lock screen, **hyprsunset** for a warm shift at night,
-  and **swayosd** for on-screen volume and brightness.
-- **Web apps** as chromeless Firefox Taskbar Tabs (Claude, Gemini, Apple Music, YouTube,
-  Apple TV, iCloud Reminders and Calendar), sharing your existing logins and Firefox Sync.
+**Theming.** Seven flavours across Catppuccin, Tokyo Night, Rosé Pine and Gruvbox Material,
+fourteen accents, and generated kits for GTK, Qt, icons, rofi, Ghostty, tmux, Neovim,
+Thunderbird and a dozen CLI tools. A silent Plymouth boot leads straight into a themed greeter.
 
-### Theming
+**Hardware.** Stream Deck pages with generated key art and Home Assistant controls, Logitech
+MX Master through Solaar, NuPhy keyboards over WebHID, and iPhone transfers over Taildrop.
 
-- `lattice.theme` holds the palette, the flavours and the accent. Generated theme kits feed
-  GTK (adw-gtk3), Qt, Papirus folder icons, rofi, mako, waybar, hyprlock, Ghostty, tmux,
-  Neovim, Thunderbird and a dozen CLI tools.
-- **`lattice theme`** switches the flavour at run time. Every app that can reload, does:
-  GTK3 apps restyle in place, Ghostty and Neovim reload, and the wallpaper and Stream Deck follow.
-- **`lattice wallpaper`** cycles through the generated pool, or right-click the bar to pick one.
-- Boot is silent: a **Plymouth** splash that pulses the lattice mark, straight into a themed
-  **tuigreet** greeter, sized per screen under cage and foot.
+**Laptops.** Charge limits, battery-aware refresh rates, measured suspend drain, captive-portal
+sign-in, and an ambient light sensor driving the panel and keyboard on the Mac.
 
-### Hardware
+**Development.** `fhs`, a shell with a normal `/usr` for toolchains that expect one, plus
+nix-ld, comma, `nh`, Docker and virtualization.
 
-- **Stream Deck**: three pages (desktop, media and home), with key art drawn by the same
-  generator as the wallpaper, a Home Assistant page for lights, the fan and scenes, and keys that
-  follow the theme.
-- **Logitech MX Master** through Solaar: DPI held across reconnects, and buttons mapped to
-  volume, the launcher and continuous workspace scrolling.
-- **NuPhy keyboard** configuration over WebHID, with a scoped udev rule.
-- **iPhone** file transfer over Taildrop, with a notification when files arrive.
-
-### Laptops
-
-- A 50/20/10/5% battery ladder that shows time remaining. On the Mac, an 80% charge cap
-  and a panel that drops to 60 Hz when unplugged.
-- Suspend drain logged per sleep, hibernate-after-delay on the Dell, and a suspend guard
-  for sleeps that never wake.
-- Captive-portal detection that opens the sign-in page for you.
-- Keyboard-backlight control on both hosts, including the Mac that has no key for it. On the
-  Mac, the ambient light sensor drives both the keyboard light and the panel, and steps back
-  whenever you set either by hand.
-- On the Mac, tuned stands in for power-profiles-daemon: the three levels cap the P-cores at
-  full speed, 2.40 GHz or 1.97 GHz, and every boot and resume starts in power saver.
-
-### Development
-
-- **`fhs`**, a bubblewrap shell with a populated `/usr`, for the `./configure`s and
-  course toolchains that expect a normal Linux. **nix-ld** covers prebuilt binaries.
-- `nh` for readable rebuild diffs and garbage collection, `nix-index` and comma
-  (`, cowsay`) for running anything in nixpkgs without installing it.
-- Docker and virtualization on both hosts.
-
-### Security
-
-- Root is locked, and passwords come only from **sops-nix**, decrypted with each host's SSH key.
-- A declared firewall. Hosts that run an SSH server are reachable **only over Tailscale**;
-  the Mac runs none.
-- **Bitwarden** with browser unlock through polkit, and its SSH agent holds the SSH key,
-  so no private key sits in `~/.ssh`.
-- **Backups** to an external drive whenever it's plugged in, then hourly: every host into
-  one encrypted, deduplicated restic repository, from btrfs snapshots so each copy is
-  consistent. They cover the whole machine except what the flake rebuilds, so a reinstall
-  plus a restore puts it back as it was. A bar pill shows progress and failures, and a
-  week without a backup turns it orange and sends a daily reminder.
+**Security and backups.** Root locked, passwords only from sops-nix, SSH reachable only over
+Tailscale, Bitwarden holding the SSH key, and hourly encrypted restic backups to an external
+drive, taken from btrfs snapshots.
 
 ## Hosts
 
 | Host | Hardware | Notes |
 | --- | --- | --- |
 | `dell` | Dell laptop | Hibernation tuned for a day of classes, Thunderbolt via bolt |
-| `mac` | MacBook | Asahi kernel next to macOS, aarch64 Widevine, carried DRM patch, VA-API video decode, hourly snapper snapshots of `/home` |
+| `mac` | MacBook | Asahi kernel next to macOS, aarch64 Widevine, VA-API video decode |
 
-Each host imports a small core (`base.nix`) and layers on the `laptop`, `graphical`
-and `server` profiles plus feature modules.
+## Get started
 
-## Layout
+Everything runs through one command: `lattice` lists it all, and zsh completes it.
 
-| Path | What it holds |
+```sh
+lattice rebuild      # build this machine and switch
+lattice theme        # next flavour, applied live
+lattice doctor       # what, if anything, is wrong
+lattice guide        # these guides, as a page
+```
+
+## Guides
+
+| | |
 | --- | --- |
-| `hosts/<host>/` | Per-host config and its generated `hardware-configuration.nix` |
-| `modules/nixos/` | The core, branding, theme, artwork, Plymouth, display, Stream Deck, Home Assistant, web apps, dotfiles |
-| `modules/nixos/desktop/` | The desktop by surface: session, apps, theming, bar, menus, notifications, lock, screenshot, greeter, plus the patches they carry |
-| `modules/nixos/profiles/` | `laptop`, `graphical` and `server`; `graphical` is the desktop modules and the hardware ones they need |
-| `secrets/` | [sops](https://github.com/getsops/sops)-encrypted secrets |
-| `modules/nixos/cli.nix` | The `lattice` command: each module registers its scripts in `lattice.cli.commands` |
-| `scripts/` | What `lattice rebuild`, `deploy`, `update` and `secrets password` run |
-| `assets/lattice-art.py` | Draws the wallpapers, the splash, its widgets and the Stream Deck keys |
+| [Everyday use](docs/using.md) | The `lattice` command, rebuilding, secrets, themes |
+| [Installing lattice](docs/install.md) | PCs, Apple Silicon Macs, and adding a host to the flake |
+| [Backups](docs/backups.md) | Setting up the drive, getting files back, restoring a machine |
+| [Recovery](docs/recovery.md) | When a host can't decrypt its secrets |
+| [Configuring lattice](docs/configuring.md) | Where things live, the theme, your dotfiles |
 
-User-level configs (Hyprland, waybar, rofi, Neovim, tmux…) live in
-[my dotfiles](https://github.com/TWinston-66/.dotfiles) and read their colours from the
-generated theme files, so tweaking a bar or menu needs no rebuild.
-
-## Usage
-
-Everything goes through one command. `lattice` alone lists it all, `lattice <command> --help`
-explains one, and zsh completes both.
-
-```sh
-lattice rebuild [host]                   # build and switch this machine
-lattice deploy [host] [addr]             # build and switch a host over SSH
-lattice update [input...]                # move flake.lock, then offer a rebuild
-lattice secrets password [user]          # set a login password
-lattice secrets edit                     # edit secrets in sops
-lattice version                          # what is running, and whether the checkout has moved
-lattice doctor                           # failed units, config drift, boot errors, backups, disk
-lattice backup [status|now|browse|eject] # the backup drive; also check, stop, unbrowse
-```
-
-`lattice deploy` evaluates locally and builds on the target, reaching it by MagicDNS
-name; pass an address for a host not on the tailnet yet. Both switch commands
-refuse a host that can't decrypt its secrets, since it would boot with every
-account locked. Secrets decrypt with an admin age key at
-`~/.config/sops/age/keys.txt` or with each host's SSH host key.
-
-### Theming
-
-```nix
-lattice.theme.accent = "mauve";   # the default accent, any palette entry
-```
-
-```sh
-lattice theme [next|prev|<flavour>]          # or `lattice theme menu`
-lattice wallpaper [next|prev|random|<slot>]  # or `lattice wallpaper menu`
-lattice art wallpaper --density 1.4 > wallpaper.svg
-```
-
-Each generated file defines `accent` and `accentAlt` aliases; prefer them over literal
-hex, since an undefined colour makes GTK render transparent with no error.
-
-<details>
-<summary><b>Adding a host</b></summary>
-
-1. Install NixOS with a `winston` user (plus OpenSSH and the deploy key if it's remote).
-2. Copy `hardware-configuration.nix` into `hosts/<host>/`, add a `default.nix`
-   importing `base.nix` and the modules you want, and register the host in
-   `flake.nix`, and in `scripts/deploy.sh` if it's remote.
-3. Add the host's age key to `.sops.yaml`, then re-encrypt from an admin machine
-   with `nix develop -c sops updatekeys secrets/common.yaml`:
-   - Remote: `ssh-keyscan -t ed25519 <ip> | nix develop -c ssh-to-age`
-   - Local: run `scripts/rebuild.sh <host>` on the host; it prints the key.
-4. Switch it with `scripts/deploy.sh <host>`, or `scripts/rebuild.sh <host>` on the host.
-
-</details>
-
-<details>
-<summary><b>Installing on Apple Silicon</b></summary>
-
-`hosts/mac` runs the Asahi kernel from [nixos-apple-silicon](https://github.com/nix-community/nixos-apple-silicon)
-next to macOS. It is installed with a minimal config first: the installer can
-only copy its own kernel, and the host can't decrypt secrets until its key is a
-recipient. Its [install guide](https://github.com/nix-community/nixos-apple-silicon/blob/main/docs/uefi-standalone.md)
-has the details; in short:
-
-1. In macOS, run `curl https://alx.sh | sh`. Resize (`r`) to leave 500GB free, then
-   install (`f`) **UEFI environment only**, named `lattice`, and finish the
-   permissive-security steps it prints in recovery.
-2. `dd` the latest [release ISO](https://github.com/nix-community/nixos-apple-silicon/releases)
-   to a USB stick and boot it. Keep the stick: it is this host's recovery stick.
-3. Create a partition in the free space only. Damaging the GPT, the first or last
-   partition, or the APFS containers can leave the Mac unbootable.
-
-   ```sh
-   sgdisk /dev/nvme0n1 -n 0:0 -s    # then sgdisk -p for its number
-   mkfs.btrfs -L lattice /dev/nvme0n1pN
-   mount /dev/disk/by-label/lattice /mnt
-   btrfs subvolume create /mnt/home && btrfs subvolume create /mnt/nix
-   mount -o subvol=home /dev/disk/by-label/lattice /mnt/home
-   mount -o subvol=nix /dev/disk/by-label/lattice /mnt/nix
-   mkdir /mnt/boot
-   mount /dev/disk/by-partuuid/$(cat /proc/device-tree/chosen/asahi,efi-system-partition) /mnt/boot
-   nixos-generate-config --root /mnt
-   ```
-
-   Edit `configuration.nix` as the guide says, plus `networking.hostName = "lattice-mac"`,
-   NetworkManager, git, and a `winston` user with an `initialPassword`, then `nixos-install`.
-4. On NixOS, clone lattice to `~/Documents/Projects/lattice` and copy
-   `/etc/nixos/hardware-configuration.nix` over `hosts/mac/`'s. `scripts/rebuild.sh mac`
-   stops at the recipient check and prints the host's age key.
-5. Back in macOS, add the key and run `updatekeys` (step 3 of *Adding a host*), and push.
-6. Back on NixOS, pull, pin the firmware hash (see the comment in `hosts/mac/default.nix`)
-   and run `scripts/rebuild.sh mac`. The first switch builds the kernel.
-
-</details>
-
-<details>
-<summary><b>Backups</b></summary>
-
-`modules/nixos/backup.nix` backs up any host the drive labelled `lattice-backup` is
-plugged into. The password is `restic-password` in sops, and a copy is in Bitwarden. The
-Bitwarden copy is the one that counts: a lost machine takes its host key, and so its
-sops copy, with it.
-
-**Setting up a drive.** This erases it. Use the `/dev/disk/by-id` name so it's the right disk:
-
-```sh
-scripts/set-backup-password.sh           # once, ever; then save it in Bitwarden
-sudo wipefs -a /dev/disk/by-id/<drive>
-echo 'label: gpt
-type=linux, name=lattice-backup' | sudo sfdisk /dev/disk/by-id/<drive>
-sudo mkfs.btrfs -L lattice-backup /dev/disk/by-id/<drive>-part1
-```
-
-The first backup creates the repository. A second drive formatted the same way works
-too, with its own repository.
-
-**Restoring a machine.** This puts back everything but `/nix` and `/boot`, which the install
-recreates:
-
-1. Commit and push any config the new install needs, such as a new
-   `hardware-configuration.nix`.
-2. Install as usual, up to the point where the new system is mounted at `/mnt`. Then
-   mount the drive and put the old host keys back first, so sops decrypts with the key
-   it already knows:
-
-   ```sh
-   mount /dev/disk/by-label/lattice-backup /media
-   export RESTIC_REPOSITORY=/media/restic     # the password is in Bitwarden
-   nix run nixpkgs#restic -- snapshots --host <hostname>
-   nix run nixpkgs#restic -- restore latest --host <hostname> --include /etc/ssh --target /mnt
-   ```
-
-3. `nixos-install --flake .#<host>`, then restore everything else over it. `/etc/static`
-   is left out because it points into the old store; the first activation relinks it:
-
-   ```sh
-   nix run nixpkgs#restic -- restore latest --host <hostname> --target /mnt --exclude /etc/static
-   ```
-
-4. Boot, `git pull` in the restored checkout, and `lattice rebuild`.
-
-`lattice backup browse` mounts every backup as folders for copying single files back.
-
-</details>
-
-<details>
-<summary><b>Recovery</b></summary>
-
-Root is locked and passwords only come from sops, so a host that can't decrypt
-its secrets locks you out entirely. Keep a NixOS USB stick around.
-
-1. Boot the stick, `cryptsetup open` the LUKS devices if the host has any, and mount
-   under `/mnt`.
-2. From an admin machine, either add the host's key
-   (`/mnt/etc/ssh/ssh_host_ed25519_key.pub`) and run `updatekeys`, or set a new
-   password with `scripts/set-password.sh`.
-3. Reinstall from a checkout with the fix:
-
-   ```sh
-   sudo nixos-install --root /mnt --flake .#<host> --no-root-passwd \
-     --option experimental-features 'nix-command flakes'
-   ```
-
-</details>
+On a running system, `lattice guide` opens them as a themed page with checkable steps and
+commands that fill in your host names. Install and recovery read just as well here, for
+when lattice isn't running yet.
 
 ## License
 
