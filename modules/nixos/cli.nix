@@ -624,7 +624,18 @@ in
           section "Errors this boot"
           # Counted by message rather than listed in order: one chatty daemon repeating
           # itself every minute would otherwise be all the tail ever shows.
+          #
+          # Less the lines that turn up on every healthy boot, which otherwise took all five
+          # slots and pushed anything new off the list (all checked on 2026-10-06):
+          # dbus-broker's duplicate-name lines, which NixOS's merged service directories cause
+          # on every host; and on the Mac, the Bluetooth codec query and BAP probe the bcm4377
+          # firmware refuses, the brcmfmac join-pref/roam/P2P setup calls its firmware does not
+          # implement (-52), the three speaker amps the devicetree leaves unconfigured, and
+          # cpufreq_schedutil, which the Asahi module asks modules-load for although this
+          # kernel has the governor built in. Also udev's mtd_probe callout, which this systemd
+          # no longer ships, and bluetoothd's wake flag the controller rejects.
           journalctl -b -p err -q --no-pager -o short 2>/dev/null \
+            | grep -vE 'Ignoring duplicate name|Failed to read codec capabilities|BAP requires ISO Socket|bap: Operation not supported|error \(-52\)|err=-52|ret -52|p2p-dev-wld0|brcmf_p2p_create_p2pdev|tas2764_i2c_probe: Failed to parse devicetree|cpufreq_schedutil|mtd_probe|set_wake_allowed_complete' \
             | awk '{ $1 = $2 = $3 = $4 = ""; sub(/^ +/, ""); sub(/\[[0-9]+\]/, ""); print }' \
             | sort | uniq -c | sort -rn | head -n 5 \
             | awk 'NF > 1 { n = $1; $1 = ""; printf "  %6dx %s\n", n, substr($0, 2, 110) }' || true
