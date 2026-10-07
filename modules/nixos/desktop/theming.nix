@@ -79,12 +79,12 @@ let
   # import last (lattice.theme.runtimeTheme); rofi and mako through their own syntax of the
   # same; Hyprland's borders through theme.lua, which hyprland.lua in ~/.dotfiles loads
   # after its own default so a `hyprctl reload` keeps the pick; the lock screen through
-  # theme.hyprlock; tmux, Ghostty and nvim through theme.tmux, theme.ghostty and
+  # theme.hyprlock; tmux, foot and nvim through theme.tmux, theme.foot and
   # theme-nvim.lua. The files themselves are lattice.theme.runtimeKits, one directory per
   # flavour with the accent left as tokens; this fills those in and puts each file in place.
   #
   # Telling each one is the other half, and it is per program, and only for a file that
-  # actually changed -- a wallpaper step changes the accent and nothing in tmux or Ghostty,
+  # actually changed -- a wallpaper step changes the accent and nothing in tmux or foot,
   # and re-sourcing tmux.conf for nothing costs a status-bar redraw. waybar watches
   # theme.css itself (reload_style_on_change in ~/.dotfiles/waybar/config.jsonc): that
   # restyles the bar in place, where the SIGUSR2 it used to get rebuilt every bar surface,
@@ -93,8 +93,9 @@ let
   # swayosd has no reload at all, so it is restarted; Hyprland takes the same Lua the file
   # holds, through `hyprctl eval` -- `keyword` refuses a Lua config. tmux re-sources its
   # whole config, because catppuccin/tmux expands its colours into the status formats as it
-  # loads. Ghostty has a reload-config action on its GApplication, which is safer than its
-  # SIGUSR2: on a build without the handler, that signal's default action is to exit. rofi,
+  # loads. foot cannot reload its config at all, so its open windows are sent the colours
+  # as escape codes, the way a program inside one would set them; a new window reads the
+  # file. rofi,
   # wlogout and hyprlock read theirs at every launch. Every one is allowed to miss: a
   # program that is not up yet will read the file when it starts.
   #
@@ -114,6 +115,7 @@ let
       pkgs.dconf
       pkgs.hyprland
       pkgs.mako
+      pkgs.procps
       pkgs.systemd
       pkgs.tmux
     ];
@@ -265,9 +267,37 @@ let
       if [[ $changed == *" theme.sh "* ]]; then
         kill -USR1 "$(cat "''${XDG_RUNTIME_DIR:-/tmp}/lattice-clock.pid" 2>/dev/null)" 2>/dev/null || true
       fi
-      if [[ $changed == *" theme.ghostty "* ]]; then
-        busctl --user call com.mitchellh.ghostty /com/mitchellh/ghostty \
-          org.gtk.Actions Activate 'sava{sv}' reload-config 0 0 >/dev/null 2>&1 || true
+      # Every line of theme.foot as its OSC, written to each foot window's pty: the one every
+      # child of foot -- the shell, or the tmux client it went on to run -- has as stdin.
+      # Writing there is output, so it goes to foot and never to the program reading it.
+      if [[ $changed == *" theme.foot "* ]]; then
+        e=$'\e'
+        osc=""
+        while IFS='=' read -r key value; do
+          value=''${value##* }
+          rgb="rgb:''${value:0:2}/''${value:2:2}/''${value:4:2}"
+          case $key in
+            foreground) osc+="$e]10;$rgb$e\\" ;;
+            background) osc+="$e]11;$rgb$e\\" ;;
+            cursor) osc+="$e]12;$rgb$e\\" ;;
+            selection-background) osc+="$e]17;$rgb$e\\" ;;
+            selection-foreground) osc+="$e]19;$rgb$e\\" ;;
+            regular[0-7]) osc+="$e]4;''${key#regular};$rgb$e\\" ;;
+            bright[0-7]) osc+="$e]4;$((''${key#bright} + 8));$rgb$e\\" ;;
+          esac
+        done <"$dir/theme.foot"
+        while read -r pid; do
+          for task in /proc/"$pid"/task/*/children; do
+            kids=()
+            read -ra kids 2>/dev/null <"$task" || true
+            for kid in "''${kids[@]}"; do
+              pty=$(readlink /proc/"$kid"/fd/0 2>/dev/null) || continue
+              if [[ $pty == /dev/pts/* ]]; then
+                printf '%s' "$osc" 2>/dev/null >"$pty" || true
+              fi
+            done
+          done
+        done < <(pgrep -x -u "$(id -u)" foot || true)
       fi
     '';
   };
@@ -685,7 +715,7 @@ let
 
   cursorTheme = "catppuccin-${catppuccinFlavor}-dark-cursors";
 
-  # 9pt (12px) keeps UI text close to Ghostty and waybar; qt6ct in ~/.dotfiles uses the same fonts.
+  # 9pt (12px) keeps UI text close to foot and waybar; qt6ct in ~/.dotfiles uses the same fonts.
   uiFont = "${theme.fonts.ui} ${toString theme.fonts.size}";
 
   monospaceFont = "${theme.fonts.monospace} ${toString theme.fonts.size}";
@@ -822,6 +852,11 @@ in
       noto-fonts
       jetbrains-mono
       nerd-fonts.symbols-only
+      # foot's font. The tmux bar's rounded pills are Nerd Font powerline caps, and foot draws
+      # them at the size of whichever font holds them: from symbols-only they come out
+      # shorter than the row, where Ghostty stretched them to the cell itself. The patched
+      # JetBrains Mono carries them sized to its own line height.
+      nerd-fonts.jetbrains-mono
       # Microsoft core fonts (Times New Roman, Arial, Courier New, ...) so documents render as their authors saw them.
       corefonts
     ];

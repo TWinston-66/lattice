@@ -56,14 +56,11 @@ in
 {
   ### APPS ###
   environment.systemPackages = with pkgs; [
-    # 1.3.1's GTK build spends every touchpad sideways scroll on switching tabs and never
-    # hands it to the terminal, so nvim's <ScrollWheelLeft/Right> never fire. Upstream's
-    # gtk-horizontal-tab-scroll (ghostty-org/ghostty#12659, due in 1.4.0) forwards it
-    # instead when set false, which ~/.config/ghostty-nixos/config does. Drop the patch
-    # once nixpkgs ships 1.4.0.
-    (ghostty.overrideAttrs (old: {
-      patches = (old.patches or [ ]) ++ [ ./patches/ghostty-horizontal-tab-scroll.patch ];
-    }))
+    # The terminal: a window for tmux, which does the tabs, splits and scrollback, so it
+    # only has to draw. foot does that at about a fifth of the memory Ghostty took (25 MB
+    # against 127 MB a window, measured). Its terminfo is a separate output, for TERM=foot.
+    foot
+    foot.terminfo
     # The same libqalculate engine at its other two surfaces: `qalc` in a terminal, and a
     # real window for the times a calculation is worth keeping on screen and editing --
     # qalculate-gtk carries the history, stored variables, user functions and the plot

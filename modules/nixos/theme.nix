@@ -181,12 +181,12 @@ let
   tokyonight =
     {
       label,
-      ghostty,
+      terminal,
       colorscheme,
       c,
     }:
     {
-      inherit label ghostty;
+      inherit label terminal;
       nvim.colorscheme = colorscheme;
       palette = {
         rosewater = mix 0.5 c.orange c.fg;
@@ -245,12 +245,12 @@ let
   rosePine =
     {
       label,
-      ghostty,
+      terminal,
       colorscheme,
       c,
     }:
     {
-      inherit label ghostty;
+      inherit label terminal;
       nvim.colorscheme = colorscheme;
       palette = {
         rosewater = mix 0.5 c.rose c.text;
@@ -325,7 +325,32 @@ let
     in
     {
       label = "Gruvbox Material";
-      ghostty = "Gruvbox Material Dark";
+      terminal = {
+        foreground = "#d4be98";
+        background = "#282828";
+        cursor = "#d4be98";
+        cursorText = "#282828";
+        selectionForeground = "#282828";
+        selectionBackground = "#d4be98";
+        ansi = [
+          "#282828"
+          "#ea6962"
+          "#a9b665"
+          "#d8a657"
+          "#7daea3"
+          "#d3869b"
+          "#89b482"
+          "#d4be98"
+          "#7c6f64"
+          "#ea6962"
+          "#a9b665"
+          "#d8a657"
+          "#7daea3"
+          "#d3869b"
+          "#89b482"
+          "#ddc7a1"
+        ];
+      };
       nvim = {
         colorscheme = "gruvbox-material";
         globals = {
@@ -583,12 +608,27 @@ let
           (thm "crust" palette.crust)
         ];
 
-      # Ghostty, a config-file from ~/.dotfiles ghostty-nixos: the matching theme Ghostty
-      # bundles, which is the upstream theme's own terminal colours. Coming after the shared
-      # config's `theme =` line, this one wins.
-      "theme.ghostty" = ''
-        theme = ${flavor.ghostty}
-      '';
+      # foot, included by ~/.dotfiles foot.ini: the flavour's terminal colours. foot cannot
+      # reload its config, so lattice-palette also reads this file back to recolour the
+      # windows already open, with the OSC 4/10/11/12/17/19 equivalent of each line.
+      "theme.foot" =
+        let
+          t = flavor.terminal;
+          hex = lib.removePrefix "#";
+        in
+        lib.concatStrings (
+          [
+            "[colors-dark]\n"
+            "foreground=${hex t.foreground}\n"
+            "background=${hex t.background}\n"
+            "cursor=${hex t.cursorText} ${hex t.cursor}\n"
+            "selection-foreground=${hex t.selectionForeground}\n"
+            "selection-background=${hex t.selectionBackground}\n"
+          ]
+          ++ lib.imap0 (
+            i: colour: "${if i < 8 then "regular" else "bright"}${toString (lib.mod i 8)}=${hex colour}\n"
+          ) t.ansi
+        );
 
       # nvim, read and watched by ~/.dotfiles nvim theme.lua: the upstream colorscheme, with
       # whatever vim.g settings it takes. Every flavour gets its own theme's plugin rather
@@ -925,16 +965,32 @@ in
                 build-time flavour.
               '';
             };
-            ghostty = lib.mkOption {
-              type = lib.types.str;
-              description = "The Ghostty theme bundled with Ghostty that matches this flavour.";
+            terminal = lib.mkOption {
+              type = lib.types.submodule {
+                options =
+                  lib.genAttrs [
+                    "foreground"
+                    "background"
+                    "cursor"
+                    "cursorText"
+                    "selectionForeground"
+                    "selectionBackground"
+                  ] (_: lib.mkOption { type = lib.types.str; })
+                  // {
+                    ansi = lib.mkOption { type = lib.types.listOf lib.types.str; };
+                  };
+              };
+              description = ''
+                The terminal's colours, ANSI 0-15 included: the upstream theme's own terminal
+                colours rather than the palette's, as Ghostty bundles them.
+              '';
             };
             bat = lib.mkOption {
               type = lib.types.str;
               default = "base16";
               description = ''
                 bat's theme, also delta's syntax theme. bat ships Catppuccin's; for the rest,
-                "base16" draws in the terminal's own ANSI colours, which Ghostty already has
+                "base16" draws in the terminal's own ANSI colours, which foot already has
                 in this flavour.
               '';
             };
@@ -965,7 +1021,32 @@ in
             teal = "#6bd7ca";
           };
           catppuccin = "mocha";
-          ghostty = "Catppuccin Mocha";
+          terminal = {
+            foreground = "#cdd6f4";
+            background = "#1e1e2e";
+            cursor = "#f5e0dc";
+            cursorText = "#1e1e2e";
+            selectionForeground = "#cdd6f4";
+            selectionBackground = "#585b70";
+            ansi = [
+              "#45475a"
+              "#f38ba8"
+              "#a6e3a1"
+              "#f9e2af"
+              "#89b4fa"
+              "#f5c2e7"
+              "#94e2d5"
+              "#a6adc8"
+              "#585b70"
+              "#f37799"
+              "#89d88b"
+              "#ebd391"
+              "#74a8fc"
+              "#f2aede"
+              "#6bd7ca"
+              "#bac2de"
+            ];
+          };
           nvim.colorscheme = "catppuccin-mocha";
           bat = "Catppuccin Mocha";
         };
@@ -982,7 +1063,32 @@ in
             teal = "#63cbc0";
           };
           catppuccin = "macchiato";
-          ghostty = "Catppuccin Macchiato";
+          terminal = {
+            foreground = "#cad3f5";
+            background = "#24273a";
+            cursor = "#f4dbd6";
+            cursorText = "#24273a";
+            selectionForeground = "#cad3f5";
+            selectionBackground = "#5b6078";
+            ansi = [
+              "#494d64"
+              "#ed8796"
+              "#a6da95"
+              "#eed49f"
+              "#8aadf4"
+              "#f5bde6"
+              "#8bd5ca"
+              "#a5adcb"
+              "#5b6078"
+              "#ec7486"
+              "#8ccf7f"
+              "#e1c682"
+              "#78a1f6"
+              "#f2a9dd"
+              "#63cbc0"
+              "#b8c0e0"
+            ];
+          };
           nvim.colorscheme = "catppuccin-macchiato";
           bat = "Catppuccin Macchiato";
         };
@@ -999,14 +1105,64 @@ in
             teal = "#5abfb5";
           };
           catppuccin = "frappe";
-          ghostty = "Catppuccin Frappe";
+          terminal = {
+            foreground = "#c6d0f5";
+            background = "#303446";
+            cursor = "#f2d5cf";
+            cursorText = "#303446";
+            selectionForeground = "#c6d0f5";
+            selectionBackground = "#626880";
+            ansi = [
+              "#51576d"
+              "#e78284"
+              "#a6d189"
+              "#e5c890"
+              "#8caaee"
+              "#f4b8e4"
+              "#81c8be"
+              "#a5adce"
+              "#626880"
+              "#e67172"
+              "#8ec772"
+              "#d9ba73"
+              "#7b9ef0"
+              "#f2a4db"
+              "#5abfb5"
+              "#b5bfe2"
+            ];
+          };
           nvim.colorscheme = "catppuccin-frappe";
           bat = "Catppuccin Frappe";
         };
 
         tokyonight-night = tokyonight {
           label = "Tokyo Night";
-          ghostty = "TokyoNight Night";
+          terminal = {
+            foreground = "#c0caf5";
+            background = "#1a1b26";
+            cursor = "#c0caf5";
+            cursorText = "#1a1b26";
+            selectionForeground = "#c0caf5";
+            selectionBackground = "#283457";
+            ansi = [
+              "#15161e"
+              "#f7768e"
+              "#9ece6a"
+              "#e0af68"
+              "#7aa2f7"
+              "#bb9af7"
+              "#7dcfff"
+              "#a9b1d6"
+              "#414868"
+              "#f7768e"
+              "#9ece6a"
+              "#e0af68"
+              "#7aa2f7"
+              "#bb9af7"
+              "#7dcfff"
+              "#c0caf5"
+            ];
+          };
           colorscheme = "tokyonight-night";
           c = tokyonightColors // {
             bg = "#1a1b26";
@@ -1017,14 +1173,64 @@ in
 
         tokyonight-storm = tokyonight {
           label = "Tokyo Night Storm";
-          ghostty = "TokyoNight Storm";
+          terminal = {
+            foreground = "#c0caf5";
+            background = "#24283b";
+            cursor = "#c0caf5";
+            cursorText = "#1d202f";
+            selectionForeground = "#c0caf5";
+            selectionBackground = "#364a82";
+            ansi = [
+              "#1d202f"
+              "#f7768e"
+              "#9ece6a"
+              "#e0af68"
+              "#7aa2f7"
+              "#bb9af7"
+              "#7dcfff"
+              "#a9b1d6"
+              "#4e5575"
+              "#f7768e"
+              "#9ece6a"
+              "#e0af68"
+              "#7aa2f7"
+              "#bb9af7"
+              "#7dcfff"
+              "#c0caf5"
+            ];
+          };
           colorscheme = "tokyonight-storm";
           c = tokyonightColors;
         };
 
         rose-pine = rosePine {
           label = "Rosé Pine";
-          ghostty = "Rose Pine";
+          terminal = {
+            foreground = "#e0def4";
+            background = "#191724";
+            cursor = "#e0def4";
+            cursorText = "#191724";
+            selectionForeground = "#e0def4";
+            selectionBackground = "#403d52";
+            ansi = [
+              "#26233a"
+              "#eb6f92"
+              "#31748f"
+              "#f6c177"
+              "#9ccfd8"
+              "#c4a7e7"
+              "#ebbcba"
+              "#e0def4"
+              "#6e6a86"
+              "#eb6f92"
+              "#31748f"
+              "#f6c177"
+              "#9ccfd8"
+              "#c4a7e7"
+              "#ebbcba"
+              "#e0def4"
+            ];
+          };
           colorscheme = "rose-pine-main";
           c = {
             nc = "#16141f";
@@ -1048,7 +1254,32 @@ in
 
         rose-pine-moon = rosePine {
           label = "Rosé Pine Moon";
-          ghostty = "Rose Pine Moon";
+          terminal = {
+            foreground = "#e0def4";
+            background = "#232136";
+            cursor = "#e0def4";
+            cursorText = "#232136";
+            selectionForeground = "#e0def4";
+            selectionBackground = "#44415a";
+            ansi = [
+              "#393552"
+              "#eb6f92"
+              "#3e8fb0"
+              "#f6c177"
+              "#9ccfd8"
+              "#c4a7e7"
+              "#ea9a97"
+              "#e0def4"
+              "#6e6a86"
+              "#eb6f92"
+              "#3e8fb0"
+              "#f6c177"
+              "#9ccfd8"
+              "#c4a7e7"
+              "#ea9a97"
+              "#e0def4"
+            ];
+          };
           colorscheme = "rose-pine-moon";
           c = {
             nc = "#1f1d30";

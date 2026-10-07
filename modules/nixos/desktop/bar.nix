@@ -1588,14 +1588,14 @@ let
       status) status ;;
       fetch) fetch ;;
       # Waybar's PATH is only the store paths in waybar.path below, and uwsm app hands the
-      # caller's environment on: a bare ghostty failed with a critical "Command not found"
+      # caller's environment on: a bare terminal failed with a critical "Command not found"
       # notification, and lazygit inside it -- and git and nvim inside that -- would not be
       # found either. So the terminal gets the session's PATH, the one uwsm exported to the
-      # user manager at login, which also finds the patched Ghostty from apps.nix.
+      # user manager at login.
       open)
         PATH=$(systemctl --user show-environment | sed -n 's/^PATH=//p')
         export PATH
-        exec uwsm app -- ghostty --working-directory="$repo" -e lazygit
+        exec uwsm app -- foot --working-directory="$repo" lazygit
         ;;
       *)
         echo "usage: lattice-vault [status|fetch|open]" >&2

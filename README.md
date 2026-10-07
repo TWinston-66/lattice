@@ -41,11 +41,11 @@
 
 <table>
   <tr>
-    <td width="50%"><img src=".github/assets/screenshots/terminals.png" alt="Ghostty, tmux, fastfetch and Neovim"></td>
+    <td width="50%"><img src=".github/assets/screenshots/terminals.png" alt="tmux, fastfetch and Neovim in foot"></td>
     <td width="50%"><img src=".github/assets/screenshots/launcher.png" alt="The rofi app launcher"></td>
   </tr>
   <tr>
-    <td><b>Terminal-first.</b> Ghostty, tmux, Neovim with DAP debugging, starship, fzf,
+    <td><b>Terminal-first.</b> foot, tmux, Neovim with DAP debugging, starship, fzf,
     bat, delta, lazygit and btop, all following the live theme.</td>
     <td><b>One launcher for everything.</b> rofi for apps, web apps, clipboard
     history, a libqalculate calculator, Wi-Fi, audio devices and more.</td>
@@ -116,7 +116,7 @@ and alerts for any failed unit, HyprQuickFrame screenshots with OCR, and chromel
 that share your Firefox logins.
 
 **Theming.** Seven flavours across Catppuccin, Tokyo Night, Rosé Pine and Gruvbox Material,
-fourteen accents, and generated kits for GTK, Qt, icons, rofi, Ghostty, tmux, Neovim,
+fourteen accents, and generated kits for GTK, Qt, icons, rofi, foot, tmux, Neovim,
 Thunderbird and a dozen CLI tools. A silent Plymouth boot leads straight into a themed greeter.
 
 **Hardware.** Stream Deck pages with generated key art and Home Assistant controls, Logitech

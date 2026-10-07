@@ -47,7 +47,7 @@ lattice wallpaper [next|prev|random|<slot>]   # or `lattice wallpaper menu`
 lattice art wallpaper --density 1.4 > wallpaper.svg
 ```
 
-Changes apply live: GTK apps restyle in place, Ghostty and Neovim reload, and the
+Changes apply live: GTK apps restyle in place, open terminals and Neovim recolour, and the
 wallpaper and Stream Deck follow. Clicking the bar does the same, and right-clicking it
 picks a wallpaper.
 

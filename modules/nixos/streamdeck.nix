@@ -216,7 +216,7 @@ let
           # that restart would kill the terminal, and with it the rebuild running in it,
           # somewhere in the middle of the switch. setsid is no help: it changes the
           # session, not the cgroup.
-          cmd = "systemd-run --user --quiet --collect --unit=lattice-deck-rebuild ghostty -e lattice-deck rebuild";
+          cmd = "systemd-run --user --quiet --collect --unit=lattice-deck-rebuild foot lattice-deck rebuild";
         }
       ];
     }
@@ -863,7 +863,7 @@ let
   # What both units below run their children with. A launcher's PATH is the session's, and
   # that is the whole difference between this and waybar.path in desktop/bar.nix:
   # waybar calls a fixed handful of commands that can be listed, while the deck's keys open
-  # apps -- ghostty, thunar, rofi, the lattice-* scripts -- and listing the system profile's
+  # apps -- foot, thunar, rofi, the lattice-* scripts -- and listing the system profile's
   # contents here would be a second copy of the app list, drifting from the first. Anything
   # that is a package rather than a session app is named by store path in a button command
   # instead. lattice-deck is found this way too, and has to be: its script carries the

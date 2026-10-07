@@ -81,7 +81,7 @@ in
   # The panel is 3024x1890 across 302x189mm, so 254ppi. Hyprland's "auto" picks scale 2,
   # which leaves a 1512x945 logical desktop at 127 logical DPI -- and everything sized in
   # logical pixels (waybar's 28px bar and 12px font, the 5/10 gaps, the 2px borders, the
-  # 16px cursor, ghostty's font-size) is drawn against the 96 DPI convention, so at 2 it
+  # 16px cursor, the terminal's font size) is drawn against the 96 DPI convention, so at 2 it
   # all lands at 76% of the size it was drawn for. Firefox and LibreOffice looked right
   # only because both size content off the real DPI rather than the nominal one; they were
   # the reference, and the shell around them was the thing that was wrong.
@@ -450,7 +450,7 @@ in
   # distinct, so nothing is contended and no keymapper daemon -- Toshy, xremap -- is needed.
   #
   # What a swap cannot reproduce is macOS having two separate keys for this: there Cmd+C
-  # copies while Ctrl+C interrupts. With a single Ctrl serving both, copying in ghostty is
+  # copies while Ctrl+C interrupts. With a single Ctrl serving both, copying in the terminal is
   # Ctrl+Shift+C and SIGINT sits on the Cmd-position key. That one case is the only thing
   # that would justify an app-aware remapper on top of this.
   #
