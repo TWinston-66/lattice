@@ -353,22 +353,17 @@ let
         classes=$(jq -cn --arg b "$band" --argjson s "$stale" \
           'if $s then [$b, "stale"] else [$b] end')
 
-        # Pango markup: the apparent temperature is the same size but dimmed, so it reads
-        # as a qualifier on the number beside it rather than as a second reading competing
-        # with it. waybar runs a custom module's text through set_markup, so this is parsed
-        # rather than shown literally.
-        #
-        # Both temperatures are right-aligned in a three-character field. The bar font is
-        # JetBrains Mono, so that makes the pill a fixed width whatever the reading is --
-        # which is what lets the centre group's counterweight be a constant. Without it the
-        # pill would be two characters narrower at 73° than at -5°, and the clock beside it
-        # would wander off centre as the temperature changed. Three characters covers
-        # -99..999; a reading outside that widens the pill, and the clock drifts by half the
-        # difference until it comes back.
-        text=$(printf '%s %3s° <span alpha="55%%">%3s°</span>' "$icon" "$temp" "$feels")
+        # Just the glyph and the temperature. The apparent temperature used to sit beside
+        # it, dimmed, with both right-aligned in three-character fields so the pill kept one
+        # width -- eleven characters in all. That is the pill next to the clock, and when
+        # the backup pill appeared further along the left group it pushed this one into the
+        # clock. So the feels-like reading is in the tooltip now and the padding is gone:
+        # five characters. The width still moves by one at -5° or 100°, which is rare
+        # enough not to buy back the padding for.
+        text=$(printf '%s %s°' "$icon" "$temp")
 
-        tooltip=$(printf '<b>%s</b>\n%s\nH %s°  L %s°\nWind %s mph %s · Humidity %s%%\nSunset %s' \
-          "$label" "$desc" "$hi" "$lo" "$wind" "$(compass "$wdir")" "$hum" "$sunset")
+        tooltip=$(printf '<b>%s</b>\n%s\nFeels like %s°\nH %s°  L %s°\nWind %s mph %s · Humidity %s%%\nSunset %s' \
+          "$label" "$desc" "$feels" "$hi" "$lo" "$wind" "$(compass "$wdir")" "$hum" "$sunset")
 
         if [ "$stale" = true ]; then
           tooltip=$(printf '%s\n<i>Offline - last known reading</i>' "$tooltip")
