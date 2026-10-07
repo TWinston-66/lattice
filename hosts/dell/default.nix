@@ -36,8 +36,11 @@
   hardware.graphics.extraPackages = [ pkgs.intel-media-driver ];
 
   ### DISPLAY ###
-  # devPixelsPerPx below, for the pages lattice opens in Chromium.
-  lattice.display.webZoom = 1.1;
+  # devPixelsPerPx below, for the pages lattice opens in Chromium. That pin is absolute,
+  # but Chromium already draws at the panel's scale (1.5, Hyprland's "auto" for this
+  # 1920x1200), so the zoom is the pin divided by it. A bare 1.1 was right when the panel
+  # ran at scale 1, and drew the cheatsheet half again as large as Firefox once it didn't.
+  lattice.display.webZoom = 1.1 / 1.5;
 
   # The bar is 1280 logical px here, and full-size pills left the right block no room
   # before the clock.

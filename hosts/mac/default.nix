@@ -259,7 +259,7 @@ in
   #     here -- it is Settings > General > Zoom if the profile is ever rebuilt.
   #   - chrome: compact uidensity, plus the stylesheet below for what compact leaves alone.
   #
-  # The Dell still pins 1.1 against its scale 1. One panel, so the ratio cannot drift there,
+  # The Dell still pins 1.1, against its scale 1.5. One panel, so the ratio cannot drift there,
   # but it would break in exactly this way the first time that machine is docked. Status
   # "default" rather than the module's "locked", there and here, so the numbers stay
   # adjustable from about:config.
