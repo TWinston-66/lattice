@@ -52,6 +52,27 @@ let
       wrapProgram $out/bin/vesktop --add-flag ${lib.escapeShellArg "--user-agent=Mozilla/5.0 (X11; Linux ${pkgs.stdenv.hostPlatform.uname.processor}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${lib.versions.major pkgs.electron.unwrapped.info.chrome}.0.0.0 Safari/537.36"}
     '';
   };
+
+  # Stremio's streaming server (server.js) looks for ffmpeg and ffprobe in Debian/Flatpak
+  # paths, finds neither, and spawns `undefined` for every probe: a TypeError per stream
+  # in the log, and no HLS transcoding for codecs the player can't take or for casting.
+  # The nixpkgs package only wraps node in. Playback itself is libmpv, which already
+  # decodes on the Mac's AVD through libva-v4l2-request (HEVC seen 2026-10-07).
+  stremio = pkgs.symlinkJoin {
+    name = "stremio-${pkgs.stremio-linux-shell.version}";
+    paths = [ pkgs.stremio-linux-shell ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/stremio \
+        --set FFMPEG_BIN ${lib.getExe' pkgs.ffmpeg "ffmpeg"} \
+        --set FFPROBE_BIN ${lib.getExe' pkgs.ffmpeg "ffprobe"}
+      # The D-Bus activation file names the unwrapped binary by store path.
+      svc=share/dbus-1/services/com.stremio.Stremio.service
+      sed "s|${pkgs.stremio-linux-shell}/bin/stremio|$out/bin/stremio|" \
+        "$(readlink -f $out/$svc)" > $out/$svc.new
+      rm $out/$svc && mv $out/$svc.new $out/$svc
+    '';
+  };
 in
 {
   ### APPS ###
@@ -114,6 +135,7 @@ in
     # Popsicle, for Impression: Impression is not merely unbuilt on ARM, it depends on
     # syslinux, which is genuinely x86-only, so this one has no way back.
     vesktop # the wrapped one from the let above
+    stremio # likewise
     cryptomator-cli
     popsicle
 
