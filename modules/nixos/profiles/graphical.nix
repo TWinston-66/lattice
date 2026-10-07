@@ -17,6 +17,7 @@
     ../desktop/bar.nix
     ../desktop/backup.nix
     ../desktop/menus.nix
+    ../desktop/guides.nix
     ../desktop/notifications.nix
     ../desktop/lock.nix
     ../desktop/screenshot.nix

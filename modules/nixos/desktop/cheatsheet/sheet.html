@@ -38,6 +38,11 @@ header {
 .brand h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
 .brand h1 span { color: var(--accent); }
 .brand small { color: var(--muted); font-size: 12px; }
+.guides-link {
+  font-size: 12.5px; padding: 6px 12px; border-radius: 8px; text-decoration: none;
+  border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+}
+.guides-link:hover { color: var(--fg); border-color: var(--accent); }
 .search {
   position: relative; flex: 1 1 280px; max-width: 420px;
 }
@@ -317,6 +322,7 @@ code.raw { font-size: 12.5px; padding: 2px 6px; border-radius: 5px; background: 
       <input id="q" type="search" placeholder="Search keys or actions… (split, copy, workspace)" autocomplete="off">
       <span class="hint"><kbd>/</kbd></span>
     </label>
+    <a class="guides-link" href="guides.html" title="Install, backup and recovery guides (lattice guide)">Guides</a>
     <button class="primary" id="practice" title="Flashcards from whatever is showing (p)">Practice</button>
     <div class="progress" title="Essentials on this tab you've ticked off. Tick any row with the circle on its right."><div class="track"><div class="fill" id="pfill"></div></div><span id="ptext"></span></div>
   </div>
@@ -483,7 +489,7 @@ code.raw { font-size: 12.5px; padding: 2px 6px; border-radius: 5px; background: 
 
 <footer>
   <span id="generated"></span> <span class="tag">yours</span> marks a binding from your config.
-  Regenerate with <code>lattice cheatsheet</code>, <kbd><span class="mod">Super</span><span class="mod">Shift</span>/</kbd> or <b>Keybinding Cheatsheet</b> in the app launcher. Search the same rows in rofi with <kbd><span class="mod">Super</span>/</kbd>.
+  Regenerate with <code>lattice cheatsheet</code> (or <code>lattice guide keys</code>), <kbd><span class="mod">Super</span><span class="mod">Shift</span>/</kbd> or <b>Keybinding Cheatsheet</b> in the app launcher. Search the same rows in rofi with <kbd><span class="mod">Super</span>/</kbd>.
   <div id="stale"></div>
 </footer>
 
@@ -491,6 +497,9 @@ code.raw { font-size: 12.5px; padding: 2px 6px; border-radius: 5px; background: 
      every row the SUPER+/ picker shows (at generation time). -->
 <script type="application/json" id="sheet">
 @SHEET@
+</script>
+<script type="application/json" id="themes">
+@THEMES@
 </script>
 <script type="application/json" id="live">
 @LIVE@
@@ -920,16 +929,7 @@ function renderBuilder() {
 }
 
 /* ---------- themes: lattice's eight, following `lattice theme` unless one is picked ---------- */
-const THEMES = {
-  "gruvbox-material": ["Gruvbox Material", "#282828","#32302f","#3c3836","#45403d","#d4be98","#928374","#d8a657","#7daea3","#a9b665","#ea6962","#d3869b","#89b482","#e78a4e"],
-  "mocha": ["Catppuccin Mocha", "#1e1e2e","#262637","#313244","#45475a","#cdd6f4","#7f849c","#cba6f7","#89b4fa","#a6e3a1","#f38ba8","#f5c2e7","#94e2d5","#fab387"],
-  "macchiato": ["Catppuccin Macchiato", "#24273a","#2b2e43","#363a4f","#494d64","#cad3f5","#8087a2","#c6a0f6","#8aadf4","#a6da95","#ed8796","#f5bde6","#8bd5ca","#f5a97f"],
-  "frappe": ["Catppuccin Frappé", "#303446","#373b50","#414559","#51576d","#c6d0f5","#838ba7","#ca9ee6","#8caaee","#a6d189","#e78284","#f4b8e4","#81c8be","#ef9f76"],
-  "tokyonight-night": ["Tokyo Night", "#1a1b26","#202231","#292e42","#3b4261","#c0caf5","#737aa2","#7aa2f7","#7dcfff","#9ece6a","#f7768e","#bb9af7","#73daca","#ff9e64"],
-  "tokyonight-storm": ["Tokyo Night Storm", "#24283b","#1f2335","#292e42","#3b4261","#c0caf5","#737aa2","#7aa2f7","#7dcfff","#9ece6a","#f7768e","#bb9af7","#73daca","#ff9e64"],
-  "rose-pine": ["Rosé Pine", "#191724","#1f1d2e","#26233a","#403d52","#e0def4","#908caa","#ebbcba","#9ccfd8","#31748f","#eb6f92","#c4a7e7","#9ccfd8","#f6c177"],
-  "rose-pine-moon": ["Rosé Pine Moon", "#232136","#2a273f","#393552","#44415a","#e0def4","#908caa","#ea9a97","#9ccfd8","#3e8fb0","#eb6f92","#c4a7e7","#9ccfd8","#f6c177"],
-};
+const THEMES = readJSON("themes") || {};
 const VARS = ["bg","panel","raised","line","fg","muted","accent","blue","green","red","purple","aqua","orange"];
 const latticeTheme = THEMES[LIVE && LIVE.theme] ? LIVE.theme : "gruvbox-material";
 const sel = document.getElementById("theme");

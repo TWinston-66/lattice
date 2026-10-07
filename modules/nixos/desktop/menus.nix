@@ -8,6 +8,7 @@ let
   inherit (import ./lib.nix { inherit config lib pkgs; })
     theme
     rofiWithCalc
+    appWindow
     ;
 
   # The Wi-Fi picker behind the network pill. NetworkManager's own front ends are either a
@@ -676,8 +677,8 @@ let
     ' ${./cheatsheet/nvim.json} > $out
   '';
 
-  # The browser cheatsheet: sheet.html with nvim.json and groups.json (how the Hyprland and
-  # tmux rows are sorted into sections) inlined, so the page opens from file:// with nothing
+  # The browser cheatsheet: sheet.html with nvim.json, groups.json (how the Hyprland and
+  # tmux rows are sorted into sections) and page-themes.json (shared with the guides) inlined, so the page opens from file:// with nothing
   # to fetch. The picker's rows go in at @LIVE@ when `lattice cheatsheet` writes it out.
   # "</" is escaped so a </code> in a description can't close the script element early.
   cheatsheetPage =
@@ -685,8 +686,11 @@ let
       ''
         jq -c -s '{nvim: .[0], groups: .[1]}' ${./cheatsheet/nvim.json} ${./cheatsheet/groups.json} \
           | sed 's#</#<\\/#g' > sheet.json
-        awk -v f=sheet.json '$0 == "@SHEET@" { while ((getline l < f) > 0) print l; next } { print }' \
-          ${./cheatsheet/sheet.html} > $out
+        awk -v f=sheet.json -v t=${./page-themes.json} '
+          $0 == "@SHEET@" { while ((getline l < f) > 0) print l; next }
+          $0 == "@THEMES@" { while ((getline l < t) > 0) print l; next }
+          { print }
+        ' ${./cheatsheet/sheet.html} > $out
       '';
 
   keybindings = pkgs.writeShellApplication {
@@ -699,8 +703,8 @@ let
       pkgs.gnugrep
       pkgs.gnused
       pkgs.coreutils
-      # The browser page opens as an app window: see `sheet` below.
-      pkgs.ungoogled-chromium
+      # The browser page opens as an app window (lib.nix).
+      appWindow
     ];
     text = ''
       extras="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/keys.tsv"
@@ -776,8 +780,10 @@ let
       # opened on the focused tool's tab (or the one named). The page sorts the Hyprland and
       # tmux rows into sections, drops nvim.json rows the dump no longer has and lists
       # described maps no row covers yet. It also follows the lattice theme, and says which
-      # physical keys are which when hid_apple has swapped Ctrl and Cmd.
-      if [[ ''${1-} == sheet ]]; then
+      # physical keys are which when hid_apple has swapped Ctrl and Cmd. `page` only writes
+      # it: `lattice guide` does that behind its own window, so the guides' link to this
+      # page finds a fresh copy.
+      if [[ ''${1-} == sheet || ''${1-} == page ]]; then
         case ''${2-} in nvim | tmux | hypr) focus=$2 ;; esac
         out="''${XDG_CACHE_HOME:-$HOME/.cache}/lattice/cheatsheet.html"
         theme=$(lattice theme current 2>/dev/null) || theme=""
@@ -796,20 +802,11 @@ let
           ${cheatsheetPage} > "$tmp/sheet.html"
         mkdir -p "$(dirname "$out")"
         cp "$tmp/sheet.html" "$out"
+        [[ $1 == page ]] && exit 0
 
-        # An app window -- no tabs, no address bar -- in Chromium, which is already here for
-        # WebHID (apps.nix). Firefox's Taskbar Tabs are how lattice's other web apps get one,
-        # but they only take http(s) pages: a file:// URL has no host for a scope to match
-        # (TaskbarTabsRegistry.sys.mjs), and a local server just for this would be a daemon
-        # for a static page. Chromium names the window after the URL, chrome-<host>_<path with
-        # / as _>-Default -- an empty host here, so chrome-__home_...-Default -- which is how
-        # an open one is found again. It is
-        # closed rather than raised, because the page it shows was written from the old rows.
-        while read -r addr; do
-          hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })" >/dev/null 2>&1 || true
-        done < <(hyprctl clients -j 2>/dev/null \
-          | jq -r --arg c "chrome-_''${out//\//_}-Default" '.[] | select(.class == $c) | .address')
-        chromium --app="file://$out#$focus" >/dev/null 2>&1 &
+        # The header links back to the guides; the same goes the other way.
+        lattice-guide --write >/dev/null 2>&1 || true
+        lattice-app-window "$out" "$focus"
         exit 0
       fi
 

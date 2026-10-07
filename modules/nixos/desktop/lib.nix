@@ -285,6 +285,37 @@ let
   # be on PATH for the mode itself; libqalculate is in apps.nix's systemPackages only for the
   # `qalc` CLI, and adds no closure of its own because the plugin already pulls it in.
   rofiWithCalc = pkgs.rofi.override { plugins = [ pkgs.rofi-calc ]; };
+
+  # `lattice-app-window <file> [fragment]`: one of lattice's own pages (the keybinding
+  # cheatsheet, the guides) in an app window -- no tabs, no address bar -- in Chromium,
+  # which is already here for WebHID (apps.nix). Firefox's Taskbar Tabs are how lattice's
+  # other web apps get one, but they only take http(s) pages: a file:// URL has no host for a
+  # scope to match (TaskbarTabsRegistry.sys.mjs), and a local server just for this would be
+  # a daemon for a static page. Chromium names the window after the URL,
+  # chrome-<host>_<path with / as _>-Default -- an empty host here, so
+  # chrome-__home_...-Default -- which is how an open one is found again. It is closed
+  # rather than raised, because the pages are rewritten on every open and the old window
+  # shows the old copy. Every page in the same directory counts, not just this one: the
+  # pages link to each other, so a window opened on the guides may be showing the
+  # cheatsheet by now, and they are one site in one window.
+  appWindow = pkgs.writeShellApplication {
+    name = "lattice-app-window";
+    runtimeInputs = [
+      pkgs.hyprland
+      pkgs.jq
+      pkgs.coreutils
+      pkgs.ungoogled-chromium
+    ];
+    text = ''
+      file=$1 fragment=''${2-}
+      dir=$(dirname "$file")
+      while read -r addr; do
+        hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })" >/dev/null 2>&1 || true
+      done < <(hyprctl clients -j 2>/dev/null \
+        | jq -r --arg c "chrome-_''${dir//\//_}_" '.[] | select(.class | startswith($c)) | .address')
+      chromium --app="file://$file''${fragment:+#$fragment}" >/dev/null 2>&1 &
+    '';
+  };
 in
 {
   inherit
@@ -308,5 +339,6 @@ in
     currentPanel
     currentDesk
     rofiWithCalc
+    appWindow
     ;
 }

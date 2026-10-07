@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lattice guides</title>
+<style>
+:root {
+  --bg: #282828; --panel: #32302f; --raised: #3c3836; --line: #45403d;
+  --fg: #d4be98; --muted: #928374; --accent: #d8a657; --blue: #7daea3;
+  --green: #a9b665; --red: #ea6962; --purple: #d3869b; --aqua: #89b482; --orange: #e78a4e;
+  --mono: "JetBrainsMono Nerd Font", "JetBrains Mono", "FiraCode Nerd Font", ui-monospace, monospace;
+  --sans: "Inter", "Noto Sans", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 24px; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+/* No ligatures: these are commands to type, and -< or != drawn as one glyph misleads. */
+code, kbd, pre, .mono { font-family: var(--mono); font-variant-ligatures: none; }
+button { font: inherit; color: inherit; }
+
+.layout {
+  display: grid; grid-template-columns: 264px minmax(0, 1fr) 232px;
+  max-width: 1440px; margin: 0 auto; min-height: 100vh;
+}
+
+/* ---------- sidebar ---------- */
+aside.side {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  padding: 22px 16px 24px 20px; border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 16px;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+.brand svg { color: var(--accent); flex: none; }
+.brand h1 { margin: 0; font-size: 17px; letter-spacing: -0.01em; line-height: 1.2; }
+.brand h1 span { color: var(--muted); font-weight: 500; }
+.search { position: relative; }
+.search input {
+  width: 100%; padding: 7px 30px 7px 32px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  font: inherit; font-size: 13.5px; outline: none;
+}
+.search input:focus { border-color: var(--accent); }
+.search > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
+kbd {
+  display: inline-block; font-size: 11.5px; line-height: 1.4; padding: 0 6px; border-radius: 5px;
+  border: 1px solid var(--line); border-bottom-width: 2px; background: var(--raised); color: var(--fg);
+}
+nav.guides { display: grid; gap: 2px; }
+nav.guides .label {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); padding: 0 8px 6px;
+}
+nav.guides a {
+  display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center;
+  padding: 7px 8px; border-radius: 8px; color: var(--fg); text-decoration: none; font-size: 14px;
+}
+nav.guides a svg { color: var(--muted); }
+nav.guides a:hover { background: var(--panel); }
+nav.guides a[aria-current="page"] { background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
+nav.guides a[aria-current="page"] svg { color: var(--accent); }
+nav.guides .done { font: 11px var(--mono); color: var(--muted); }
+nav.guides kbd { font-size: 10.5px; color: var(--muted); }
+nav.guides .done.full { color: var(--green); }
+.results { display: grid; gap: 2px; }
+.results a {
+  display: block; padding: 7px 9px; border-radius: 8px; color: var(--fg); text-decoration: none;
+}
+.results a:hover, .results a.sel { background: var(--raised); }
+.results b { display: block; font-size: 13.5px; font-weight: 600; }
+.results small { display: block; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.results mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; }
+.results .none { color: var(--muted); font-size: 13px; padding: 6px 9px; }
+.side-foot { margin-top: auto; display: grid; gap: 8px; font-size: 12px; color: var(--muted); padding: 0 4px; }
+select {
+  font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; width: 100%;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+
+/* ---------- article ---------- */
+main { padding: 44px 56px 80px; min-width: 0; }
+article { max-width: 760px; margin: 0 auto; }
+.crumb { font-size: 12.5px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.crumb svg { color: var(--accent); }
+article h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 12px; }
+article .lede { font-size: 17px; color: color-mix(in srgb, var(--fg) 82%, var(--muted)); margin: 0 0 22px; }
+article h2 {
+  font-size: 22px; letter-spacing: -0.01em; margin: 44px 0 12px; padding-top: 18px;
+  border-top: 1px solid var(--line); display: flex; align-items: baseline; gap: 10px;
+}
+article h2 .count { margin-left: auto; font: 500 12px var(--mono); color: var(--muted); }
+article h2 .count.full { color: var(--green); }
+article h3 { font-size: 17px; margin: 28px 0 8px; }
+article h2 a.anchor, article h3 a.anchor { color: var(--muted); opacity: 0; font-weight: 400; text-decoration: none; }
+article h2:hover a.anchor, article h3:hover a.anchor { opacity: 1; }
+article p { margin: 0 0 14px; }
+article ul { padding-left: 22px; margin: 0 0 14px; }
+article ul li { margin: 4px 0; }
+article ul li::marker { color: var(--accent); }
+article :not(pre) > code {
+  font-size: 0.86em; padding: 1px 5px; border-radius: 5px;
+  background: var(--raised); border: 1px solid var(--line); white-space: nowrap;
+}
+article strong { color: color-mix(in srgb, var(--fg) 70%, white); }
+
+/* the values card */
+.fill {
+  margin: 0 0 8px; padding: 14px 16px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.fill .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.fill .head b { font-size: 14px; }
+.fill .head span { color: var(--muted); font-size: 12.5px; }
+.fill .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.fill label { display: grid; gap: 3px; font: 12px var(--mono); color: var(--muted); }
+.fill input {
+  font: 13.5px var(--mono); padding: 6px 9px; border-radius: 7px; outline: none;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+}
+.fill input:focus { border-color: var(--accent); }
+.fill input:not(:placeholder-shown) { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+
+/* placeholders: unfilled ones stand out, filled ones read as typed text with a hint */
+.ph { color: var(--orange); border-bottom: 1px dashed currentColor; cursor: pointer; }
+.ph.set { color: var(--green); border-bottom-style: dotted; }
+
+/* steps */
+article ol { list-style: none; padding: 0; margin: 0 0 18px; counter-reset: step; }
+article ol > li {
+  counter-increment: step; position: relative; padding: 2px 0 6px 46px; margin: 0 0 8px;
+}
+article ol > li::before {
+  content: ""; position: absolute; left: 14px; top: 34px; bottom: -8px; width: 2px;
+  background: var(--line); border-radius: 2px;
+}
+article ol > li:last-child::before { display: none; }
+.check {
+  position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid var(--line); background: var(--panel); cursor: pointer;
+  display: grid; place-items: center; font: 600 13px var(--mono); color: var(--muted);
+  transition: background .15s, border-color .15s, color .15s;
+}
+.check::after { content: counter(step); }
+.check:hover { border-color: var(--accent); color: var(--fg); }
+li.done > .check { background: var(--green); border-color: var(--green); color: var(--bg); }
+li.done > .check::after { content: "✓"; font-size: 15px; }
+li.done > p, li.done > ul { color: var(--muted); }
+li.done::before { background: color-mix(in srgb, var(--green) 55%, var(--line)); }
+
+/* code */
+.code { margin: 6px 0 16px; border-radius: 10px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 55%, black); overflow: hidden; }
+.code .bar {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 12px;
+  border-bottom: 1px solid var(--line); background: var(--panel); font-size: 11.5px; color: var(--muted);
+}
+.code .bar .lang { font-family: var(--mono); text-transform: lowercase; }
+.code .bar button {
+  margin-left: auto; border: 1px solid var(--line); background: var(--raised); color: var(--fg);
+  border-radius: 6px; padding: 2px 9px; font-size: 11.5px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center;
+}
+.code .bar button:hover { border-color: var(--accent); }
+.code .bar button.ok { color: var(--green); border-color: var(--green); }
+.code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+.code .cm { color: var(--muted); font-style: italic; }
+.code .cmd { color: var(--blue); }
+
+/* callouts */
+.callout {
+  margin: 16px 0 20px; padding: 12px 16px 12px 14px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line));
+  background: color-mix(in srgb, var(--c) 9%, var(--panel));
+  display: grid; grid-template-columns: 22px 1fr; gap: 10px;
+}
+.callout svg { color: var(--c); margin-top: 3px; }
+.callout .t { font-weight: 600; color: var(--c); font-size: 13px; letter-spacing: .03em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+.callout p { margin: 0 0 6px; }
+.callout p:last-child { margin: 0; }
+.callout.note { --c: var(--blue); }
+.callout.tip { --c: var(--green); }
+.callout.important { --c: var(--purple); }
+.callout.warning { --c: var(--orange); }
+.callout.caution { --c: var(--red); }
+
+/* tables */
+.tablewrap { overflow-x: auto; margin: 6px 0 18px; border: 1px solid var(--line); border-radius: 10px; }
+article table { width: 100%; border-collapse: collapse; font-size: 14px; }
+article th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--panel); }
+article th, article td { padding: 8px 14px; vertical-align: top; }
+article td { border-top: 1px solid var(--line); }
+article td:first-child { white-space: nowrap; }
+
+/* prev / next */
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 56px; }
+.pager a {
+  display: block; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel); text-decoration: none; color: var(--fg);
+}
+.pager a:hover { border-color: var(--accent); }
+.pager small { display: block; color: var(--muted); font-size: 12px; }
+.pager b { font-size: 15px; }
+.pager .next { text-align: right; grid-column: 2; }
+.source { margin-top: 22px; font-size: 12.5px; color: var(--muted); }
+
+/* ---------- on this page ---------- */
+aside.toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 48px 20px 24px 8px; font-size: 13px; }
+aside.toc .label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+aside.toc a {
+  display: flex; gap: 8px; align-items: baseline; padding: 4px 0 4px 12px; color: var(--muted);
+  border-left: 2px solid var(--line); text-decoration: none;
+}
+aside.toc a:hover { color: var(--fg); }
+aside.toc a.on { color: var(--fg); border-left-color: var(--accent); }
+aside.toc a small { margin-left: auto; font: 11px var(--mono); }
+aside.toc a small.full { color: var(--green); }
+aside.toc .reset {
+  margin-top: 14px; background: none; border: 0; padding: 0 0 0 14px; color: var(--muted);
+  font-size: 12px; cursor: pointer; text-decoration: underline dotted;
+}
+aside.toc .reset:hover { color: var(--fg); }
+
+@media (max-width: 1180px) {
+  .layout { grid-template-columns: 248px minmax(0, 1fr); }
+  aside.toc { display: none; }
+}
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .side-foot { display: none; }
+  main { padding: 28px 16px 60px; }
+  article h1 { font-size: 28px; }
+}
+@media print {
+  aside.side, aside.toc, .code .bar button, .pager, .fill { display: none; }
+  .layout { display: block; }
+  body { background: white; color: black; }
+  main { padding: 0; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/><path d="M12 7.5 16.5 12 12 16.5 7.5 12Z"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>
+      </svg>
+      <h1>lattice <span>guides</span></h1>
+    </div>
+    <label class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search the guides" autocomplete="off" aria-label="Search the guides">
+      <kbd>/</kbd>
+    </label>
+    <div class="results" id="results" hidden></div>
+    <nav class="guides" id="guides" aria-label="Guides"></nav>
+    <nav class="guides" id="reference" aria-label="Reference">
+      <div class="label">Reference</div>
+      <a href="cheatsheet.html" title="Every Hyprland, tmux and Neovim binding (lattice guide keys)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M7 14h10"/></svg>
+        <span>Keybindings</span><kbd>Super ⇧ /</kbd>
+      </a>
+    </nav>
+    <div class="side-foot">
+      <select id="theme" aria-label="Theme"></select>
+      <div id="generated"></div>
+    </div>
+  </aside>
+  <main><article id="doc"></article></main>
+  <aside class="toc" id="toc" aria-label="On this page"></aside>
+</div>
+
+<!-- Filled in at build time: docs/*.md rendered by cmark-gfm, in sidebar order, and the
+     theme table shared with the cheatsheet. #live is filled in by `lattice guide`. -->
+<script type="application/json" id="guides-data">
+@GUIDES@
+</script>
+<script type="application/json" id="themes">
+@THEMES@
+</script>
+<script type="application/json" id="live">
+@LIVE@
+</script>
+
+<script>
+/* ======================================================================
+   Source: lattice's modules/nixos/desktop/guides. The text is docs/*.md, the same files
+   GitHub shows; this page only dresses them up. Opened by `lattice guide [name]`.
+
+   #guides-data  [{id, html}]           cmark-gfm output for docs/<id>.md
+   #themes       {id: [name, 13 colours]}  modules/nixos/desktop/page-themes.json
+   #live         {theme, zoom, hostname, generated}
+   ====================================================================== */
+const readJSON = id => { try { return JSON.parse(document.getElementById(id).textContent); } catch { return null; } };
+const RAW = readJSON("guides-data") || [];
+const THEMES = readJSON("themes") || {};
+const LIVE = readJSON("live") || {};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+const ICONS = {
+  using: '<path d="M4 17l6-5-6-5"/><path d="M12 19h8"/>',
+  install: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  backups: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/>',
+  recovery: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m5.6 5.6 3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6"/>',
+  configuring: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+};
+const icon = (id, size = 18) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id] || '<circle cx="12" cy="12" r="3"/>'}</svg>`;
+const CALLOUT_ICONS = {
+  note: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h0"/>',
+  tip: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3Z"/>',
+  important: '<path d="M4 4h16v12H8l-4 4Z"/><path d="M12 7v4M12 13.5h0"/>',
+  warning: '<path d="M12 3 2 20h20Z"/><path d="M12 9v5M12 17h0"/>',
+  caution: '<path d="M8 3h8l5 5v8l-5 5H8l-5-5V8Z"/><path d="M12 8v5M12 16h0"/>',
+};
+
+// A <name> in code is something to fill in -- unless it is one choice of a [a|b|<name>]
+// synopsis, which says what a command takes rather than what to type.
+// A function rather than one shared /g regex: test() and matchAll() both carry its
+// lastIndex along, and a stale one skips the first placeholder in the next string.
+const PH = () => /(?<![|[])<([a-z][a-z-]*)>(?![|\]])/g;
+const hasPH = s => PH().test(s);
+
+// GitHub's heading ids, so a docs link like backups.md#restoring-a-machine lands here too.
+const slug = s => s.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+
+/* ---------- parse every guide once: title, lede, sections, placeholders, search text ---------- */
+const GUIDES = RAW.map(({ id, html }) => {
+  const d = document.createElement("div");
+  d.innerHTML = html;
+  const h1 = d.querySelector("h1");
+  const title = h1 ? h1.textContent : id;
+  if (h1) h1.remove();
+  const first = d.firstElementChild;
+  let lede = "";
+  if (first && first.tagName === "P") { lede = first.innerHTML; first.remove(); }
+  const sections = [...d.querySelectorAll("h2")].map(h => ({ id: slug(h.textContent), title: h.textContent }));
+  // Search units: the intro and each h2 with the text under it.
+  const units = [{ sec: "", title, text: d.textContent.split(/\n/).slice(0, 4).join(" ") }];
+  let cur = null;
+  for (const el of d.children) {
+    if (el.tagName === "H2") { cur = { sec: slug(el.textContent), title: el.textContent, text: "" }; units.push(cur); }
+    else if (cur) cur.text += " " + el.textContent;
+    else units[0].text += " " + el.textContent;
+  }
+  const phs = [...new Set([...d.querySelectorAll("code")].flatMap(c => [...c.textContent.matchAll(PH())].map(m => m[1])))];
+  return { id, title, lede, body: d.innerHTML, sections, units, phs };
+});
+const byId = Object.fromEntries(GUIDES.map(g => [g.id, g]));
+
+/* ---------- step ticks and filled-in values (this browser only) ---------- */
+let done = new Set(store.get("guides-done", []));
+let values = store.get("guides-values", {});
+const stepTotals = {};   // guide -> {section -> [total]} counted at render
+
+/* ---------- sidebar ---------- */
+const nav = document.getElementById("guides");
+function renderNav(current) {
+  nav.innerHTML = `<div class="label">Guides</div>` + GUIDES.map(g => {
+    const total = g.stepCount || 0;
+    const n = [...done].filter(k => k.startsWith(g.id + "/")).length;
+    const badge = total ? `<span class="done${n >= total ? " full" : ""}">${n ? `${n}/${total}` : ""}</span>` : "<span></span>";
+    return `<a href="#${g.id}"${g.id === current ? ' aria-current="page"' : ""}>${icon(g.id)}<span>${esc(g.title)}</span>${badge}</a>`;
+  }).join("");
+}
+
+/* ---------- rendering one guide ---------- */
+const doc = document.getElementById("doc");
+const toc = document.getElementById("toc");
+let current = null;
+
+function fillText(text) {
+  return text.replace(PH(), (m, k) => values[k] || m);
+}
+
+// Wrap <placeholder> tokens in a code element's text so they can be filled and clicked.
+function markPlaceholders(code) {
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const t of nodes) {
+    if (!hasPH(t.data)) continue;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const m of t.data.matchAll(PH())) {
+      frag.append(t.data.slice(last, m.index));
+      const s = document.createElement("span");
+      s.className = "ph"; s.dataset.ph = m[1]; s.dataset.raw = m[0]; s.title = `Fill in ${m[1]}`;
+      frag.append(s);
+      last = m.index + m[0].length;
+    }
+    frag.append(t.data.slice(last));
+    t.replaceWith(frag);
+  }
+}
+
+function paintPlaceholders() {
+  doc.querySelectorAll(".ph").forEach(s => {
+    const v = values[s.dataset.ph];
+    s.textContent = v || s.dataset.raw;
+    s.classList.toggle("set", !!v);
+  });
+}
+
+// Light shell colouring: comments, and the command word at the start of each line.
+function shellColour(pre) {
+  const code = pre.querySelector("code");
+  if (!code || !/language-(sh|bash|console)/.test(code.className)) return;
+  code.innerHTML = code.innerHTML.split("\n").map(line => {
+    const hash = line.search(/(^|\s)# /);
+    let body = hash >= 0 ? line.slice(0, hash) : line, cm = hash >= 0 ? line.slice(hash) : "";
+    body = body.replace(/^(\s*)((?:sudo )?[a-z][\w.\/-]*)/, (m, sp, w) => `${sp}<span class="cmd">${w}</span>`);
+    return body + (cm ? `<span class="cm">${cm}</span>` : "");
+  }).join("\n");
+}
+
+function render(id, anchor) {
+  const g = byId[id] || GUIDES[0];
+  if (!g) { doc.innerHTML = "<p>No guides were built into this page.</p>"; return; }
+  const changed = current !== g.id;
+  current = g.id;
+  document.title = `${g.title} · lattice guides`;
+
+  if (changed) {
+    const fill = g.phs.length ? `
+      <div class="fill">
+        <div class="head"><b>Fill in your values</b><span>The commands below update as you type, and copy filled in.</span></div>
+        <div class="fields">${g.phs.map(p => `<label>&lt;${esc(p)}&gt;<input data-ph="${esc(p)}" value="${esc(values[p] || "")}" placeholder="${esc(hint(p))}" spellcheck="false"></label>`).join("")}</div>
+      </div>` : "";
+    doc.innerHTML = `
+      <div class="crumb">${icon(g.id, 15)}<span>Guide ${GUIDES.indexOf(g) + 1} of ${GUIDES.length}</span></div>
+      <h1>${esc(g.title)}</h1>
+      ${g.lede ? `<p class="lede">${g.lede}</p>` : ""}
+      ${fill}
+      <div class="body">${g.body}</div>
+      ${pager(g)}
+      <div class="source">This guide is <code>docs/${esc(g.id)}.md</code> in lattice, and reads the same on GitHub.</div>`;
+    decorate(g);
+  }
+  if (anchor) {
+    const el = document.getElementById(anchor);
+    if (el) { el.scrollIntoView(); return; }
+  }
+  if (changed) window.scrollTo(0, 0);
+}
+
+function hint(p) {
+  const host = (LIVE.hostname || "").replace(/^lattice-/, "");
+  if (p === "host") return host ? `e.g. ${host}` : "e.g. mac";
+  if (p === "hostname") return LIVE.hostname ? `e.g. ${LIVE.hostname}` : "e.g. lattice-mac";
+  if (p === "drive") return "e.g. usb-Samsung_PSSD_T3_…";
+  if (p === "address") return "e.g. 192.168.1.20";
+  if (p === "number") return "from sgdisk -p";
+  if (p === "disk") return "e.g. nvme0n1, from lsblk";
+  if (p === "swap-size") return "e.g. 32G, at least RAM";
+  return "";
+}
+
+function pager(g) {
+  const i = GUIDES.indexOf(g), prev = GUIDES[i - 1], next = GUIDES[i + 1];
+  return `<nav class="pager">` +
+    (prev ? `<a class="prev" href="#${prev.id}"><small>← Previous</small><b>${esc(prev.title)}</b></a>` : "") +
+    (next ? `<a class="next" href="#${next.id}"><small>Next →</small><b>${esc(next.title)}</b></a>` : "") +
+    `</nav>`;
+}
+
+function decorate(g) {
+  const body = doc.querySelector(".body");
+
+  // Headings: ids and anchors.
+  body.querySelectorAll("h2, h3").forEach(h => {
+    h.id = slug(h.textContent);
+    h.insertAdjacentHTML("beforeend", ` <a class="anchor" href="#${g.id}/${h.id}" aria-label="Link to this section">#</a>`);
+  });
+
+  // Links: other guides become in-page routes; the web opens outside.
+  body.querySelectorAll("a[href]").forEach(a => {
+    const href = a.getAttribute("href");
+    let m;
+    if ((m = /^([a-z-]+)\.md(?:#(.*))?$/.exec(href)) && byId[m[1]]) a.setAttribute("href", `#${m[1]}${m[2] ? "/" + m[2] : ""}`);
+    else if (href.startsWith("#") && !href.includes("/")) a.setAttribute("href", `#${g.id}/${href.slice(1)}`);
+    else if (/^https?:/.test(href)) { a.target = "_blank"; a.rel = "noreferrer"; }
+  });
+
+  // GitHub alerts: > [!NOTE] and friends.
+  body.querySelectorAll("blockquote").forEach(q => {
+    const p = q.querySelector("p");
+    const m = p && /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/.exec(p.innerHTML);
+    if (!m) return;
+    const kind = m[1].toLowerCase();
+    p.innerHTML = p.innerHTML.slice(m[0].length);
+    const box = document.createElement("div");
+    box.className = `callout ${kind}`;
+    box.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CALLOUT_ICONS[kind]}</svg><div><span class="t">${kind}</span>${q.innerHTML}</div>`;
+    q.replaceWith(box);
+  });
+
+  // Tables scroll on their own rather than pushing the page sideways.
+  body.querySelectorAll("table").forEach(t => {
+    const w = document.createElement("div"); w.className = "tablewrap";
+    t.replaceWith(w); w.append(t);
+  });
+
+  // Code blocks: a bar with the language and a copy button that copies the filled-in text.
+  body.querySelectorAll("pre").forEach(pre => {
+    shellColour(pre);
+    const lang = (/language-(\w+)/.exec(pre.querySelector("code")?.className || "") || [])[1] || "";
+    const wrap = document.createElement("div");
+    wrap.className = "code";
+    wrap.innerHTML = `<div class="bar"><span class="lang">${esc(lang === "sh" ? "shell" : lang)}</span><button type="button">Copy</button></div>`;
+    pre.replaceWith(wrap); wrap.append(pre);
+    wrap.querySelector("button").addEventListener("click", e => copy(e.currentTarget, fillText(pre.textContent.replace(/\n$/, ""))));
+  });
+  body.querySelectorAll("code").forEach(markPlaceholders);
+  paintPlaceholders();
+
+  // Steps: every numbered list item at the top level of a section gets a tick.
+  let sec = "", n = 0;
+  const per = {};
+  for (const el of body.children) {
+    if (el.tagName === "H2") { sec = el.id; n = 0; continue; }
+    if (el.tagName !== "OL") continue;
+    for (const li of el.children) {
+      const key = `${g.id}/${sec}/${++n}`;
+      (per[sec] = per[sec] || []).push(key);
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "check"; b.title = "Mark this step done";
+      b.setAttribute("aria-label", `Step ${n}`);
+      li.prepend(b);
+      li.classList.toggle("done", done.has(key));
+      b.addEventListener("click", () => {
+        done.has(key) ? done.delete(key) : done.add(key);
+        li.classList.toggle("done", done.has(key));
+        store.set("guides-done", [...done]);
+        counts(g, per);
+      });
+    }
+  }
+  g.stepCount = Object.values(per).reduce((a, k) => a + k.length, 0);
+
+  // Placeholder fields.
+  doc.querySelectorAll(".fill input").forEach(inp => inp.addEventListener("input", () => {
+    const v = inp.value.trim();
+    if (v) values[inp.dataset.ph] = v; else delete values[inp.dataset.ph];
+    store.set("guides-values", values);
+    doc.querySelectorAll(`.fill input[data-ph="${inp.dataset.ph}"]`).forEach(o => { if (o !== inp) o.value = inp.value; });
+    paintPlaceholders();
+  }));
+  // Clicking a placeholder in a command jumps to its field.
+  doc.querySelectorAll(".ph").forEach(s => s.addEventListener("click", () => {
+    const f = doc.querySelector(`.fill input[data-ph="${s.dataset.ph}"]`);
+    if (f) { f.scrollIntoView({ block: "center", behavior: "smooth" }); f.focus(); }
+  }));
+
+  renderToc(g, per);
+  counts(g, per);
+}
+
+function counts(g, per) {
+  for (const [sec, keys] of Object.entries(per)) {
+    const n = keys.filter(k => done.has(k)).length, full = n === keys.length;
+    const h = sec && document.getElementById(sec);
+    if (h) {
+      let c = h.querySelector(".count");
+      if (!c) { c = document.createElement("span"); c.className = "count"; h.insertBefore(c, h.querySelector(".anchor")); }
+      c.textContent = `${n}/${keys.length} steps`;
+      c.classList.toggle("full", full);
+    }
+    const t = toc.querySelector(`a[data-sec="${sec}"] small`);
+    if (t) { t.textContent = `${n}/${keys.length}`; t.classList.toggle("full", full); }
+  }
+  const reset = toc.querySelector(".reset");
+  if (reset) reset.hidden = ![...done].some(k => k.startsWith(g.id + "/"));
+  renderNav(g.id);
+}
+
+function renderToc(g, per) {
+  if (!g.sections.length) { toc.innerHTML = ""; return; }
+  toc.innerHTML = `<div class="label">On this page</div>` +
+    g.sections.map(s => `<a href="#${g.id}/${s.id}" data-sec="${s.id}"><span>${esc(s.title)}</span>${per[s.id] ? "<small></small>" : ""}</a>`).join("") +
+    (g.stepCount ? `<button class="reset" type="button">Clear ticked steps</button>` : "");
+  toc.querySelector(".reset")?.addEventListener("click", () => {
+    done = new Set([...done].filter(k => !k.startsWith(g.id + "/")));
+    store.set("guides-done", [...done]);
+    doc.querySelectorAll("li.done").forEach(li => li.classList.remove("done"));
+    counts(g, per);
+  });
+  spy();
+}
+
+// Highlight the section being read.
+function spy() {
+  const links = [...toc.querySelectorAll("a[data-sec]")];
+  if (!links.length) return;
+  let on = links[0];
+  for (const a of links) {
+    const h = document.getElementById(a.dataset.sec);
+    if (h && h.getBoundingClientRect().top < window.innerHeight * 0.3) on = a;
+  }
+  // A short last section never scrolls up that far; at the bottom, it is what is being read.
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) on = links[links.length - 1];
+  links.forEach(a => a.classList.toggle("on", a === on));
+}
+window.addEventListener("scroll", spy, { passive: true });
+
+function copy(btn, text) {
+  const ok = () => { btn.textContent = "Copied"; btn.classList.add("ok"); setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("ok"); }, 1400); };
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(ok, () => {
+    const t = document.createElement("textarea"); t.value = text; document.body.append(t); t.select();
+    try { document.execCommand("copy"); ok(); } catch {}
+    t.remove();
+  });
+}
+
+/* ---------- search ---------- */
+const q = document.getElementById("q");
+const results = document.getElementById("results");
+let hits = [], sel = 0;
+function search() {
+  const words = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  results.hidden = !words.length;
+  nav.hidden = !!words.length;
+  document.getElementById("reference").hidden = !!words.length;
+  if (!words.length) return;
+  hits = [];
+  for (const g of GUIDES) for (const u of g.units) {
+    const hay = (u.title + " " + u.text).toLowerCase();
+    if (!words.every(w => hay.includes(w))) continue;
+    const score = words.reduce((s, w) => s + (u.title.toLowerCase().includes(w) ? 5 : 0) + 1, 0);
+    const i = u.text.toLowerCase().indexOf(words[0]);
+    const snip = i < 0 ? u.text.slice(0, 110) : (i > 40 ? "…" : "") + u.text.slice(Math.max(0, i - 40), i + 80);
+    hits.push({ g, u, score, snip: snip.replace(/\s+/g, " ").trim() });
+  }
+  hits.sort((a, b) => b.score - a.score);
+  sel = 0;
+  const mark = s => { let h = esc(s); for (const w of words) h = h.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), m => `<mark>${m}</mark>`); return h; };
+  results.innerHTML = hits.length
+    ? hits.slice(0, 12).map((h, i) => `<a href="#${h.g.id}${h.u.sec ? "/" + h.u.sec : ""}" class="${i === sel ? "sel" : ""}"><b>${mark(h.u.title)}</b><small>${esc(h.g.title)}${h.u.sec ? "" : ""} · ${mark(h.snip)}</small></a>`).join("")
+    : `<div class="none">Nothing in the guides matches.</div>`;
+}
+q.addEventListener("input", search);
+q.addEventListener("keydown", e => {
+  const items = [...results.querySelectorAll("a")];
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    sel = (sel + (e.key === "ArrowDown" ? 1 : -1) + items.length) % Math.max(items.length, 1);
+    items.forEach((a, i) => a.classList.toggle("sel", i === sel));
+  } else if (e.key === "Enter" && items[sel]) {
+    location.hash = items[sel].getAttribute("href"); clear();
+  } else if (e.key === "Escape") clear();
+});
+results.addEventListener("click", e => { if (e.target.closest("a")) setTimeout(clear, 0); });
+function clear() { q.value = ""; search(); q.blur(); }
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, select, textarea")) return;
+  if (e.key === "/") { e.preventDefault(); q.focus(); }
+  const i = GUIDES.findIndex(g => g.id === current);
+  if (e.key === "[" && GUIDES[i - 1]) location.hash = GUIDES[i - 1].id;
+  if (e.key === "]" && GUIDES[i + 1]) location.hash = GUIDES[i + 1].id;
+});
+
+/* ---------- routing: #guide or #guide/section ---------- */
+function route() {
+  const [id, anchor] = decodeURIComponent(location.hash.slice(1)).split("/");
+  // A bare `lattice guide` starts at the first guide, not wherever the last visit ended:
+  // `lattice guide <name>` is how to open another one.
+  render(byId[id] ? id : GUIDES[0] && GUIDES[0].id, anchor);
+  spy();
+}
+window.addEventListener("hashchange", route);
+
+/* ---------- themes: the cheatsheet's table, following `lattice theme` unless one is picked ---------- */
+const VARS = ["bg","panel","raised","line","fg","muted","accent","blue","green","red","purple","aqua","orange"];
+const latticeTheme = THEMES[LIVE.theme] ? LIVE.theme : "gruvbox-material";
+const themeSel = document.getElementById("theme");
+themeSel.innerHTML = (THEMES[latticeTheme] ? `<option value="">Follow lattice (${THEMES[latticeTheme][0]})</option>` : `<option value="">Default</option>`) +
+  Object.entries(THEMES).map(([id, t]) => `<option value="${id}">${t[0]}</option>`).join("");
+function applyTheme(pick) {
+  const id = THEMES[pick] ? pick : latticeTheme;
+  if (THEMES[id]) THEMES[id].slice(1).forEach((c, i) => document.documentElement.style.setProperty(`--${VARS[i]}`, c));
+  themeSel.value = THEMES[pick] ? pick : "";
+}
+// Shared with the cheatsheet: picking a theme on one picks it on both.
+themeSel.addEventListener("change", () => { store.set("cheatsheet-theme", themeSel.value); applyTheme(themeSel.value); });
+applyTheme(store.get("cheatsheet-theme", ""));
+// lattice.display.webZoom: the size Firefox draws pages at on this host.
+if (LIVE.zoom && LIVE.zoom !== 1) document.documentElement.style.zoom = LIVE.zoom;
+document.getElementById("generated").textContent = LIVE.generated
+  ? `Opened ${LIVE.generated} on ${LIVE.hostname || "this machine"}. Press / to search, [ and ] to page.`
+  : "Press / to search, [ and ] to page.";
+
+// Count every guide's steps up front, so the sidebar shows progress for the ones not open.
+for (const g of GUIDES) {
+  const d = document.createElement("div"); d.innerHTML = g.body;
+  g.stepCount = [...d.children].filter(e => e.tagName === "OL").reduce((a, ol) => a + ol.children.length, 0);
+}
+route();
+</script>
+</body>
+</html>
