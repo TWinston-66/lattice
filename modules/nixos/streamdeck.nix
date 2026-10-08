@@ -1298,7 +1298,10 @@ let
   # deck on that flavour's faces. Anything unreadable is the build-time flavour.
   seed = pkgs.writeShellApplication {
     name = "lattice-streamdeck-seed";
-    runtimeInputs = [ pkgs.coreutils ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.jq
+    ];
     text = ''
       config="''${STREAMDECK_UI_CONFIG:?}"
       stamp="$(dirname "$config")/generation"
@@ -1319,13 +1322,21 @@ let
       }*) generated=${generatedFor theme.flavor} ;;
       esac
 
-      if [ "$(cat "$stamp" 2>/dev/null || true)" = "$generated" ]; then
-        exit 0
+      if [ "$(cat "$stamp" 2>/dev/null || true)" != "$generated" ]; then
+        install -Dm600 "$generated" "$config"
+        printf '%s' "$generated" > "$stamp"
+        echo "seeded $config from $generated"
       fi
 
-      install -Dm600 "$generated" "$config"
-      printf '%s' "$generated" > "$stamp"
-      echo "seeded $config from $generated"
+      # The backlight is put back on every start, not only on a fresh seed. streamdeck-ui
+      # saves set_brightness into this file, so `lattice-deck dim` writes a 0 that only the
+      # matching `wake` takes out again -- and a session that ends between the two (shut
+      # down after the idle dim) starts the next one with every key drawn and none of them
+      # lit.
+      tmp="$config.tmp"
+      jq --argjson b ${toString cfg.brightness} '.state[].brightness = $b' "$config" > "$tmp"
+      chmod 600 "$tmp"
+      mv "$tmp" "$config"
     '';
   };
 in
