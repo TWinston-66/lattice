@@ -63,6 +63,21 @@ let
         "Audio"
       ];
     }
+    # Papirus has no Apple Podcasts mark, so this wears its generic podcast icon.
+    #
+    # Its own hostname, so its scope never matches Music's. /us/home rather than the root,
+    # which 301s to /us/new.
+    {
+      id = "1b089c60-5dc1-4bf0-84b2-553f33fd52b5";
+      name = "Apple Podcasts";
+      url = "https://podcasts.apple.com/us/home";
+      hostname = "podcasts.apple.com";
+      icon = "podcast";
+      categories = [
+        "AudioVideo"
+        "Audio"
+      ];
+    }
     {
       id = "1974c9ee-1d00-4a81-881d-66f7f14adb6d";
       name = "YouTube";
