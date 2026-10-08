@@ -132,12 +132,16 @@ in
     # JavaFX, and the derivation evaluates fine on aarch64 with the meta relaxed), so an
     # overlay is the way back to the GUI on both if the CLI ever grates.
     #
-    # Popsicle, for Impression: Impression is not merely unbuilt on ARM, it depends on
-    # syslinux, which is genuinely x86-only, so this one has no way back.
+    # caligula, for Impression: Impression is not merely unbuilt on ARM, it depends on
+    # syslinux, which is genuinely x86-only, so this one has no way back. Popsicle sat
+    # here first and listed no drives on the Mac: its dbus-udisks2 unwraps a partition
+    # on every non-table block of a drive, and the Apple SSD's extra NVMe namespaces
+    # (nvme0n2/n3) have neither, so the refresh thread panics. caligula walks the
+    # removable disks itself and does a hash check and readback verify as well.
     vesktop # the wrapped one from the let above
     stremio # likewise
     cryptomator-cli
-    popsicle
+    caligula
 
     # Tor Browser used to sit here, on the Dell alone. It is dropped rather than gated:
     # the Tor Project ships no ARM Linux build (only tor-browser-linux-x86_64), and
