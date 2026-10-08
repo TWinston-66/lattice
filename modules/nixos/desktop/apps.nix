@@ -73,6 +73,48 @@ let
       rm $out/$svc && mv $out/$svc.new $out/$svc
     '';
   };
+
+  # caligula ships no desktop entry, and `caligula burn` won't start without an image, so
+  # the launcher row is a foot window that picks one first: disk images under ~, newest
+  # first, in fzf. Escape closes the window. caligula finds the removable disks and asks
+  # for sudo itself once a target is chosen.
+  #
+  # --size skips the empty file Firefox leaves under the final name while the download
+  # goes to .part. It is the newest file, so it tops the list, and caligula 0.5.0 panics
+  # on a zero-byte input: its progress gauge gets 0/0 (seen 2026-10-08).
+  flash = pkgs.writeShellApplication {
+    name = "lattice-flash";
+    runtimeInputs = [
+      pkgs.caligula
+      pkgs.fd
+      pkgs.fzf
+    ];
+    text = ''
+      if (( $# )); then exec caligula burn "$@"; fi
+      cd ~
+      image=$(fd -t f --max-depth 4 --size +1m '\.(iso|img|raw)(\.(gz|bz2|xz|lz4|zst))?$' \
+        --exec-batch ls -1t -- | fzf --prompt 'Image to flash> ' --no-sort) || exit 0
+      exec caligula burn "$image"
+    '';
+  };
+  flashItem = pkgs.makeDesktopItem {
+    name = "lattice-flash";
+    desktopName = "USB Flasher";
+    comment = "Write a disk image to a USB drive";
+    exec = "foot --app-id lattice-flash ${flash}/bin/lattice-flash";
+    icon = "media-removable";
+    categories = [ "System" ];
+    keywords = [
+      "usb"
+      "flash"
+      "burn"
+      "iso"
+      "image"
+      "caligula"
+      "etcher"
+      "impression"
+    ];
+  };
 in
 {
   ### APPS ###
@@ -142,6 +184,8 @@ in
     stremio # likewise
     cryptomator-cli
     caligula
+    flash
+    flashItem
 
     # Tor Browser used to sit here, on the Dell alone. It is dropped rather than gated:
     # the Tor Project ships no ARM Linux build (only tor-browser-linux-x86_64), and
