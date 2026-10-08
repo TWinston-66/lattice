@@ -45,6 +45,7 @@ let
 
   # Home Assistant and Tailscale are optional modules; their rows only appear where they are.
   ha = config.lattice.cli.commands.ha.exec or "";
+  radio = config.lattice.cli.commands.radio.exec;
   tailnet = config.services.tailscale;
 
   # The tab bar: rofi's own mode-switcher widget, one button per mode, the current one
@@ -70,7 +71,7 @@ let
 
   # The launcher on ALT + SPACE: apps, as `drun` always showed them, and these instead:
   #
-  #   > / <    the next or previous mode: apps, actions, ask, chat, web (the tab bar)
+  #   > / <    the next or previous mode: apps, actions, radio, ask, chat, web (the tab bar)
   #   ? text   a short answer from Claude, in rofi
   #   ?? text  a conversation with Claude, in a foot window
   #   @ text   a DuckDuckGo search; its !bangs work too (`@!w nixos`)
@@ -390,10 +391,11 @@ let
       }
 
       # The launcher's modes, in the order the tab bar shows them and `>` / `<` step through
-      # them. ask, chat and web list nothing: they are a prompt for Enter to send.
+      # them. ask, chat and web list nothing: they are a prompt for Enter to send. radio is
+      # SomaFM's channels, from lattice-radio (radio.nix).
       launcher() {
         exec rofi -show "$1" \
-          -modi "combi,actions:$0 actions,ask:$0 mode ask,chat:$0 mode chat,web:$0 mode web" \
+          -modi "combi,actions:$0 actions,radio:${radio} rofi,ask:$0 mode ask,chat:$0 mode chat,web:$0 mode web" \
           -combi-modes "lattice:$0 route,drun" -combi-hide-mode-prefix -display-combi apps \
           -kb-mode-next "greater,Shift+Right,Control+Tab" \
           -kb-mode-previous "less,Shift+Left,Control+ISO_Left_Tab" \
@@ -402,6 +404,7 @@ let
 
       case ''${1-} in
       "") launcher combi ;;
+      radio) launcher radio ;;
       actions)
         # rofi's script mode for the actions list (ROFI_RETV 0 lists it, 1 is a pick). Run
         # by hand, it opens the launcher on that list.
@@ -456,7 +459,7 @@ let
         esac
         ;;
       *)
-        echo "usage: lattice-launch [actions]" >&2
+        echo "usage: lattice-launch [actions|radio]" >&2
         exit 2
         ;;
       esac
