@@ -20,6 +20,7 @@
     ../desktop/launcher.nix
     ../desktop/radio.nix
     ../desktop/books.nix
+    ../desktop/pomodoro.nix
     ../desktop/guides.nix
     ../desktop/notifications.nix
     ../desktop/lock.nix
