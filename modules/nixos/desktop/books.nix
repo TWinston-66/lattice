@@ -99,6 +99,7 @@ let
       pkgs.lua5_4
       pkgs.poppler-utils
       pkgs.procps
+      pkgs.sqlite
       pkgs.systemd
       pkgs.udisks
       pkgs.unzip
@@ -350,16 +351,36 @@ let
         echo $((after > before ? after - before : 0))
       }
 
-      # KOReader's statistics database, whole. KoInsight's import upserts on the book's md5
-      # and each page visit's start time, so sending it again only adds what is new. A copy
-      # first, so a half-flushed file never goes out under the real one's name.
+      # KOReader's statistics database, posted the way koinsight.koplugin posts it on
+      # sleep: /api/plugin/import, under the Kindle's own device id from KOReader's
+      # settings. KoInsight upserts per device on (book, page, start time), so sending what
+      # the plugin already sent adds nothing. Not /api/upload -- that files everything under
+      # a "Manual Upload" device and doubles every page visit the plugin already had.
       stats() {
-        local db=$kindle/koreader/settings/statistics.sqlite3 tmp
+        local db=$kindle/koreader/settings/statistics.sqlite3 settings=$kindle/koreader/settings.reader.lua
+        local id tmp rc=0
         [[ -s $db ]] || return 1
+        id=$(sed -n 's/^ *\["device_id"\] = "\([0-9A-Fa-f]*\)",$/\1/p' "$settings" | head -n 1)
+        [[ -n $id ]] || { echo "lattice-books: no device_id in $settings" >&2; return 1; }
         tmp=$(mktemp -d)
-        cp "$db" "$tmp/statistics.sqlite3"
-        local rc=0
-        curl -fsS --max-time 60 -o /dev/null -F "file=@$tmp/statistics.sqlite3" "$koinsight/api/upload" || rc=1
+        # A copy first, so a half-flushed file is never read.
+        cp "$db" "$tmp/stats.sqlite3"
+        sqlite3 -json "$tmp/stats.sqlite3" \
+          'SELECT id, md5, title, authors, series, language, last_open, pages, notes,
+                  highlights, total_read_pages, total_read_time FROM book' >"$tmp/books.json"
+        sqlite3 -json "$tmp/stats.sqlite3" \
+          'SELECT b.md5 AS book_md5, p.page, p.start_time, p.duration, p.total_pages
+             FROM page_stat_data p JOIN book b ON b.id = p.id_book' >"$tmp/stats.json"
+        # 0.2.0 is the only plugin version this KoInsight accepts; the field is a gate,
+        # not a description of this script.
+        jq -n --arg id "$id" --slurpfile b "$tmp/books.json" --slurpfile s "$tmp/stats.json" \
+          '{version: "0.2.0", books: ($b[0] // []),
+            stats: [($s[0] // [])[] | .device_id = $id]}' >"$tmp/body.json"
+        curl -fsS --max-time 20 -o /dev/null -H 'Content-Type: application/json' \
+          -d "$(jq -nc --arg id "$id" '{version: "0.2.0", id: $id, model: "Kindle"}')" \
+          "$koinsight/api/plugin/device" || rc=1
+        ((rc)) || curl -fsS --max-time 60 -o /dev/null -H 'Content-Type: application/json' \
+          --data-binary "@$tmp/body.json" "$koinsight/api/plugin/import" || rc=1
         rm -rf "$tmp"
         return $rc
       }
