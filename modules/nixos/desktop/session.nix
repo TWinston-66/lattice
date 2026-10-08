@@ -210,10 +210,22 @@ in
     # then leaves it failed -- where try-restart does nothing, and every volume, brightness
     # and Solaar mouse binding (all swayosd-client) goes silently dead until someone runs
     # reset-failed (2026-10-04). RestartSec keeps a real crash loop to one try a second.
+    #
+    # PartOf pipewire because swayosd-server does not survive pipewire going away under it:
+    # its libpulse thread panics on the dropped connection, the process stays up, and every
+    # key after that logs "sending into a closed channel" -- brightness included, since it
+    # goes through the same dead server. Restart= never fires because nothing exited
+    # (2026-10-08, after a plain `systemctl --user restart pipewire`).
     swayosd = {
       description = "Volume and brightness OSD";
-      partOf = [ "graphical-session.target" ];
-      after = [ "graphical-session.target" ];
+      partOf = [
+        "graphical-session.target"
+        "pipewire.service"
+      ];
+      after = [
+        "graphical-session.target"
+        "pipewire.service"
+      ];
       wantedBy = [ "graphical-session.target" ];
       startLimitIntervalSec = 0;
       serviceConfig = {
