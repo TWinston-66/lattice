@@ -252,15 +252,17 @@ in
 
     # Mounts USB drives as they arrive, under /run/media/winston, with a notification through
     # mako. udiskie ignores anything udisks reports as internal, so the macOS APFS partitions
-    # on the Mac are never touched. No tray icon: the eject buttons in Thunar's sidebar
-    # unmount, as does `udiskie-umount -a`.
+    # on the Mac are never touched. --smart-tray puts an icon in the bar's tray only while a
+    # drive is mounted, and its menu unmounts and ejects; so do Thunar's sidebar and
+    # `udiskie-umount -a`. --appindicator because the default GTK StatusIcon is XEmbed,
+    # which waybar's tray doesn't show.
     udiskie = {
       description = "Automount removable drives";
       partOf = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
       wantedBy = [ "graphical-session.target" ];
       serviceConfig = {
-        ExecStart = "${pkgs.udiskie}/bin/udiskie --automount --notify --no-tray";
+        ExecStart = "${pkgs.udiskie}/bin/udiskie --automount --notify --smart-tray --appindicator";
         Restart = "on-failure";
       };
     };
