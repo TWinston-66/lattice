@@ -92,6 +92,7 @@ let
       pkgs.curl
       pkgs.diffutils
       pkgs.findutils
+      pkgs.gawk
       pkgs.gnugrep
       pkgs.gnused
       pkgs.jq
@@ -177,6 +178,12 @@ let
         author=$(tr -s '\n\t ' '   ' <<<"$author" | sed 's/^ //; s/ $//')
       }
 
+      # A curl -F value in double quotes, which is the only way it takes , and ; literally.
+      quote() {
+        local s=''${1//\\/\\\\}
+        printf '"%s"' "''${s//\"/\\\"}"
+      }
+
       add() {
         local force=0 f
         local -a files=()
@@ -202,29 +209,50 @@ let
           fi
           # Audiobookshelf files it under <folder>/<author>/<title>/ and its watcher picks
           # it up; the scan after is for the day the watcher is off.
+          # The file goes up quoted -- unquoted, curl reads a comma in the path as a second
+          # file -- and named for what it is rather than wherever it was downloaded from.
           api /upload -X POST -o /dev/null \
             -F "title=$title" -F "author=$author" -F "library=$lib" -F "folder=$folder" \
-            -F "0=@$f" || die "upload of $f failed"
+            -F "0=@$(quote "$f");filename=$(quote "$(safe "''${author:+$author - }$title").''${f##*.}")" \
+            || die "upload of $f failed"
           echo "added: $title''${author:+ — $author}"
-          notify "Added to the library" "$title''${author:+ · $author}"$'\n'"On the Kindle under OPDS → homelab"
           n=$((n + 1))
         done
-        if ((n)); then api "/libraries/$lib/scan" -X POST -o /dev/null || true; fi
+        ((n)) || return 0
+        api "/libraries/$lib/scan" -X POST -o /dev/null || true
+        # abs-opds keeps the library listing for an hour, hard-coded; restarting it is the
+        # only way to empty that. Over SSH through Bitwarden's agent, so a locked vault only
+        # means waiting out the hour.
+        local when="Now in OPDS → homelab on the Kindle"
+        if ! ${cfg.refreshCatalog} >/dev/null 2>&1; then when="In OPDS → homelab on the Kindle within the hour"; fi
+        echo "$when"
+        notify "Added to the library" "$title''${author:+ · $author}''${n:+$( ((n > 1)) && echo " and $((n - 1)) more")}"$'\n'"$when"
       }
 
       # Run by lattice-books-downloads.path on any change in ~/Downloads: an EPUB that has
       # arrived since the last look gets a banner. With no stamp yet, the last look is a
       # minute ago -- enough for the download that set this off, and not every book ever
       # downloaded.
+      #
+      # By ctime, not mtime: Firefox writes to a .part and renames it, and a rename keeps an
+      # mtime that can be older than the last look. And the look is stamped when it starts,
+      # not when it ends, then repeated until nothing is newer: a rename that lands while
+      # this runs doesn't start it again (the unit is already active), so this run has to
+      # be the one that sees it.
       downloads() {
-        local stamp=$state/downloads-seen f
+        local stamp=$state/downloads-seen next=$state/downloads-seen.next f
         mkdir -p "$state"
         [[ -e $stamp ]] || touch -d '-1 minute' "$stamp"
-        local -a new=()
-        while IFS= read -r -d "" f; do new+=("$f"); done \
-          < <(find "$HOME/Downloads" -maxdepth 1 -type f -iname '*.epub' -newer "$stamp" -print0)
-        touch "$stamp"
-        for f in "''${new[@]}"; do setsid -f "$0" offer "$f" >/dev/null 2>&1 </dev/null; done
+        while :; do
+          touch "$next"
+          local -a new=()
+          while IFS= read -r -d "" f; do new+=("$f"); done < <(find "$HOME/Downloads" -maxdepth 1 \
+            -type f -iname '*.epub' -cnewer "$stamp" ! -cnewer "$next" -print0)
+          mv -f "$next" "$stamp"
+          for f in "''${new[@]}"; do setsid -f "$0" offer "$f" >/dev/null 2>&1 </dev/null; done
+          [[ -n $(find "$HOME/Downloads" -maxdepth 1 -type f -iname '*.epub' -cnewer "$stamp" -print -quit) ]] \
+            || break
+        done
       }
 
       # mako draws no buttons, only the default action on a left click, so the body says
@@ -293,7 +321,7 @@ let
         ((''${#metas[@]})) || { echo 0; return; }
         mkdir -p "$vault"
 
-        local before after json title authors name tmp
+        local before after json title authors name tmp n
         before=$(counted)
         tmp=$(mktemp -d)
         # The same book can be both on the Kindle and in .Trashes; the copy with the most
@@ -340,8 +368,8 @@ let
           printf '%%%% Written by lattice books kindle. %%%%\n\n'
           for f in "$vault"/*.md; do
             [[ -e $f && $(basename "$f") != 00_Highlights.md ]] || continue
-            printf -- '- [[%s]] · %s\n' "$(basename "$f" .md)" \
-              "$(sed -n 's/^highlights: //p' "$f" | head -n 1) highlights"
+            n=$(sed -n 's/^highlights: //p' "$f" | head -n 1)
+            printf -- '- [[%s]] · %s highlight%s\n' "$(basename "$f" .md)" "$n" "$( [[ $n == 1 ]] || echo s)"
           done
         } >"$tmp/index.md"
         grep -q '^- ' "$tmp/index.md" && ! cmp -s "$tmp/index.md" "$vault/00_Highlights.md" && cp "$tmp/index.md" "$vault/00_Highlights.md"
@@ -498,6 +526,14 @@ in
       description = ''
         A file holding one Audiobookshelf API key. The default is the sops secret
         `abs-token`; mint one under Settings → API Keys, for the root user, with no expiry.
+      '';
+    };
+    refreshCatalog = lib.mkOption {
+      type = lib.types.str;
+      default = "${pkgs.openssh}/bin/ssh -o BatchMode=yes -o ConnectTimeout=5 pi8@labpi8 docker restart opds-abs";
+      description = ''
+        A command that empties abs-opds' hour-long cache of the library, run after a book
+        is added. Failing only delays the book on the Kindle.
       '';
     };
     highlightsDir = lib.mkOption {
