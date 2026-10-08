@@ -74,6 +74,36 @@
   };
   services.resolved.enable = true;
 
+  # tailscaled puts accepted subnet routes in table 52 and looks it up at pref 5270, ahead of
+  # main. OPNsense advertises the home LAN, so at home 10.0.10.0/24 went out tailscale0 from
+  # the 100.x address even with wifi sitting on that same subnet. TCP survived the trip
+  # through the router; AirPlay did not, because the HomePod answers its timing and control
+  # channels over UDP to an address it has no route back to, and the sink tore itself down
+  # (2026-10-08).
+  #
+  # suppress_prefixlength 0 consults main but ignores its default route, so only on-link and
+  # other specific routes win here. Away from home the LAN is not on-link and table 52 still
+  # carries it; the exit node's default is untouched either way.
+  systemd.services.lattice-lan-before-tailnet = lib.mkIf config.services.tailscale.enable {
+    description = "Prefer directly connected subnets over tailscale subnet routes";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "tailscaled.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    path = [ pkgs.iproute2 ];
+    script = ''
+      for v in -4 -6; do
+        ip "$v" rule del pref 5200 2>/dev/null || true
+        ip "$v" rule add pref 5200 lookup main suppress_prefixlength 0
+      done
+    '';
+    preStop = ''
+      for v in -4 -6; do ip "$v" rule del pref 5200 2>/dev/null || true; done
+    '';
+  };
+
   ### SECRETS ###
   services.openssh.hostKeys = [
     {
