@@ -916,7 +916,7 @@ in
       default = "mocha";
       description = ''
         The flavour the build is drawn in: one of `flavors`. Everything fixed at build time
-        -- the GTK theme, cursors, folders, console, boot splash, greeter and deck keys --
+        -- the GTK theme, cursors, folders, console, boot splash and deck keys --
         uses this one, and it is what the desktop starts on until `lattice-theme` picks
         another at run time.
       '';

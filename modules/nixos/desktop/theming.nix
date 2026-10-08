@@ -100,9 +100,10 @@ let
   # wlogout and hyprlock read theirs at every launch. Every one is allowed to miss: a
   # program that is not up yet will read the file when it starts.
   #
-  # The GTK theme, cursors, folder icons, Stream Deck keys, screenshot overlay, console,
-  # boot splash and greeter stay on the build-time flavour and accent: all of them are
-  # drawn or packaged per palette, and none can be told at run time.
+  # The GTK theme, cursors, folder icons, Stream Deck keys, screenshot overlay, console and
+  # boot splash stay on the build-time flavour and accent: all of them are drawn or packaged
+  # per palette, and none can be told at run time. The greeter follows a boot late, from a
+  # copy made below.
   #
   # --write-only is for the build, which runs this same script to make the seeds below, and
   # for the login pick, which writes before anything that reads these has started.
@@ -203,6 +204,17 @@ let
           cat "$dir/starship-palette.toml"
         } >"$dir/.starship.toml.tmp"
         place starship.toml
+      fi
+
+      # The greeter's copy, for the next boot's login screen (see greeterThemeDir in
+      # greeter.nix). Before the reload check, because the login pick is --write-only and is
+      # exactly the write the greeter should remember. The build's seed has no such directory
+      # and skips it.
+      greeter=/var/lib/lattice/greeter
+      if [[ -w $greeter ]]; then
+        for file in theme.foot theme.greeter.toml; do
+          cp "$dir/$file" "$greeter/.$file.tmp" && mv -f "$greeter/.$file.tmp" "$greeter/$file" || true
+        done
       fi
 
       ((reload)) || exit 0

@@ -9,9 +9,82 @@ let
     theme
     palette
     hex
+    mixHex
     ;
 
   toml = pkgs.formats.toml { };
+
+  # Where the greeter finds the theme the desktop was last in. It runs as `greeter`, which
+  # cannot read ~/.cache/lattice, so lattice-palette copies the two files the greeter needs
+  # here on every write -- the login pick, a wallpaper step, a theme switch -- and the next
+  # boot's greeter wears whatever the last session ended on. Owned by winston, since the
+  # writer runs as them; the greeter only reads.
+  greeterThemeDir = "/var/lib/lattice/greeter";
+
+  # tuigreet's [theme] block, as a runtime kit file so it follows the flavour and the accent
+  # like the lock screen does -- and in the lock screen's roles: the field outline is the
+  # same half-accent mix, the box is mantle, labels are overlay0. tuigreet takes #rrggbb as
+  # well as ANSI names, so these are the palette's colours and not their nearest names.
+  greeterThemeText =
+    { palette, accent, ... }:
+    ''
+      container = "${palette.mantle}"
+      border = "#%LOCK_OUTER_BARE%"
+      title = "${accent}"
+      greet = "${accent}"
+      time = "${palette.subtext0}"
+      text = "${palette.text}"
+      prompt = "${palette.overlay0}"
+      input = "${palette.text}"
+      action = "${palette.overlay0}"
+      button = "${accent}"
+    '';
+
+  # The same block in the build-time flavour and accent, for a boot that has no copy yet.
+  greeterThemeFallback =
+    lib.replaceStrings [ "%LOCK_OUTER_BARE%" ] [ (mixHex 0.5 theme.accentHex palette.surface0) ]
+      (greeterThemeText {
+        inherit palette;
+        accent = theme.accentHex;
+      });
+
+  # Everything tuigreet is told except its colours, which greeterSession appends.
+  greeterConfig = toml.generate "tuigreet.toml" {
+    display = {
+      greeting = "lattice";
+      show_time = true;
+      # The lock screen's date line, with the time beside it rather than above.
+      time_format = "%A, %B %-d   %H:%M";
+      # "Authenticate into <hostname>" -- the lock screen does not say where it is either.
+      show_title = false;
+    };
+    layout.width = 44;
+    # Power and caps lock are the hints worth a row. The rest -- the raw uwsm command line,
+    # session and background pickers, Esc to reset -- are still bound, just not advertised.
+    layout.widgets.status_bar = {
+      show_reset = false;
+      show_command = false;
+      show_session = false;
+      show_background = false;
+      show_session_status = false;
+      show_power = true;
+      show_caps_lock = true;
+    };
+    session = {
+      command = "uwsm start -e -D Hyprland hyprland.desktop";
+      sessions_dirs = [ "${config.services.displayManager.sessionData.desktops}/share/wayland-sessions" ];
+    };
+    remember.username = true;
+    # hyprlock's dots.
+    secret = {
+      mode = "characters";
+      characters = "•";
+    };
+    power = {
+      shutdown = "systemctl poweroff";
+      reboot = "systemctl reboot";
+    };
+  };
 
   # regular0-7 then bright0-7, read straight off the list ../theme.nix hands the kernel as
   # vt.default_red/grn/blu, so the greeter's sixteen colours and the console's are one
@@ -22,8 +95,7 @@ let
     ) config.console.colors
   );
 
-  # The greeter's terminal. tuigreet is untouched by this -- same binary, same config, same
-  # theme block below -- it just draws into foot under cage now rather than into fbcon on
+  # The greeter's terminal: tuigreet draws into foot under cage rather than into fbcon on
   # VT1.
   #
   # Sizing is the whole reason. fbcon has one framebuffer and one bitmap font for every
@@ -70,9 +142,9 @@ let
     # exist for anything else that looks; xterm-256color always does.
     term=xterm-256color
 
-    # tuigreet is themed by ANSI colour name, so this block is where those names get their
-    # values: `blue` in its theme is the palette's blue, exactly as it was on the console,
-    # which gets these same sixteen through vt.default_red/grn/blu.
+    # The build-time flavour, the console's sixteen through vt.default_red/grn/blu.
+    # greeterSession overrides these with the last session's theme.foot when there is one;
+    # tuigreet's own colours are hex, in its [theme], so this is the backdrop and little else.
     [colors-dark]
     background=${hex palette.base}
     foreground=${hex palette.text}
@@ -97,6 +169,8 @@ let
   greeterSession = pkgs.writeShellApplication {
     name = "lattice-greeter";
     runtimeInputs = [
+      pkgs.coreutils
+      pkgs.gnugrep
       pkgs.foot
       pkgs.tuigreet
     ];
@@ -110,12 +184,33 @@ let
         fi
       done
 
+      # The last session's theme, from lattice-palette's copy. The directory is writable by a
+      # user and read by the greeter, so only colour lines are taken from it: foot keys could
+      # bind commands, and a tuigreet section could change the session every user logs into.
+      # Anything else -- or no copy at all -- leaves the build-time colours in place.
+      overrides=()
+      while IFS='=' read -r key value; do
+        overrides+=("--override=colors-dark.$key=$value")
+      done < <(grep -E '^(foreground|background|regular[0-7]|bright[0-7])=[0-9a-fA-F]{6}$' \
+        ${greeterThemeDir}/theme.foot 2>/dev/null || true)
+
+      colours=$(grep -E '^[a-z_]+ = "#[0-9a-fA-F]{6}"$' \
+        ${greeterThemeDir}/theme.greeter.toml 2>/dev/null || true)
+      [ -n "$colours" ] || colours=$(cat ${pkgs.writeText "greeter-theme.toml" greeterThemeFallback})
+
+      work=$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/lattice-greeter.XXXXXX")
+      {
+        cat ${greeterConfig}
+        printf '\n[theme]\n%s\n' "$colours"
+      } >"$work/tuigreet.toml"
+
       # -o rather than a second config file: everything else about the two cases is identical,
       # and a font line is the one thing that differs.
       exec foot \
         --config=/etc/greetd/foot.ini \
         --override="font=${theme.fonts.monospace}:size=$size" \
-        tuigreet
+        "''${overrides[@]}" \
+        tuigreet --config "$work/tuigreet.toml"
     '';
   };
 in
@@ -177,40 +272,7 @@ in
   # that way on a screen renders at exactly the size the greeter will on that same screen.
   environment.etc."greetd/foot.ini".text = greeterTerminal;
 
-  environment.etc."tuigreet/config.toml".source = toml.generate "tuigreet.toml" {
-    display = {
-      greeting = "Welcome to lattice";
-      show_time = true;
-    };
-    session = {
-      command = "uwsm start -e -D Hyprland hyprland.desktop";
-      sessions_dirs = [ "${config.services.displayManager.sessionData.desktops}/share/wayland-sessions" ];
-    };
-    remember.username = true;
-    secret = {
-      mode = "characters";
-      characters = "*";
-    };
-    power = {
-      shutdown = "systemctl poweroff";
-      reboot = "systemctl reboot";
-    };
+  lattice.theme.extraKitFiles."theme.greeter.toml" = greeterThemeText;
 
-    # tuigreet takes ANSI colour names, not hex, so the accent maps to its nearest name. What
-    # those names resolve to is foot's [colors-dark] block above, which is ../theme.nix's
-    # palette -- so `blue` is the palette's blue rather than a terminal's idea of blue, and a
-    # re-accent carries through here without touching this block.
-    theme = {
-      container = "black";
-      border = theme.accentAnsi;
-      title = theme.accentAnsi;
-      greet = "white";
-      time = "white";
-      text = "gray";
-      prompt = theme.accentAnsi;
-      input = "gray";
-      action = theme.accentAnsi;
-      button = "magenta";
-    };
-  };
+  systemd.tmpfiles.rules = [ "d ${greeterThemeDir} 0755 winston - -" ];
 }
