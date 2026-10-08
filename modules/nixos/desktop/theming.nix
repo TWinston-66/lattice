@@ -84,8 +84,9 @@ let
   # flavour with the accent left as tokens; this fills those in and puts each file in place.
   #
   # Telling each one is the other half, and it is per program, and only for a file that
-  # actually changed -- a wallpaper step changes the accent and nothing in tmux or foot,
-  # and re-sourcing tmux.conf for nothing costs a status-bar redraw. waybar watches
+  # actually changed -- a wallpaper step changes the accent and nothing in foot, and
+  # re-sourcing tmux.conf for nothing costs a status-bar redraw (tmux does take the accent,
+  # for its active pane border). waybar watches
   # theme.css itself (reload_style_on_change in ~/.dotfiles/waybar/config.jsonc): that
   # restyles the bar in place, where the SIGUSR2 it used to get rebuilt every bar surface,
   # ate the next click on the wallpaper pill and aborted waybar outright on a few picks in

@@ -606,6 +606,11 @@ let
           (thm "surface_0" palette.surface0)
           (thm "mantle" palette.mantle)
           (thm "crust" palette.crust)
+          # Pane borders: the plugin draws the active one lavender over overlay0, which in
+          # Gruvbox Material are two near-identical greys. The accent over surface1 instead,
+          # the same pair Hyprland's window borders use.
+          "set -g @catppuccin_pane_border_style \"fg=#{@thm_surface_1}\"\n"
+          "set -g @catppuccin_pane_active_border_style \"##{?pane_in_mode,fg=%ACCENT%,##{?pane_synchronized,fg=#{@thm_mauve},fg=%ACCENT%}}\"\n"
         ];
 
       # foot, included by ~/.dotfiles foot.ini: the flavour's terminal colours. foot cannot
