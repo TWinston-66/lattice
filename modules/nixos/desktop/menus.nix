@@ -850,45 +850,96 @@ let
   # business offering hibernation.
   canHibernate = config.boot.resumeDevice != "";
 
-  powerButton = label: action: text: keybind: {
-    inherit
-      label
-      action
-      text
-      keybind
-      ;
+  powerButton = label: action: icon: word: {
+    inherit label action word;
+    text = "${icon}  ${word}";
   };
 
-  lock = powerButton "lock" "pidof hyprlock || hyprlock" "󰌾  Lock" "l";
+  lock = powerButton "lock" "pidof hyprlock || hyprlock" "󰌾" "Lock";
 
-  logout = powerButton "logout" "hyprctl dispatch 'hl.dsp.exit()'" "󰗽  Log out" "e";
+  logout = powerButton "logout" "hyprctl dispatch 'hl.dsp.exit()'" "󰗽" "Log out";
 
-  suspend = powerButton "suspend" "systemctl suspend" "󰒲  Suspend" "u";
+  suspend = powerButton "suspend" "systemctl suspend" "󰒲" "Suspend";
 
-  reboot = powerButton "reboot" "systemctl reboot" "󰜉  Reboot" "r";
+  reboot = powerButton "reboot" "systemctl reboot" "󰜉" "Reboot";
 
-  hibernate = powerButton "hibernate" "systemctl hibernate" "󰋊  Hibernate" "h";
+  hibernate = powerButton "hibernate" "systemctl hibernate" "󰋊" "Hibernate";
 
-  shutdown = powerButton "shutdown" "systemctl poweroff" "󰐥  Shut down" "s";
+  shutdown = powerButton "shutdown" "systemctl poweroff" "󰐥" "Shut down";
 
-  powerButtons =
-    if canHibernate then
-      [
-        lock
-        logout
-        suspend
-        reboot
-        hibernate
-        shutdown
-      ]
-    else
-      [
-        lock
-        suspend
-        logout
-        reboot
-        shutdown
-      ];
+  # The buttons as they read on screen, left to right and then down, which is also the
+  # order they are numbered in: each one's number is the key that presses it, and sits
+  # under its name as a keycap. wlogout takes one key per button, so the numbers are
+  # instead of letters.
+  #
+  # The label is plain text -- no markup, and GTK left-justifies a label's lines with no
+  # CSS to say otherwise -- so the keycap is centred by padding in front of it. Plain
+  # spaces can't be counted in cells for that, monospace or not: Pango sets a space in
+  # whatever font its neighbour is in, so next to the keycap they come out in Symbols
+  # Nerd Font at well under a JetBrains Mono cell. The widths below were measured off a
+  # screenshot, in hundredths of a cell -- en space 88, space 39 -- and the keycap wants
+  # to start 76 + 50 per letter of the word in, which centres it under icon and word
+  # together. They're ratios of the font size, so they hold at any scale, but not for
+  # another font. powerPad takes as many en spaces as fit and makes up the rest in spaces,
+  # rounded, which lands within a logical pixel or two.
+  #
+  # The keycaps are Material Design's numeric_N_box_outline, whose code points aren't in
+  # numeric order.
+  powerPad =
+    word:
+    let
+      want = 76 + 50 * lib.stringLength word;
+      ens = want / 88;
+      spaces = ((want - ens * 88) * 2 + 39) / 78;
+      enSpace = builtins.fromJSON ''"\u2002"''; # Nix strings have no \u escape
+    in
+    lib.concatStrings (lib.replicate ens enSpace ++ lib.replicate spaces " ");
+
+  powerKeycaps = [
+    "󰎦"
+    "󰎩"
+    "󰎬"
+    "󰎮"
+    "󰎰"
+    "󰎵"
+  ];
+  powerRows = if canHibernate then 2 else 1;
+  powerCols = if canHibernate then 3 else 5;
+  powerButtonsReading =
+    lib.imap1
+      (
+        n: button:
+        button
+        // {
+          keybind = toString n;
+          text = "${button.text}\n\n${powerPad button.word}${lib.elemAt powerKeycaps (n - 1)}";
+        }
+      )
+      (
+        if canHibernate then
+          [
+            lock
+            suspend
+            hibernate
+            logout
+            reboot
+            shutdown
+          ]
+        else
+          [
+            lock
+            suspend
+            logout
+            reboot
+            shutdown
+          ]
+      );
+
+  # wlogout fills its grid *down the columns*, so the layout file wants the reading order
+  # transposed: the k-th button it reads goes in row k mod rows, column k / rows.
+  powerButtons = lib.genList (
+    k: lib.elemAt powerButtonsReading ((lib.mod k powerRows) * powerCols + k / powerRows)
+  ) (lib.length powerButtonsReading);
 
   # wlogout reads $XDG_CONFIG_HOME/wlogout/{layout,style.css} and then falls straight back
   # to its own store path -- it never consults XDG_CONFIG_DIRS, so the /etc/xdg drop-in
@@ -932,7 +983,7 @@ let
       # taken from a tall docked screen is more than a laptop panel has to give -- the band it
       # asks to keep clear is taller than the panel, and the menu lands off the bottom of it.
       # The shortest screen is the one that fits everywhere.
-      rows=${toString (if canHibernate then 2 else 1)}
+      rows=${toString powerRows}
       height=140
       # The button's own margin in /etc/xdg/wlogout/style.css, which is outside the height
       # above -- so a change there wants the same change here.
@@ -954,7 +1005,7 @@ let
         --layout /etc/xdg/wlogout/layout \
         --css /etc/xdg/wlogout/style.css \
         "''${margin[@]}" \
-        --buttons-per-row ${toString (if canHibernate then 3 else lib.length powerButtons)}
+        --buttons-per-row ${toString powerCols}
     '';
   };
 in
@@ -987,10 +1038,9 @@ in
   # on one line with the word: wlogout's JSON reader doesn't decode escapes, so a "\n"
   # in `text` reaches the button as a literal backslash-n.
   #
-  # wlogout fills its grid *down the columns*, so with --buttons-per-row 3 the order of
-  # powerButtons lays out as
-  #     Lock      Suspend   Hibernate
-  #     Log out   Reboot    Shut down
+  # With --buttons-per-row 3 the grid comes out as
+  #     1 Lock      2 Suspend   3 Hibernate
+  #     4 Log out   5 Reboot    6 Shut down
   # which puts the three that end the session along the bottom row. A host that can't
   # hibernate gets one row of five instead: wlogout reads a button for every cell of its
   # grid, so five buttons in a three-wide grid would run off the end of the list.
