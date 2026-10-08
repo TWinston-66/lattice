@@ -467,6 +467,17 @@ in
       "secrets edit" = {
         exec = script "secrets-edit" [ ] ''
           cd ${lib.escapeShellArg flake}
+          # The admin key if this machine has it (it lives on the DB flash drive, not on
+          # either laptop), otherwise this host's SSH key, which is a recipient too and needs
+          # sudo to read -- the same fallback as scripts/set-backup-password.sh.
+          keyfile=''${SOPS_AGE_KEY_FILE:-''${XDG_CONFIG_HOME:-$HOME/.config}/sops/age/keys.txt}
+          if [[ -f $keyfile ]]; then
+            export SOPS_AGE_KEY_FILE=$keyfile
+          else
+            # shellcheck disable=SC2016 # expanded by the inner bash, inside the dev shell
+            exec nix develop --command bash -c \
+              'SOPS_AGE_KEY=$(sudo "$(command -v ssh-to-age)" -private-key -i /etc/ssh/ssh_host_ed25519_key) exec sops secrets/common.yaml'
+          fi
           exec nix develop --command sops secrets/common.yaml
         '';
         summary = "Open secrets/common.yaml in sops";

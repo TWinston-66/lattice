@@ -19,6 +19,7 @@
     ../desktop/menus.nix
     ../desktop/launcher.nix
     ../desktop/radio.nix
+    ../desktop/books.nix
     ../desktop/guides.nix
     ../desktop/notifications.nix
     ../desktop/lock.nix
