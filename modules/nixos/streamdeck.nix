@@ -43,7 +43,6 @@ let
     television = "󰔂"; # md-television
     mail = "󰇮"; # md-email
     calendar = "󰸗"; # md-calendar_month
-    checklist = "󰝖"; # md-format_list_checks
 
     bell = "󰂚"; # md-bell
     bellOff = "󰂛"; # md-bell_off
@@ -294,24 +293,14 @@ let
       ];
     }
     {
+      # Thunderbird's calendar tab rather than a web app, like the mail key above.
       index = 7;
-      cmd = webapp "Calendar";
+      cmd = "thunderbird -calendar";
       faces = [
         {
           icon = "calendar";
           glyph = g.calendar;
           label = "cal";
-        }
-      ];
-    }
-    {
-      index = 8;
-      cmd = webapp "Reminders";
-      faces = [
-        {
-          icon = "reminders";
-          glyph = g.checklist;
-          label = "todo";
         }
       ];
     }

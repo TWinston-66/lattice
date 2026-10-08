@@ -77,14 +77,13 @@ let
       ];
     }
     # No apple-tv mark in Papirus and no Nerd Font one either, so this wears the generic
-    # video-player icon rather than a stand-in drawn here -- the same call as the two iCloud
-    # apps below, and there is nothing on the row to confuse it with.
+    # video-player icon rather than a stand-in drawn here; there is nothing on the row to
+    # confuse it with.
     #
     # Widevine again, as with Apple Music above: without modules/nixos/widevine.nix this is
     # an error page on the Mac rather than a window. Unlike Music, signing in *is* a
     # navigation to idmsa.apple.com -- which stays in the window anyway, because navigation
-    # scope compares base domains and that one is apple.com either way. The exact-hostname
-    # check that keeps the two iCloud apps apart does not apply to it.
+    # scope compares base domains and that one is apple.com either way.
     {
       id = "b36782de-012b-408f-951e-46db7bee11de";
       name = "Apple TV";
@@ -97,33 +96,6 @@ let
         "AudioVideo"
         "Video"
       ];
-    }
-    # Papirus ships one icloud.svg and no per-app variants, so both iCloud apps would wear
-    # the same mark. Generic-but-distinct reads better in rofi than correct-but-identical.
-    #
-    # Note the two iCloud hostnames, and don't collapse them. A registered entry is matched
-    # by exact hostname plus container, so a second app on www.icloud.com under container 0
-    # matches the first one's scope and opens *its* start URL instead -- launch Reminders
-    # once and Calendar would only ever reopen Reminders. Navigation scope is the looser of
-    # the two checks: it compares base domains, so the 301 from icloud.com to
-    # www.icloud.com stays inside the window rather than spilling into a normal tab.
-    # Separate containers would also split them, at the price of a second iCloud login;
-    # distinct hostnames keep the single sign-on that made this approach worth having.
-    {
-      id = "7645277b-e07d-4154-9702-429745e77965";
-      name = "Reminders";
-      url = "https://www.icloud.com/reminders";
-      hostname = "www.icloud.com";
-      icon = "gnome-todo";
-      categories = [ "Office" ];
-    }
-    {
-      id = "2ba60649-bb0b-4a45-9c82-7645a2a69578";
-      name = "Calendar";
-      url = "https://icloud.com/calendar";
-      hostname = "icloud.com";
-      icon = "office-calendar";
-      categories = [ "Office" ];
     }
   ];
 
