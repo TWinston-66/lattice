@@ -890,11 +890,24 @@ in
       exec = "${lib.getExe sleepDrain} report";
       summary = "Battery spent in each recent sleep";
       group = "devices";
+      launch = [
+        {
+          label = "Battery spent in sleep";
+          icon = "battery";
+          terminal = true;
+        }
+      ];
     };
     portal = {
       exec = lib.getExe portalSignIn;
       summary = "Open the captive portal's sign-in page";
       group = "session";
+      launch = [
+        {
+          label = "Captive portal sign-in";
+          icon = "web-browser";
+        }
+      ];
     };
   };
 }

@@ -1112,28 +1112,64 @@ in
       exec = lib.getExe wifiMenu;
       summary = "Join, rescan, disconnect or switch off Wi-Fi";
       group = "session";
+      launch = [
+        {
+          label = "Wi-Fi…";
+          icon = "network-wireless";
+        }
+      ];
     };
     audio = {
       exec = lib.getExe audioMenu;
       args = "<output|input>";
       summary = "Pick an output or input; what is playing moves with it";
       group = "session";
+      launch = [
+        {
+          label = "Audio output…";
+          args = "output";
+          icon = "audio-speakers";
+        }
+        {
+          label = "Audio input…";
+          args = "input";
+          icon = "audio-input-microphone";
+        }
+      ];
     };
     "power menu" = {
       exec = lib.getExe powerMenu;
       summary = "Lock, suspend, log out, reboot or shut down";
       group = "session";
+      launch = [
+        {
+          label = "Power menu…";
+          icon = "system-shutdown";
+        }
+      ];
     };
     keys = {
       exec = lib.getExe keybindings;
       summary = "Search every Hyprland, tmux and Neovim binding";
       group = "session";
+      launch = [
+        {
+          label = "Keybindings…";
+          icon = "preferences-desktop-keyboard-shortcuts";
+        }
+      ];
     };
     cheatsheet = {
       exec = "${lib.getExe keybindings} sheet";
       args = "[nvim|tmux|hypr]";
       summary = "Open the keybinding cheatsheet in the browser, fresh from the live configs";
       group = "session";
+      launch = [
+        {
+          label = "Keybinding cheatsheet";
+          icon = "preferences-desktop-keyboard-shortcuts";
+        }
+      ];
     };
   };
 }

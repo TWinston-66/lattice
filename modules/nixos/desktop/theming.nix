@@ -929,22 +929,53 @@ in
       ++ flavorNames;
       summary = "Switch the flavour at run time; next by default";
       group = "look";
+      launch = [
+        {
+          label = "Next theme";
+          args = "next";
+          icon = "preferences-desktop-theme";
+        }
+      ];
     };
     "theme menu" = {
       exec = lib.getExe themeMenu;
       summary = "Pick a flavour from a menu";
       group = "look";
+      launch = [
+        {
+          label = "Theme…";
+          icon = "preferences-desktop-theme";
+        }
+      ];
     };
     wallpaper = {
       exec = lib.getExe cycleWallpaper;
       args = "[next|prev|random|apply|list|current|<index>]";
       summary = "Step through the wallpaper pool; next by default";
       group = "look";
+      launch = [
+        {
+          label = "Next wallpaper";
+          args = "next";
+          icon = "preferences-desktop-wallpaper";
+        }
+        {
+          label = "Random wallpaper";
+          args = "random";
+          icon = "preferences-desktop-wallpaper";
+        }
+      ];
     };
     "wallpaper menu" = {
       exec = lib.getExe wallpaperMenu;
       summary = "Pick a wallpaper from a menu";
       group = "look";
+      launch = [
+        {
+          label = "Wallpaper…";
+          icon = "preferences-desktop-wallpaper";
+        }
+      ];
     };
     art = {
       exec = lib.getExe config.lattice.artwork.draw;

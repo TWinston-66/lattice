@@ -239,5 +239,12 @@ in
     args = "[toggle|on|off|status]";
     summary = "Keep the session from locking or blanking; toggle by default";
     group = "session";
+    launch = [
+      {
+        label = "Keep awake: toggle";
+        args = "toggle";
+        icon = "caffeine";
+      }
+    ];
   };
 }

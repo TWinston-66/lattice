@@ -1657,6 +1657,18 @@ in
       args = "[status|toggle|web]";
       summary = "Tailscale: bring it up or down, or open the admin console";
       group = "session";
+      launch = [
+        {
+          label = "Tailscale: toggle";
+          args = "toggle";
+          icon = "network-vpn";
+        }
+        {
+          label = "Tailscale admin console";
+          args = "web";
+          icon = "network-vpn";
+        }
+      ];
     };
     weather = {
       exec = lib.getExe weather;
@@ -1669,11 +1681,24 @@ in
       args = "[status|cycle]";
       summary = "Cycle the power profile; status is the bar's JSON";
       group = "session";
+      launch = [
+        {
+          label = "Next power profile";
+          args = "cycle";
+          icon = "preferences-system-power";
+        }
+      ];
     };
     calendar = {
       exec = lib.getExe calendar;
       summary = "A month calendar in a menu";
       group = "session";
+      launch = [
+        {
+          label = "Calendar";
+          icon = "office-calendar";
+        }
+      ];
     };
     "bar clock" = {
       exec = lib.getExe clock;
@@ -1698,6 +1723,13 @@ in
       args = "[status|fetch|open]";
       summary = "The Obsidian vault's git state; fetch checks GitHub, open starts lazygit";
       group = "session";
+      launch = [
+        {
+          label = "Obsidian vault in lazygit";
+          args = "open";
+          icon = "obsidian";
+        }
+      ];
     };
   };
 }

@@ -126,5 +126,11 @@ in
     args = "[${lib.concatStringsSep "|" (guides ++ [ "keys" ])}]";
     summary = "Open the lattice guides; `keys` opens the keybinding cheatsheet";
     group = "session";
+    launch = [
+      {
+        label = "Lattice guides";
+        icon = "help-contents";
+      }
+    ];
   };
 }

@@ -281,11 +281,24 @@ in
       args = "[toggle|on|off|status]";
       summary = "Do not disturb: banners go straight to the history";
       group = "session";
+      launch = [
+        {
+          label = "Do not disturb: toggle";
+          args = "toggle";
+          icon = "notification-disabled";
+        }
+      ];
     };
     notifications = {
       exec = lib.getExe notifyHistory;
       summary = "Browse the notification history";
       group = "session";
+      launch = [
+        {
+          label = "Notification history";
+          icon = "preferences-system-notifications";
+        }
+      ];
     };
   };
 }

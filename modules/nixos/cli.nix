@@ -87,6 +87,41 @@ let
             runs. `lattice commands --all` still lists them.
           '';
         };
+        launch = lib.mkOption {
+          type = types.listOf (
+            types.submodule {
+              options = {
+                label = lib.mkOption {
+                  type = types.str;
+                  description = "The row's text. A trailing … means it opens a menu of its own.";
+                };
+                args = lib.mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Appended to `exec`, split on spaces.";
+                };
+                icon = lib.mkOption {
+                  type = types.str;
+                  default = "system-run";
+                  description = "An icon name from the icon theme.";
+                };
+                terminal = lib.mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = ''
+                    Run it in a foot window that stays open, for commands whose output is
+                    the point or that ask for a password.
+                  '';
+                };
+              };
+            }
+          );
+          default = [ ];
+          description = ''
+            Rows this command puts in the launcher's `>` list (desktop/launcher.nix). The
+            route is searchable on each row too, so `>dnd` finds "Do not disturb".
+          '';
+        };
         route = lib.mkOption {
           type = types.str;
           default = name;
@@ -402,6 +437,13 @@ in
         args = "[host]";
         summary = "Build this machine from the checkout and switch to it";
         group = "system";
+        launch = [
+          {
+            label = "Rebuild this machine";
+            icon = "system-software-update";
+            terminal = true;
+          }
+        ];
       };
       deploy = {
         exec = "${flake}/scripts/deploy.sh";
@@ -414,6 +456,13 @@ in
         args = "[input...]";
         summary = "Move flake.lock forward, then offer a rebuild";
         group = "system";
+        launch = [
+          {
+            label = "Update flake inputs";
+            icon = "system-software-update";
+            terminal = true;
+          }
+        ];
       };
       "secrets edit" = {
         exec = script "secrets-edit" [ ] ''
@@ -447,6 +496,13 @@ in
         '';
         summary = "What is running, and whether the checkout has moved since";
         group = "system";
+        launch = [
+          {
+            label = "What's running";
+            icon = "dialog-information";
+            terminal = true;
+          }
+        ];
       };
 
       doctor = {
@@ -686,6 +742,13 @@ in
         '';
         summary = "Health check: units, crashes, last shutdown, drift, persistence, boot errors, backups, disk";
         group = "system";
+        launch = [
+          {
+            label = "Health check";
+            icon = "utilities-system-monitor";
+            terminal = true;
+          }
+        ];
       };
     };
   };

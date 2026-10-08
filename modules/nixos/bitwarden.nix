@@ -153,5 +153,12 @@ in
     args = "[status|toggle]";
     summary = "Bitwarden's lock state, or show and hide its window";
     group = "session";
+    launch = [
+      {
+        label = "Bitwarden: show or hide";
+        args = "toggle";
+        icon = "bitwarden";
+      }
+    ];
   };
 }

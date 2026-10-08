@@ -263,5 +263,11 @@ in
     exec = lib.getExe screenshot;
     summary = "Select a region to save, copy, annotate or read the text from";
     group = "session";
+    launch = [
+      {
+        label = "Screenshot";
+        icon = "applets-screenshooter";
+      }
+    ];
   };
 }

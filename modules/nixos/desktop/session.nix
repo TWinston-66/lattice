@@ -279,6 +279,13 @@ in
       args = "[toggle|on|off|status]";
       summary = "Warm the screens for the night; toggle by default";
       group = "look";
+      launch = [
+        {
+          label = "Night light: toggle";
+          args = "toggle";
+          icon = "weather-clear-night";
+        }
+      ];
     };
     restart = {
       exec = lib.getExe restart;
@@ -293,6 +300,38 @@ in
         audio          PipeWire and WirePlumber, for speakers that vanish
       '';
       group = "session";
+      launch = [
+        {
+          label = "Restart the bar";
+          args = "bar";
+          icon = "view-refresh";
+        }
+        {
+          label = "Restart the Stream Deck";
+          args = "deck";
+          icon = "view-refresh";
+        }
+        {
+          label = "Restart the OSD";
+          args = "osd";
+          icon = "view-refresh";
+        }
+        {
+          label = "Reload notifications";
+          args = "notifications";
+          icon = "view-refresh";
+        }
+        {
+          label = "Reload Hyprland";
+          args = "hypr";
+          icon = "view-refresh";
+        }
+        {
+          label = "Restart audio";
+          args = "audio";
+          icon = "view-refresh";
+        }
+      ];
     };
   };
 }

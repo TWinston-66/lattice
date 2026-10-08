@@ -1014,11 +1014,24 @@ in
         exec = "${lib.getExe cli} status";
         summary = "When this machine last backed up, and the drive's state";
         group = "system";
+        launch = [
+          {
+            label = "Backup status";
+            icon = "document-save";
+            terminal = true;
+          }
+        ];
       };
       "backup now" = {
         exec = "${lib.getExe cli} now";
         summary = "Back up to the backup drive now";
         group = "system";
+        launch = [
+          {
+            label = "Back up now";
+            icon = "document-save";
+          }
+        ];
       };
       "backup check" = {
         exec = "${lib.getExe cli} check";
@@ -1044,6 +1057,12 @@ in
         exec = "${lib.getExe cli} eject";
         summary = "Stop everything, unmount and power off the backup drive";
         group = "system";
+        launch = [
+          {
+            label = "Eject the backup drive";
+            icon = "media-eject";
+          }
+        ];
       };
     };
   };
