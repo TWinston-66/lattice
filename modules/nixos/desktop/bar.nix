@@ -1292,7 +1292,9 @@ let
 
         if [[ $state != "$last" ]]; then
           if [[ $state == on ]]; then
-            printf '{"text": "󰘲 CAPS", "class": "on", "tooltip": "Caps lock is on"}\n'
+            # The glyph alone: the yellow border already says it, and on the Mac's bar the
+            # word was what pushed a full left group into the clock.
+            printf '{"text": "󰘲", "class": "on", "tooltip": "Caps lock is on"}\n'
           else
             printf '{"text": ""}\n'
           fi
