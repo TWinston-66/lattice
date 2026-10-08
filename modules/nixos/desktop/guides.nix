@@ -101,7 +101,9 @@ let
     desktopName = "Lattice Guides";
     genericName = "Install, backup and recovery guides";
     exec = lib.getExe guide;
-    icon = "help-contents";
+    # Papirus has help-contents only as a 24px monochrome action, a bare "?" that reads as a
+    # missing icon at launcher size; this is a full-colour app icon (a book with a wrench).
+    icon = "deepin-manual";
     categories = [ "Utility" ];
     keywords = [
       "help"
@@ -129,7 +131,7 @@ in
     launch = [
       {
         label = "Lattice guides";
-        icon = "help-contents";
+        icon = "deepin-manual";
       }
     ];
   };
