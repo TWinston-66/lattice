@@ -11,7 +11,6 @@ let
     theme
     palette
     hex
-    mixHex
     ;
 
   toml = pkgs.formats.toml { };
@@ -24,14 +23,19 @@ let
   greeterThemeDir = "/var/lib/lattice/greeter";
 
   # tuigreet's [theme] block, as a runtime kit file so it follows the flavour and the accent
-  # like the lock screen does -- and in the lock screen's roles: the field outline is the
-  # same half-accent mix, the box is mantle, labels are overlay0. tuigreet takes #rrggbb as
-  # well as ANSI names, so these are the palette's colours and not their nearest names.
+  # like the lock screen does -- and in the lock screen's roles: the box is mantle, labels
+  # are overlay0. tuigreet takes #rrggbb as well as ANSI names, so these are the palette's
+  # colours and not their nearest names.
+  #
+  # The border is the box's own colour, so the box reads as a plain card. tuigreet fills
+  # every border cell with the container colour and draws the line through the middle of
+  # the cell, so a visible outline always had half a cell of mantle standing out beyond
+  # it -- a second, darker frame, plainest on the docked monitor.
   greeterThemeText =
     { palette, accent, ... }:
     ''
       container = "${palette.mantle}"
-      border = "#%LOCK_OUTER_BARE%"
+      border = "${palette.mantle}"
       title = "${accent}"
       greet = "${accent}"
       time = "${palette.subtext0}"
@@ -43,12 +47,10 @@ let
     '';
 
   # The same block in the build-time flavour and accent, for a boot that has no copy yet.
-  greeterThemeFallback =
-    lib.replaceStrings [ "%LOCK_OUTER_BARE%" ] [ (mixHex 0.5 theme.accentHex palette.surface0) ]
-      (greeterThemeText {
-        inherit palette;
-        accent = theme.accentHex;
-      });
+  greeterThemeFallback = greeterThemeText {
+    inherit palette;
+    accent = theme.accentHex;
+  };
 
   # Everything tuigreet is told except its colours, which greeterSession appends.
   greeterConfig = toml.generate "tuigreet.toml" {
