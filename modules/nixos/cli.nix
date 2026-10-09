@@ -511,258 +511,261 @@ in
       };
 
       doctor = {
-        exec = script "doctor" [
-          pkgs.git
-          pkgs.gawk
-          pkgs.jq
-          pkgs.btrfs-progs
-          pkgs.util-linux
-        ] ''
-          problems=0
-          if [[ -t 1 ]]; then
-            section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
-          else
-            section() { printf '\n%s\n' "$1"; }
-          fi
+        exec =
+          script "doctor"
+            [
+              pkgs.git
+              pkgs.gawk
+              pkgs.jq
+              pkgs.btrfs-progs
+              pkgs.util-linux
+            ]
+            ''
+              problems=0
+              if [[ -t 1 ]]; then
+                section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
+              else
+                section() { printf '\n%s\n' "$1"; }
+              fi
 
-          section "Failed units"
-          system=$(systemctl --failed --no-legend --plain | awk '{ print "  system  " $1 }')
-          user=$(systemctl --user --failed --no-legend --plain | awk '{ print "  user    " $1 }')
-          # Daemons that died with an error but are no longer marked failed. A reset-failed
-          # clears the failed state, as happened to lattice-network-notify at login on
-          # 2026-10-04, but ExecMainStatus keeps the exit status, so they are still listed.
-          # Only units with a Restart= policy, which are meant to stay up. A oneshot such as
-          # a lattice-notify-failure@ instance keeps its last status until it runs again,
-          # and would stay listed for the rest of the boot.
-          # Records from `systemctl show` come in its own property order, not the order
-          # asked for, so each one is read in full before it is judged.
-          exited() {
-            systemctl "$1" list-units --type=service --all --state=inactive --no-legend --plain \
-              | awk '{ print $1 }' \
-              | xargs -r systemctl "$1" show -p Id -p ExecMainStatus -p Restart 2>/dev/null \
-              | awk -v scope="$2" '
-                  function judge() { if (id != "" && status != 0 && restart != "no") printf "  %-7s %s (exited %s, not running)\n", scope, id, status; id = status = restart = "" }
-                  /^$/ { judge(); next }
-                  /^Id=/ { id = substr($0, 4) }
-                  /^ExecMainStatus=/ { status = substr($0, 16) }
-                  /^Restart=/ { restart = substr($0, 9) }
-                  END { judge() }'
-          }
-          system+=$'\n'$(exited --system system)
-          user+=$'\n'$(exited --user user)
-          if [[ -n ''${system//$'\n'/}''${user//$'\n'/} ]]; then
-            printf '%s\n' "$system" "$user" | grep . || true
-            echo "  systemctl [--user] status <unit> for why; lattice-notify-failure has already said so on screen"
-            problems=1
-          else
-            echo "  none"
-          fi
+              section "Failed units"
+              system=$(systemctl --failed --no-legend --plain | awk '{ print "  system  " $1 }')
+              user=$(systemctl --user --failed --no-legend --plain | awk '{ print "  user    " $1 }')
+              # Daemons that died with an error but are no longer marked failed. A reset-failed
+              # clears the failed state, as happened to lattice-network-notify at login on
+              # 2026-10-04, but ExecMainStatus keeps the exit status, so they are still listed.
+              # Only units with a Restart= policy, which are meant to stay up. A oneshot such as
+              # a lattice-notify-failure@ instance keeps its last status until it runs again,
+              # and would stay listed for the rest of the boot.
+              # Records from `systemctl show` come in its own property order, not the order
+              # asked for, so each one is read in full before it is judged.
+              exited() {
+                systemctl "$1" list-units --type=service --all --state=inactive --no-legend --plain \
+                  | awk '{ print $1 }' \
+                  | xargs -r systemctl "$1" show -p Id -p ExecMainStatus -p Restart 2>/dev/null \
+                  | awk -v scope="$2" '
+                      function judge() { if (id != "" && status != 0 && restart != "no") printf "  %-7s %s (exited %s, not running)\n", scope, id, status; id = status = restart = "" }
+                      /^$/ { judge(); next }
+                      /^Id=/ { id = substr($0, 4) }
+                      /^ExecMainStatus=/ { status = substr($0, 16) }
+                      /^Restart=/ { restart = substr($0, 9) }
+                      END { judge() }'
+              }
+              system+=$'\n'$(exited --system system)
+              user+=$'\n'$(exited --user user)
+              if [[ -n ''${system//$'\n'/}''${user//$'\n'/} ]]; then
+                printf '%s\n' "$system" "$user" | grep . || true
+                echo "  systemctl [--user] status <unit> for why; lattice-notify-failure has already said so on screen"
+                problems=1
+              else
+                echo "  none"
+              fi
 
-          section "Crashes this boot"
-          # Core dumps, grouped by program. Informational, not a problem: Hyprland 0.56.2
-          # segfaults in aquamarine's teardown on every clean exit, and takes its clients
-          # down with it, so each logout leaves a handful here.
-          booted=$(awk '/^btime/ { print $2 }' /proc/stat)
-          crashes=$(coredumpctl list --since "@$booted" --json=short --no-pager 2>/dev/null \
-            | jq -r '.[] | "\(.exe | split("/") | last | ltrimstr(".") | rtrimstr("-wrapped"))\t\(.sig)"' \
-            | sort | uniq -c | sort -rn || true)
-          # The kernel's OOM killer and systemd-oomd both end a process without a core.
-          ooms=$(journalctl -b -k -q --no-pager -o cat --grep 'Out of memory: Killed process' 2>/dev/null | wc -l || true)
-          oomd=$(journalctl -b -q --no-pager -o cat -u systemd-oomd --grep 'Killed' 2>/dev/null | wc -l || true)
-          if [[ -n $crashes ]]; then
-            while read -r n exe sig; do
-              printf '  %6dx %s (SIG%s)\n' "$n" "$exe" "$(kill -l "$sig" 2>/dev/null || echo "$sig")"
-            done <<< "$crashes"
-            echo "  coredumpctl info <program> for the backtrace"
-          fi
-          if (( ooms + oomd > 0 )); then
-            echo "  $ooms killed by the kernel OOM killer, $oomd by systemd-oomd"
-          fi
-          if [[ -z $crashes ]] && (( ooms + oomd == 0 )); then
-            echo "  none"
-          fi
+              section "Crashes this boot"
+              # Core dumps, grouped by program. Informational, not a problem: Hyprland 0.56.2
+              # segfaults in aquamarine's teardown on every clean exit, and takes its clients
+              # down with it, so each logout leaves a handful here.
+              booted=$(awk '/^btime/ { print $2 }' /proc/stat)
+              crashes=$(coredumpctl list --since "@$booted" --json=short --no-pager 2>/dev/null \
+                | jq -r '.[] | "\(.exe | split("/") | last | ltrimstr(".") | rtrimstr("-wrapped"))\t\(.sig)"' \
+                | sort | uniq -c | sort -rn || true)
+              # The kernel's OOM killer and systemd-oomd both end a process without a core.
+              ooms=$(journalctl -b -k -q --no-pager -o cat --grep 'Out of memory: Killed process' 2>/dev/null | wc -l || true)
+              oomd=$(journalctl -b -q --no-pager -o cat -u systemd-oomd --grep 'Killed' 2>/dev/null | wc -l || true)
+              if [[ -n $crashes ]]; then
+                while read -r n exe sig; do
+                  printf '  %6dx %s (SIG%s)\n' "$n" "$exe" "$(kill -l "$sig" 2>/dev/null || echo "$sig")"
+                done <<< "$crashes"
+                echo "  coredumpctl info <program> for the backtrace"
+              fi
+              if (( ooms + oomd > 0 )); then
+                echo "  $ooms killed by the kernel OOM killer, $oomd by systemd-oomd"
+              fi
+              if [[ -z $crashes ]] && (( ooms + oomd == 0 )); then
+                echo "  none"
+              fi
 
-          section "Previous boot"
-          # A boot whose journal stops without systemd reaching its shutdown ended in a
-          # hang, a panic or a power cut, and the cause is usually only in that journal.
-          if ! last=$(journalctl -b -1 -q --no-pager -o cat -n 50 2>/dev/null) || [[ -z $last ]]; then
-            echo "  no journal for it"
-          elif grep -qE '^(Shutting down|Journal stopped)' <<< "$last"; then
-            echo "  shut down cleanly"
-          else
-            echo "  ended without a clean shutdown; journalctl -b -1 -e for its last words"
-            problems=1
-          fi
+              section "Previous boot"
+              # A boot whose journal stops without systemd reaching its shutdown ended in a
+              # hang, a panic or a power cut, and the cause is usually only in that journal.
+              if ! last=$(journalctl -b -1 -q --no-pager -o cat -n 50 2>/dev/null) || [[ -z $last ]]; then
+                echo "  no journal for it"
+              elif grep -qE '^(Shutting down|Journal stopped)' <<< "$last"; then
+                echo "  shut down cleanly"
+              else
+                echo "  ended without a clean shutdown; journalctl -b -1 -e for its last words"
+                problems=1
+              fi
 
-          section "Configuration"
-          ${revisionCheck}
-          echo "  $drift"
-          # A switch can change the kernel, initrd or modules without them taking effect, and
-          # the system then runs one generation's userland on another's kernel.
-          stale=()
-          for part in kernel initrd kernel-modules; do
-            if [[ $(readlink -f /run/booted-system/$part) != $(readlink -f /run/current-system/$part) ]]; then
-              stale+=("$part")
-            fi
-          done
-          if (( ''${#stale[@]} > 0 )); then
-            echo "  reboot to load the new ''${stale[*]}"
-          fi
-          ahead=$(git -C ${lib.escapeShellArg flake} rev-list --count '@{u}..HEAD' 2>/dev/null || true)
-          if [[ -n $ahead && $ahead != 0 ]]; then
-            echo "  $ahead commit(s) not pushed"
-          fi
-          # How far the running system's nixpkgs trails today. This matters most for Firefox,
-          # whose media decoder runs unsandboxed on Apple Silicon (hardware/apple-silicon.nix):
-          # what protects it is mostly how soon a fixed release arrives. nixpkgs-unstable picks
-          # those up within a day or two, so anything past a week means `lattice update` is
-          # overdue.
-          nixpkgsDate=$(nixos-version | sed -nE 's/^[0-9]+\.[0-9]+\.([0-9]{8})\..*/\1/p')
-          if [[ -n $nixpkgsDate ]]; then
-            age=$(( ($(date +%s) - $(date -d "$nixpkgsDate" +%s)) / 86400 ))
-            echo "  nixpkgs is $age day(s) old"
-            if (( age > 7 )); then
-              echo "  Firefox is probably missing security fixes; lattice update"
-              problems=1
-            fi
-          fi
+              section "Configuration"
+              ${revisionCheck}
+              echo "  $drift"
+              # A switch can change the kernel, initrd or modules without them taking effect, and
+              # the system then runs one generation's userland on another's kernel.
+              stale=()
+              for part in kernel initrd kernel-modules; do
+                if [[ $(readlink -f /run/booted-system/$part) != $(readlink -f /run/current-system/$part) ]]; then
+                  stale+=("$part")
+                fi
+              done
+              if (( ''${#stale[@]} > 0 )); then
+                echo "  reboot to load the new ''${stale[*]}"
+              fi
+              ahead=$(git -C ${lib.escapeShellArg flake} rev-list --count '@{u}..HEAD' 2>/dev/null || true)
+              if [[ -n $ahead && $ahead != 0 ]]; then
+                echo "  $ahead commit(s) not pushed"
+              fi
+              # How far the running system's nixpkgs trails today. This matters most for Firefox,
+              # whose media decoder runs unsandboxed on Apple Silicon (hardware/apple-silicon.nix):
+              # what protects it is mostly how soon a fixed release arrives. nixpkgs-unstable picks
+              # those up within a day or two, so anything past a week means `lattice update` is
+              # overdue.
+              nixpkgsDate=$(nixos-version | sed -nE 's/^[0-9]+\.[0-9]+\.([0-9]{8})\..*/\1/p')
+              if [[ -n $nixpkgsDate ]]; then
+                age=$(( ($(date +%s) - $(date -d "$nixpkgsDate" +%s)) / 86400 ))
+                echo "  nixpkgs is $age day(s) old"
+                if (( age > 7 )); then
+                  echo "  Firefox is probably missing security fixes; lattice update"
+                  problems=1
+                fi
+              fi
 
-          section "Persistence"
-          # Where code running as the user would hide to survive a reboot, which matters
-          # because Firefox's media decoder runs unsandboxed on Apple Silicon
-          # (hardware/apple-silicon.nix). Every unit comes from the flake, and any config that
-          # runs code at login is either absent or a symlink into a git repo (a dotfiles
-          # repo), so anything else is worth looking at. Detection, not prevention: it only shows up here.
-          clean=1
-          extra=$(find "$HOME/.config/systemd" "$HOME/.config/environment.d" -mindepth 1 \( -type f -o -type l \) 2>/dev/null || true)
-          if [[ -n $extra ]]; then
-            echo "  user units or environment from outside the flake:"
-            awk '{ print "    " $0 }' <<< "$extra"
-            problems=1 clean=0
-          fi
-          # Bitwarden writes its own entry, with a store path that changes on every
-          # update, so it is matched by shape.
-          for entry in "$HOME"/.config/autostart/*.desktop; do
-            [[ -e $entry ]] || continue
-            exec=$(grep -m1 '^Exec=' "$entry" || true)
-            case "''${entry##*/} $exec" in
-              "bitwarden.desktop Exec=/nix/store/"*"-bitwarden-desktop-"*"/bin/bitwarden --autostart") ;;
-              *)
-                echo "  autostart ''${entry##*/}: ''${exec#Exec=}"
+              section "Persistence"
+              # Where code running as the user would hide to survive a reboot, which matters
+              # because Firefox's media decoder runs unsandboxed on Apple Silicon
+              # (hardware/apple-silicon.nix). Every unit comes from the flake, and any config that
+              # runs code at login is either absent or a symlink into a git repo (a dotfiles
+              # repo), so anything else is worth looking at. Detection, not prevention: it only shows up here.
+              clean=1
+              extra=$(find "$HOME/.config/systemd" "$HOME/.config/environment.d" -mindepth 1 \( -type f -o -type l \) 2>/dev/null || true)
+              if [[ -n $extra ]]; then
+                echo "  user units or environment from outside the flake:"
+                awk '{ print "    " $0 }' <<< "$extra"
                 problems=1 clean=0
-                ;;
-            esac
-          done
-          # Shell startup files and the user's Hyprland Lua run at every login. Each one
-          # must be a symlink into a git repo, whose hooks and uncommitted changes are then
-          # checked below.
-          declare -A repos=()
-          [[ -d $HOME/.dotfiles/.git ]] && repos[$HOME/.dotfiles]=1
-          for rc in .zshrc .zshenv .zprofile .zlogin .zlogout .profile .bashrc .bash_profile .bash_login .pam_environment \
-            .config/hypr/hyprland.lua .config/hypr/local.lua; do
-            f="$HOME/$rc"
-            [[ -e $f || -L $f ]] || continue
-            target=$(readlink -f "$f")
-            if [[ -L $f ]] && repo=$(git -C "''${target%/*}" rev-parse --show-toplevel 2>/dev/null); then
-              repos[$repo]=1
-            else
-              echo "  ~/$rc is not from a git repo"
-              problems=1 clean=0
-            fi
-          done
-          # This one is a choice rather than a threat, but it replaces the whole of
-          # /etc/xdg/hypr/hyprland.lua, so lattice's binds and rules no longer apply.
-          if [[ -e $HOME/.config/hypr/hyprland.lua ]]; then
-            echo "  ~/.config/hypr/hyprland.lua replaces lattice's Hyprland config"
-            clean=0
-          fi
-          # A git hook runs on the next commit in that repo.
-          for repo in ${lib.escapeShellArg flake} "''${!repos[@]}"; do
-            hooks=$(find "$repo/.git/hooks" -type f ! -name '*.sample' 2>/dev/null || true)
-            if [[ -n $hooks ]]; then
-              echo "  git hooks in ''${repo/#$HOME/\~}:"
-              awk '{ print "    " $0 }' <<< "$hooks"
-              problems=1 clean=0
-            fi
-          done
-          # Every config in those repos can run code (zshrc, gitconfig and so on), so
-          # uncommitted changes are listed for review. They don't count as a problem on
-          # their own, since they are usually just work in progress.
-          for repo in "''${!repos[@]}"; do
-            changes=$(git -C "$repo" status --porcelain 2>/dev/null || true)
-            if [[ -n $changes ]]; then
-              echo "  uncommitted in ''${repo/#$HOME/\~} (review anything you didn't change yourself):"
-              head -n 10 <<< "$changes" | sed 's/^/    /'
-              clean=0
-            fi
-          done
-          if (( clean )); then
-            echo "  nothing from outside the flake and your git repos"
-          fi
+              fi
+              # Bitwarden writes its own entry, with a store path that changes on every
+              # update, so it is matched by shape.
+              for entry in "$HOME"/.config/autostart/*.desktop; do
+                [[ -e $entry ]] || continue
+                exec=$(grep -m1 '^Exec=' "$entry" || true)
+                case "''${entry##*/} $exec" in
+                  "bitwarden.desktop Exec=/nix/store/"*"-bitwarden-desktop-"*"/bin/bitwarden --autostart") ;;
+                  *)
+                    echo "  autostart ''${entry##*/}: ''${exec#Exec=}"
+                    problems=1 clean=0
+                    ;;
+                esac
+              done
+              # Shell startup files and the user's Hyprland Lua run at every login. Each one
+              # must be a symlink into a git repo, whose hooks and uncommitted changes are then
+              # checked below.
+              declare -A repos=()
+              [[ -d $HOME/.dotfiles/.git ]] && repos[$HOME/.dotfiles]=1
+              for rc in .zshrc .zshenv .zprofile .zlogin .zlogout .profile .bashrc .bash_profile .bash_login .pam_environment \
+                .config/hypr/hyprland.lua .config/hypr/local.lua; do
+                f="$HOME/$rc"
+                [[ -e $f || -L $f ]] || continue
+                target=$(readlink -f "$f")
+                if [[ -L $f ]] && repo=$(git -C "''${target%/*}" rev-parse --show-toplevel 2>/dev/null); then
+                  repos[$repo]=1
+                else
+                  echo "  ~/$rc is not from a git repo"
+                  problems=1 clean=0
+                fi
+              done
+              # This one is a choice rather than a threat, but it replaces the whole of
+              # /etc/xdg/hypr/hyprland.lua, so lattice's binds and rules no longer apply.
+              if [[ -e $HOME/.config/hypr/hyprland.lua ]]; then
+                echo "  ~/.config/hypr/hyprland.lua replaces lattice's Hyprland config"
+                clean=0
+              fi
+              # A git hook runs on the next commit in that repo.
+              for repo in ${lib.escapeShellArg flake} "''${!repos[@]}"; do
+                hooks=$(find "$repo/.git/hooks" -type f ! -name '*.sample' 2>/dev/null || true)
+                if [[ -n $hooks ]]; then
+                  echo "  git hooks in ''${repo/#$HOME/\~}:"
+                  awk '{ print "    " $0 }' <<< "$hooks"
+                  problems=1 clean=0
+                fi
+              done
+              # Every config in those repos can run code (zshrc, gitconfig and so on), so
+              # uncommitted changes are listed for review. They don't count as a problem on
+              # their own, since they are usually just work in progress.
+              for repo in "''${!repos[@]}"; do
+                changes=$(git -C "$repo" status --porcelain 2>/dev/null || true)
+                if [[ -n $changes ]]; then
+                  echo "  uncommitted in ''${repo/#$HOME/\~} (review anything you didn't change yourself):"
+                  head -n 10 <<< "$changes" | sed 's/^/    /'
+                  clean=0
+                fi
+              done
+              if (( clean )); then
+                echo "  nothing from outside the flake and your git repos"
+              fi
 
-          section "Errors this boot"
-          # Counted by message rather than listed in order: one chatty daemon repeating
-          # itself every minute would otherwise be all the tail ever shows.
-          #
-          # Less the lines that turn up on every healthy boot, which otherwise took all five
-          # slots and pushed anything new off the list (all checked on 2026-10-06):
-          # dbus-broker's duplicate-name lines, which NixOS's merged service directories cause
-          # on every host; and on the Mac, the Bluetooth codec query and BAP probe the bcm4377
-          # firmware refuses, the brcmfmac join-pref/roam/P2P setup calls its firmware does not
-          # implement (-52), the three speaker amps the devicetree leaves unconfigured, and
-          # cpufreq_schedutil, which the Asahi module asks modules-load for although this
-          # kernel has the governor built in. Also udev's mtd_probe callout, which this systemd
-          # no longer ships, and bluetoothd's wake flag the controller rejects.
-          journalctl -b -p err -q --no-pager -o short 2>/dev/null \
-            | grep -vE 'Ignoring duplicate name|Failed to read codec capabilities|BAP requires ISO Socket|bap: Operation not supported|error \(-52\)|err=-52|ret -52|p2p-dev-wld0|brcmf_p2p_create_p2pdev|tas2764_i2c_probe: Failed to parse devicetree|cpufreq_schedutil|mtd_probe|set_wake_allowed_complete' \
-            | awk '{ $1 = $2 = $3 = $4 = ""; sub(/^ +/, ""); sub(/\[[0-9]+\]/, ""); print }' \
-            | sort | uniq -c | sort -rn | head -n 5 \
-            | awk 'NF > 1 { n = $1; $1 = ""; printf "  %6dx %s\n", n, substr($0, 2, 110) }' || true
+              section "Errors this boot"
+              # Counted by message rather than listed in order: one chatty daemon repeating
+              # itself every minute would otherwise be all the tail ever shows.
+              #
+              # Less the lines that turn up on every healthy boot, which otherwise took all five
+              # slots and pushed anything new off the list (all checked on 2026-10-06):
+              # dbus-broker's duplicate-name lines, which NixOS's merged service directories cause
+              # on every host; and on the Mac, the Bluetooth codec query and BAP probe the bcm4377
+              # firmware refuses, the brcmfmac join-pref/roam/P2P setup calls its firmware does not
+              # implement (-52), the three speaker amps the devicetree leaves unconfigured, and
+              # cpufreq_schedutil, which the Asahi module asks modules-load for although this
+              # kernel has the governor built in. Also udev's mtd_probe callout, which this systemd
+              # no longer ships, and bluetoothd's wake flag the controller rejects.
+              journalctl -b -p err -q --no-pager -o short 2>/dev/null \
+                | grep -vE 'Ignoring duplicate name|Failed to read codec capabilities|BAP requires ISO Socket|bap: Operation not supported|error \(-52\)|err=-52|ret -52|p2p-dev-wld0|brcmf_p2p_create_p2pdev|tas2764_i2c_probe: Failed to parse devicetree|cpufreq_schedutil|mtd_probe|set_wake_allowed_complete' \
+                | awk '{ $1 = $2 = $3 = $4 = ""; sub(/^ +/, ""); sub(/\[[0-9]+\]/, ""); print }' \
+                | sort | uniq -c | sort -rn | head -n 5 \
+                | awk 'NF > 1 { n = $1; $1 = ""; printf "  %6dx %s\n", n, substr($0, 2, 110) }' || true
 
-          section "Backups"
-          # backup.nix: a failed run, a week without a backup, a nested subvolume left out
-          # or a check that found damage.
-          if ! backups=$(${lib.getExe config.lattice.backup.internal.cli} status); then
-            problems=1
-          fi
-          awk '{ print "  " $0 }' <<< "$backups"
+              section "Backups"
+              # backup.nix: a failed run, a week without a backup, a nested subvolume left out
+              # or a check that found damage.
+              if ! backups=$(${lib.getExe config.lattice.backup.internal.cli} status); then
+                problems=1
+              fi
+              awk '{ print "  " $0 }' <<< "$backups"
 
-          section "Disk"
-          df -h --output=target,avail,pcent / /nix 2>/dev/null | awk 'NR > 1 && !seen[$1]++ { print "  " $1 "  " $2 " free, " $3 " used" }'
-          if df --output=pcent / /nix 2>/dev/null | awk 'NR > 1 && $1 + 0 >= 90 { found = 1 } END { exit !found }'; then
-            echo "  under 10% free; nh clean all frees old generations"
-            problems=1
-          fi
-          # Every btrfs filesystem, once each however many subvolumes it is mounted as.
-          # Device stats are cumulative across boots and readable without root; nonzero
-          # means the disk has actually returned a bad read, write or checksum.
-          for fs in $(findmnt -t btrfs -no UUID,TARGET | awk '!seen[$1]++ { print $2 }'); do
-            errors=$(btrfs device stats -c "$fs" 2>/dev/null | awk '$2 != 0 { print "    " $0 }' || true)
-            if [[ -n $errors ]]; then
-              echo "  btrfs on $fs has recorded device errors:"
-              echo "$errors"
-              problems=1
-            else
-              echo "  btrfs on $fs: no device errors"
-            fi
-          done
-          # The last scrub's summary, from the journal. `btrfs scrub status` needs root to
-          # read the result file and prints nothing useful without it. The monthly
-          # btrfs-scrub@ timer logs the same summary there. One line for every filesystem,
-          # because each host has a single btrfs filesystem.
-          scrub=$(journalctl -q --no-pager -o cat -t btrfs --grep '^(Scrub started|Error summary):' -n 2 2>/dev/null \
-            | awk '{ value = $0; sub(/^[^:]*: */, "", value) }
-                /^Scrub started/ { started = value } /^Error summary/ { summary = value }
-                END { if (started != "") print "last scrub " started ": " summary }' || true)
-          if [[ -n $scrub ]]; then
-            echo "  $scrub"
-            if [[ $scrub != *"no errors found" ]]; then problems=1; fi
-          elif [[ -n $(findmnt -t btrfs -no TARGET) ]]; then
-            echo "  no scrub on record"
-          fi
+              section "Disk"
+              df -h --output=target,avail,pcent / /nix 2>/dev/null | awk 'NR > 1 && !seen[$1]++ { print "  " $1 "  " $2 " free, " $3 " used" }'
+              if df --output=pcent / /nix 2>/dev/null | awk 'NR > 1 && $1 + 0 >= 90 { found = 1 } END { exit !found }'; then
+                echo "  under 10% free; nh clean all frees old generations"
+                problems=1
+              fi
+              # Every btrfs filesystem, once each however many subvolumes it is mounted as.
+              # Device stats are cumulative across boots and readable without root; nonzero
+              # means the disk has actually returned a bad read, write or checksum.
+              for fs in $(findmnt -t btrfs -no UUID,TARGET | awk '!seen[$1]++ { print $2 }'); do
+                errors=$(btrfs device stats -c "$fs" 2>/dev/null | awk '$2 != 0 { print "    " $0 }' || true)
+                if [[ -n $errors ]]; then
+                  echo "  btrfs on $fs has recorded device errors:"
+                  echo "$errors"
+                  problems=1
+                else
+                  echo "  btrfs on $fs: no device errors"
+                fi
+              done
+              # The last scrub's summary, from the journal. `btrfs scrub status` needs root to
+              # read the result file and prints nothing useful without it. The monthly
+              # btrfs-scrub@ timer logs the same summary there. One line for every filesystem,
+              # because each host has a single btrfs filesystem.
+              scrub=$(journalctl -q --no-pager -o cat -t btrfs --grep '^(Scrub started|Error summary):' -n 2 2>/dev/null \
+                | awk '{ value = $0; sub(/^[^:]*: */, "", value) }
+                    /^Scrub started/ { started = value } /^Error summary/ { summary = value }
+                    END { if (started != "") print "last scrub " started ": " summary }' || true)
+              if [[ -n $scrub ]]; then
+                echo "  $scrub"
+                if [[ $scrub != *"no errors found" ]]; then problems=1; fi
+              elif [[ -n $(findmnt -t btrfs -no TARGET) ]]; then
+                echo "  no scrub on record"
+              fi
 
-          exit "$problems"
-        '';
+              exit "$problems"
+            '';
         summary = "Health check: units, crashes, last shutdown, drift, persistence, boot errors, backups, disk";
         group = "system";
         launch = [
