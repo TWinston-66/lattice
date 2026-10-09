@@ -36,4 +36,11 @@ jobs:
           df -h /
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
+      # Pulls what earlier runs built, and pushes what this one builds as it goes (the daemon
+      # pushes only local builds, not what came from cache.nixos.org), so a cancelled run's
+      # work still lands.
+      - uses: cachix/cachix-action@v16
+        with:
+          name: lattice
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - run: scripts/ci-build.sh
