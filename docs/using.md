@@ -29,7 +29,7 @@ host's SSH host key.
 ## Checking on things
 
 ```sh
-lattice doctor                      # failed units, crashes, drift, boot errors, backups, disk
+lattice doctor                      # failed units, crashes, drift, persistence, boot errors, backups, disk
 lattice backup status               # when this machine last backed up
 ```
 

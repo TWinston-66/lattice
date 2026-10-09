@@ -613,9 +613,10 @@ in
             echo "  $ahead commit(s) not pushed"
           fi
           # How far the running system's nixpkgs trails today. This matters most for Firefox,
-          # whose media decoder runs unsandboxed on the Mac (hosts/mac): what protects it is
-          # mostly how soon a fixed release arrives. nixpkgs-unstable picks those up within a
-          # day or two, so anything past a week means `lattice update` is overdue.
+          # whose media decoder runs unsandboxed on Apple Silicon (hardware/apple-silicon.nix):
+          # what protects it is mostly how soon a fixed release arrives. nixpkgs-unstable picks
+          # those up within a day or two, so anything past a week means `lattice update` is
+          # overdue.
           nixpkgsDate=$(nixos-version | sed -nE 's/^[0-9]+\.[0-9]+\.([0-9]{8})\..*/\1/p')
           if [[ -n $nixpkgsDate ]]; then
             age=$(( ($(date +%s) - $(date -d "$nixpkgsDate" +%s)) / 86400 ))
@@ -627,10 +628,11 @@ in
           fi
 
           section "Persistence"
-          # Where code running as winston would hide to survive a reboot, which matters
-          # because Firefox's media decoder runs unsandboxed on the Mac (hosts/mac). Every
-          # unit comes from the flake and every config from ~/.dotfiles, so anything else
-          # is worth looking at. Detection, not prevention: it only shows up here.
+          # Where code running as the user would hide to survive a reboot, which matters
+          # because Firefox's media decoder runs unsandboxed on Apple Silicon
+          # (hardware/apple-silicon.nix). Every unit comes from the flake, and any config that
+          # runs code at login is either absent or a symlink into a git repo (a dotfiles
+          # repo), so anything else is worth looking at. Detection, not prevention: it only shows up here.
           clean=1
           extra=$(find "$HOME/.config/systemd" "$HOME/.config/environment.d" -mindepth 1 \( -type f -o -type l \) 2>/dev/null || true)
           if [[ -n $extra ]]; then
@@ -651,35 +653,51 @@ in
                 ;;
             esac
           done
-          # Shell startup files are symlinks into ~/.dotfiles or absent.
-          for rc in .zshrc .zshenv .zprofile .zlogin .zlogout .profile .bashrc .bash_profile .bash_login .pam_environment; do
+          # Shell startup files and the user's Hyprland Lua run at every login. Each one
+          # must be a symlink into a git repo, whose hooks and uncommitted changes are then
+          # checked below.
+          declare -A repos=()
+          [[ -d $HOME/.dotfiles/.git ]] && repos[$HOME/.dotfiles]=1
+          for rc in .zshrc .zshenv .zprofile .zlogin .zlogout .profile .bashrc .bash_profile .bash_login .pam_environment \
+            .config/hypr/hyprland.lua .config/hypr/local.lua; do
             f="$HOME/$rc"
             [[ -e $f || -L $f ]] || continue
-            if [[ $(readlink -f "$f") != "$HOME/.dotfiles/"* ]]; then
-              echo "  ~/$rc is not from ~/.dotfiles"
+            target=$(readlink -f "$f")
+            if [[ -L $f ]] && repo=$(git -C "''${target%/*}" rev-parse --show-toplevel 2>/dev/null); then
+              repos[$repo]=1
+            else
+              echo "  ~/$rc is not from a git repo"
               problems=1 clean=0
             fi
           done
+          # This one is a choice rather than a threat, but it replaces the whole of
+          # /etc/xdg/hypr/hyprland.lua, so lattice's binds and rules no longer apply.
+          if [[ -e $HOME/.config/hypr/hyprland.lua ]]; then
+            echo "  ~/.config/hypr/hyprland.lua replaces lattice's Hyprland config"
+            clean=0
+          fi
           # A git hook runs on the next commit in that repo.
-          for repo in ${lib.escapeShellArg flake} "$HOME/.dotfiles"; do
+          for repo in ${lib.escapeShellArg flake} "''${!repos[@]}"; do
             hooks=$(find "$repo/.git/hooks" -type f ! -name '*.sample' 2>/dev/null || true)
             if [[ -n $hooks ]]; then
-              echo "  git hooks in $repo:"
+              echo "  git hooks in ''${repo/#$HOME/\~}:"
               awk '{ print "    " $0 }' <<< "$hooks"
               problems=1 clean=0
             fi
           done
-          # Every config in ~/.dotfiles can run code (hyprland.lua, zshrc, gitconfig and so
-          # on), so uncommitted changes are listed for review. They don't count as a problem
-          # on their own, since they are usually just work in progress.
-          changes=$(git -C "$HOME/.dotfiles" status --porcelain 2>/dev/null || true)
-          if [[ -n $changes ]]; then
-            echo "  uncommitted in ~/.dotfiles (review anything you didn't change yourself):"
-            head -n 10 <<< "$changes" | sed 's/^/    /'
-            clean=0
-          fi
+          # Every config in those repos can run code (zshrc, gitconfig and so on), so
+          # uncommitted changes are listed for review. They don't count as a problem on
+          # their own, since they are usually just work in progress.
+          for repo in "''${!repos[@]}"; do
+            changes=$(git -C "$repo" status --porcelain 2>/dev/null || true)
+            if [[ -n $changes ]]; then
+              echo "  uncommitted in ''${repo/#$HOME/\~} (review anything you didn't change yourself):"
+              head -n 10 <<< "$changes" | sed 's/^/    /'
+              clean=0
+            fi
+          done
           if (( clean )); then
-            echo "  nothing from outside the flake and ~/.dotfiles"
+            echo "  nothing from outside the flake and your git repos"
           fi
 
           section "Errors this boot"
