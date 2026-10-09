@@ -26,8 +26,8 @@
 # Restic encrypts everything it writes with a key derived from the password, file names
 # included, so the drive itself is plain btrfs: a lost or stolen drive gives up nothing
 # without the password, and LUKS on top would only add an unlock step on every host. The
-# password is in sops (restic-password) and in Bitwarden. The Bitwarden copy is the one
-# that matters when the host is gone, since its host key went with it.
+# password is read from lattice.backup.passwordFile, and should also live somewhere that
+# survives the host, such as a password manager.
 let
   cfg = config.lattice.backup;
 
@@ -43,9 +43,9 @@ let
   # Read-only btrfs snapshots of the sources live here for the length of a run.
   snapshotDir = "/.lattice-backup";
   cacheDir = "/var/cache/restic";
-  user = "winston";
+  user = config.lattice.user.name;
   host = config.networking.hostName;
-  passwordFile = config.sops.secrets.restic-password.path;
+  inherit (cfg) passwordFile;
 
   # A pill whose drive has been away this long turns to a warning, and twice as long to an
   # error. The daily reminder starts at the first.
@@ -830,6 +830,14 @@ let
 in
 {
   options.lattice.backup = {
+    passwordFile = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/lattice-backup/password";
+      description = ''
+        A root-readable file holding the restic password. The drive is unreadable without
+        it, so keep a copy off the machine.
+      '';
+    };
     sources = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       # /srv is a subvolume of its own wherever systemd-tmpfiles made it on btrfs, which
@@ -868,8 +876,6 @@ in
   };
 
   config = {
-    sops.secrets.restic-password = { };
-
     environment.systemPackages = [
       cli
       pkgs.restic

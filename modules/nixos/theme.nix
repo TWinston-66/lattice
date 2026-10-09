@@ -1370,7 +1370,7 @@ in
     runtimeTheme = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      example = "/home/winston/.cache/lattice";
+      example = "/home/alice/.cache/lattice";
       description = ''
         Directory holding the run-time theme: one file per `runtimeFiles` entry, each a
         `runtimeKits` file with the accent filled in. The generated palettes in /etc/xdg
@@ -1384,7 +1384,7 @@ in
     runtimeState = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      example = "/home/winston/.local/state/lattice/theme";
+      example = "/home/alice/.local/state/lattice/theme";
       description = ''
         The file `lattice-theme` keeps the run-time flavour's name in, for anything else that
         has to follow it -- the Stream Deck, which swaps its whole layout on a theme switch.

@@ -5,6 +5,8 @@
   ...
 }:
 let
+  user = config.lattice.user.name;
+
   inherit (import ./lib.nix { inherit config lib pkgs; })
     theme
     palette
@@ -274,5 +276,5 @@ in
 
   lattice.theme.extraKitFiles."theme.greeter.toml" = greeterThemeText;
 
-  systemd.tmpfiles.rules = [ "d ${greeterThemeDir} 0755 winston - -" ];
+  systemd.tmpfiles.rules = [ "d ${greeterThemeDir} 0755 ${user} - -" ];
 }

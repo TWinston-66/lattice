@@ -13,6 +13,7 @@
     ./backup.nix
     ./cli.nix
     ./firewall.nix
+    ./user.nix
   ];
 
   ### NIX ###
@@ -40,7 +41,6 @@
   programs = {
     nh = {
       enable = true;
-      flake = "/home/winston/Documents/Projects/lattice";
       clean = {
         enable = true;
         extraArgs = "--keep-since 14d --keep 3";
@@ -120,15 +120,6 @@
   ### TIME/LOCALE ###
   time.timeZone = "America/Denver";
   i18n.defaultLocale = "en_US.UTF-8";
-
-  ### USERS ###
-  users.mutableUsers = false;
-  users.users.winston = {
-    isNormalUser = true;
-    description = "winston";
-    extraGroups = [ "wheel" ];
-    hashedPasswordFile = config.sops.secrets.winston-password.path;
-  };
 
   ### PACKAGES ###
   nixpkgs.config.allowUnfree = true;

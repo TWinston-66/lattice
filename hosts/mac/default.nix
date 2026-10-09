@@ -27,6 +27,15 @@ in
   ];
 
   networking.hostName = "lattice-mac";
+
+  lattice.user = {
+    name = "winston";
+    hashedPasswordFile = config.sops.secrets.winston-password.path;
+  };
+  programs.nh.flake = "/home/winston/Documents/Projects/lattice";
+
+  sops.secrets.restic-password = { };
+  lattice.backup.passwordFile = config.sops.secrets.restic-password.path;
   system.stateVersion = "26.11";
 
   ### ASAHI ###

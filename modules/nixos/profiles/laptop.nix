@@ -5,6 +5,8 @@
   ...
 }:
 let
+  user = config.lattice.user.name;
+
   upowerCfg = config.services.upower;
 
   # How the 5% alert words what upower is about to do at percentageAction.
@@ -681,7 +683,7 @@ in
   ### NETWORKING ###
   networking.useNetworkd = false;
   networking.networkmanager.enable = true;
-  users.users.winston.extraGroups = [ "networkmanager" ];
+  users.users.${user}.extraGroups = [ "networkmanager" ];
 
   # Detection, and only detection -- NM classifies the link and publishes the verdict on
   # D-Bus, which is where `nmcli monitor` picks it up for lattice-network-notify. Nothing

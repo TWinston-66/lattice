@@ -6,6 +6,8 @@
   pkgs,
 }:
 let
+  user = config.lattice.user.name;
+
   theme = config.lattice.theme;
   inherit (theme) palette;
 
@@ -226,7 +228,7 @@ let
   # rather than beside the wallpaper's per-boot pick in XDG_RUNTIME_DIR: the flavour is a
   # preference, and should survive a reboot. Anything unreadable or no longer in
   # lattice.theme.flavors falls back to the build-time one rather than failing.
-  themeState = "${config.users.users.winston.home}/.local/state/lattice/theme";
+  themeState = "${config.users.users.${user}.home}/.local/state/lattice/theme";
 
   readFlavor = ''
     flavor=$(cat "${themeState}" 2>/dev/null || true)
@@ -261,7 +263,7 @@ let
   # beside them covers the gap before the first pick, and base is the gradient's own
   # bottom-right stop, so even that reads as the wallpaper's darkest corner. One per screen
   # size, for the same reason there are two of every wallpaper.
-  currentDir = "${config.users.users.winston.home}/.cache/lattice";
+  currentDir = "${config.users.users.${user}.home}/.cache/lattice";
 
   currentPanel = "${currentDir}/wallpaper-panel.png";
 

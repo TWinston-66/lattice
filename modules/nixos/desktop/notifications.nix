@@ -5,6 +5,8 @@
   ...
 }:
 let
+  user = config.lattice.user.name;
+
   inherit (import ./lib.nix { inherit config lib pkgs; })
     rofiWithCalc
     ;
@@ -255,7 +257,7 @@ in
   # systemd.services lands here rather than on the user template above -- one spelling for
   # both scopes, and a unit that moves between them needs no edit at its use site.
   #
-  # `--machine=winston@.host` is the whole of it: root opens the user manager's own bus by
+  # `--machine=${user}@.host` is the whole of it: root opens the user manager's own bus by
   # name and starts the unit there, so neither a uid nor a DBUS_SESSION_BUS_ADDRESS has to
   # be reconstructed the way the Mac's sleep guard still does for its own banner. Reaching
   # the session becomes the reporter's problem instead of the failing unit's.
@@ -271,7 +273,7 @@ in
 
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.systemd}/bin/systemctl --user --machine=winston@.host start lattice-notify-failure-system@%i.service";
+      ExecStart = "${pkgs.systemd}/bin/systemctl --user --machine=${user}@.host start lattice-notify-failure-system@%i.service";
     };
   };
 

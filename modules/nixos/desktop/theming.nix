@@ -5,6 +5,8 @@
   ...
 }:
 let
+  user = config.lattice.user.name;
+
   inherit (import ./lib.nix { inherit config lib pkgs; })
     theme
     palette
@@ -900,7 +902,7 @@ in
   #
   # Per-user rather than systemd.user.tmpfiles.rules: those go to every user manager, and
   # the greeter's starts one too, failing on winston's home at every boot.
-  systemd.user.tmpfiles.users.winston.rules = [
+  systemd.user.tmpfiles.users.${user}.rules = [
     "d ${currentDir} 0755 - - -"
   ]
   # `L` without `+` for the same reason as `C`: only on a home that has never picked, so
@@ -914,7 +916,7 @@ in
   # them at this build's copy.
   ++
     map
-      (name: "L+ ${config.users.users.winston.home}/.local/share/themes/${name} - - - - ${gtkUserTheme}")
+      (name: "L+ ${config.users.users.${user}.home}/.local/share/themes/${name} - - - - ${gtkUserTheme}")
       [
         "lattice-a"
         "lattice-b"

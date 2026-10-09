@@ -1,5 +1,12 @@
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
+  user = config.lattice.user.name;
+
   # A bubblewrap sandbox with a populated /usr/lib, /bin and a working ldconfig, entered
   # with `fhs`. nix-ld below already covers prebuilt binaries that only need a dynamic
   # linker; it does nothing for anything that expects to *compile* against a normal
@@ -162,7 +169,7 @@ in
       ];
     };
   };
-  users.users.winston.shell = pkgs.zsh;
+  users.users.${user}.shell = pkgs.zsh;
 
   environment.pathsToLink = [
     "/share/zsh-autosuggestions"

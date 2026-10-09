@@ -6,6 +6,8 @@
   ...
 }:
 let
+  user = config.lattice.user.name;
+
   inherit (import ./lib.nix { inherit config lib pkgs; })
     theme
     palette
@@ -253,10 +255,12 @@ in
 
   lattice.theme.extraKitFiles."theme.hqf.toml" = hqfThemeText;
 
-  systemd.user.tmpfiles.users.winston.rules = [
+  systemd.user.tmpfiles.users.${user}.rules = [
     # The screenshot overlay's theme, at the first path HyprQuickFrame looks; see hqfThemeText.
-    "d ${config.users.users.winston.home}/.config/hyprquickframe 0755 - - -"
-    "L+ ${config.users.users.winston.home}/.config/hyprquickframe/theme.toml - - - - ${currentDir}/theme.hqf.toml"
+    "d ${config.users.users.${user}.home}/.config/hyprquickframe 0755 - - -"
+    "L+ ${
+      config.users.users.${user}.home
+    }/.config/hyprquickframe/theme.toml - - - - ${currentDir}/theme.hqf.toml"
   ];
 
   lattice.cli.commands.screenshot = {

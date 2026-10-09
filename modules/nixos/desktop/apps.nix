@@ -5,6 +5,8 @@
   ...
 }:
 let
+  user = config.lattice.user.name;
+
   # Opens the NuPhy Halo65 V2's raw-HID node to whoever holds the seat, so the keyboard can
   # be remapped from nuphy.io in the Chromium below. The board is QMK underneath: its
   # interface 1 reports usage page 0xFF60, QMK's raw-HID endpoint and the transport both
@@ -322,7 +324,7 @@ in
   # five seconds later.
   systemd.user.services.solaar.after = [ "graphical-session.target" ];
 
-  users.users.winston.extraGroups = [
+  users.users.${user}.extraGroups = [
     "video"
     "uinput"
   ];
