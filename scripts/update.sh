@@ -7,7 +7,7 @@ export NIX_CONFIG="experimental-features = nix-command flakes"
 # in flake.lock, and a rebuild evaluates against that lock and nothing else. Updating is
 # this, and only this -- move the lock, then switch to what it now describes.
 #
-# No dev shell. Unlike rebuild.sh and deploy.sh this needs neither ssh-to-age nor sops, and
+# No dev shell. Unlike rebuild.sh this needs neither ssh-to-age nor sops, and
 # rebuild.sh enters the shell for itself when we hand off at the end.
 
 # Hashed rather than diffed against HEAD: the lock is routinely already dirty here -- an

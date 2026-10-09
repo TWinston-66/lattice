@@ -41,13 +41,6 @@
         ] (system: f nixpkgs.legacyPackages.${system});
     in
     {
-      nixosConfigurations.dell = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs; };
-        modules = [
-          ./hosts/dell
-        ];
-      };
-
       nixosConfigurations.mac = nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs; };
         modules = [

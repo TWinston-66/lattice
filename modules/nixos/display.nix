@@ -245,10 +245,9 @@ in
       output rather than dropping it.
 
       Per-host because mako matches the connector name and nothing else. `desc:` strings,
-      which is how ~/.dotfiles/hypr tells this same Samsung apart on either laptop without
-      naming a port, are not understood here -- mako reads one as a name, misses, and
-      quietly falls back to the focused output -- and the monitor is HDMI-A-1 on the Mac
-      but a DP connector on the Dell, so there is no one name to share.
+      which is how ~/.dotfiles/hypr tells a monitor apart without naming a port, are not
+      understood here -- mako reads one as a name, misses, and quietly falls back to the
+      focused output.
     '';
   };
 
@@ -262,9 +261,9 @@ in
       "off" end is hyprsunset's own 6000K, which is no filter at all.
 
       Per-host for the same reason the scales above are: the strength of the shift is a
-      property of the panel, not of the setting. The Dell's sRGB panel reads 4000K as a
-      clear warm cast; the MacBook's is wide-gamut and much brighter, so the same
-      transform lands far weaker there and wants a lower number to match it.
+      property of the panel, not of the setting. An sRGB panel reads 4000K as a clear warm
+      cast; a MacBook's is wide-gamut and much brighter, so the same transform lands far
+      weaker there and wants a lower number to match it.
 
       `hyprctl hyprsunset temperature <k>` tries a value on the running daemon without a
       rebuild, which is the way to pick one; the next lattice-sunset toggle returns to
@@ -280,8 +279,8 @@ in
       Zoom for lattice's own pages shown outside Firefox -- the keybinding cheatsheet, in a
       Chromium app window -- so they come out the size Firefox draws pages at on this host.
       Chromium follows the output's scale with nothing on top, while Firefox carries a
-      per-host factor: devPixelsPerPx 1.1 on the Dell, and on the Mac the 80% default zoom
-      that lives in the Firefox profile rather than in any pref (hosts/mac/default.nix).
+      per-host factor: on the Mac, the 80% default zoom that lives in the Firefox profile
+      rather than in any pref (modules/nixos/hardware/apple-silicon.nix).
       This is that factor, applied by the page itself as CSS zoom.
     '';
   };
@@ -297,8 +296,8 @@ in
       rounded to whole pixels, and imports it from the palette drop-in style.css already
       pulls in.
 
-      Per-host because the bar is a fixed logical width: the Dell's 1920px panel at scale
-      1.5 leaves it 1280px, and at full size the right block ran up against the clock.
+      Per-host because the bar is a fixed logical width: a 1920px panel at scale 1.5 leaves
+      it 1280px, and at full size the right block runs up against the clock.
     '';
   };
 

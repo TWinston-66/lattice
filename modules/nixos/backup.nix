@@ -67,7 +67,7 @@ let
   defaultExclude = [
     # Rebuilt from the flake at the revision the manifest records.
     "/nix"
-    # Recreated by the installer: the Asahi one on the Mac, nixos-install on the Dell.
+    # Recreated by the Asahi installer and nixos-install.
     "/boot"
     # Kernel and runtime file systems. They are not in a snapshot anyway, but the live
     # fallback for a source that is not btrfs would see them.

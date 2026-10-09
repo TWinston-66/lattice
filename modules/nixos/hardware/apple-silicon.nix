@@ -64,7 +64,7 @@ in
     boot.loader.systemd-boot = {
       enable = true;
       # The ESP the Asahi installer makes is only ~500MB, and it also holds m1n1 and the
-      # firmware, so fewer kernels fit than on the Dell.
+      # firmware, so few kernels fit.
       configurationLimit = 3;
     };
 
@@ -122,10 +122,10 @@ in
       }
     ];
 
-    # The night-light default of 4000K, which is plainly warm on the Dell's sRGB panel,
-    # barely registers on this one -- it is wide-gamut and far brighter, so the same
-    # transform is a much smaller share of what the panel can show. 2800K puts the shift
-    # back where the Dell has it.
+    # The night-light default of 4000K, which is plainly warm on an sRGB panel, barely
+    # registers on these -- they are wide-gamut and far brighter, so the same transform is a
+    # much smaller share of what the panel can show. 2800K puts the shift back where an
+    # ordinary laptop has it.
     lattice.display.sunsetTemperature = 2800;
 
     # Firefox's 80% default zoom (below), for the pages lattice opens in Chromium.
@@ -147,10 +147,8 @@ in
     #     here -- it is Settings > General > Zoom if the profile is ever rebuilt.
     #   - chrome: compact uidensity, plus the stylesheet below for what compact leaves alone.
     #
-    # The Dell still pins 1.1, against its scale 1.5. One panel, so the ratio cannot drift there,
-    # but it would break in exactly this way the first time that machine is docked. Status
-    # "default" rather than the module's "locked", there and here, so the numbers stay
-    # adjustable from about:config.
+    # Status "default" rather than the module's "locked", so the numbers stay adjustable from
+    # about:config.
     programs = {
       firefox = {
         preferences = {
@@ -461,7 +459,7 @@ in
     };
 
     ### POWER ###
-    # tuned rather than power-profiles-daemon, which the laptop profile enables for the Dell.
+    # tuned rather than power-profiles-daemon, which the laptop profile enables by default.
     # PPD has no generic cpufreq driver: it drives intel_pstate, amd-pstate or an ACPI
     # platform_profile, and Apple Silicon offers none of the three. So it fell back to its
     # `placeholder` driver, which advertises exactly power-saver and balanced -- no

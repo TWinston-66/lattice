@@ -189,10 +189,8 @@ in
     flash
     flashItem
 
-    # Tor Browser used to sit here, on the Dell alone. It is dropped rather than gated:
-    # the Tor Project ships no ARM Linux build (only tor-browser-linux-x86_64), and
-    # Mullvad Browser is x86-only for the same reason, so there is nothing to make the
-    # two hosts agree on. `nix run nixpkgs#tor-browser` on the Dell for the rare need.
+    # No Tor Browser: the Tor Project ships no ARM Linux build (only
+    # tor-browser-linux-x86_64), and Mullvad Browser is x86-only for the same reason.
   ];
 
   programs = {
@@ -229,8 +227,7 @@ in
     # speed knob, and pointer travel is proportional to hand travel so it means one thing.
     #
     # DPI is volatile: the mouse forgets it whenever it power-cycles or the Bluetooth link
-    # drops, which on the Dell includes every hibernate -- see the btintel_pcie unload
-    # in hosts/dell. The CLI alone would hold only until the next reconnect; the
+    # drops. The CLI alone would hold only until the next reconnect; the
     # user service is what makes it stick, reapplying ~/.config/solaar/config.yaml each
     # time the device comes back. It runs with no window and no tray icon at all -- see
     # the note on the package override below.

@@ -551,8 +551,8 @@ let
 
       # Draw, in milliwatts, from whichever of three sources this machine has. macsmc's "Total
       # System Power" is the whole-package figure and the reason this row is worth graphing at
-      # all: it is the number a power profile is actually chosen for. The other two are what the
-      # Dell has instead, and neither has been run there yet.
+      # all: it is the number a power profile is actually chosen for. The other two are
+      # fallbacks for other hardware, and are untested.
       power_mw=-1
       energy_uj=-1
       power_src=""
@@ -823,7 +823,7 @@ let
       ### RENDER ###
 
       # The active profile, off the same interface the deck's key reads: net.hadess.PowerProfiles,
-      # which power-profiles-daemon serves on the Dell and tuned-ppd on this Mac, so neither end
+      # which power-profiles-daemon and tuned-ppd both serve, so neither end
       # has to know which daemon is behind it. GetAll rather than the one property, for the same
       # single busctl: it also carries PerformanceDegraded and the holds apps have placed. Trims
       # rather than jq take the reply apart -- this runs every two seconds, and the busctl is

@@ -445,12 +445,6 @@ in
           }
         ];
       };
-      deploy = {
-        exec = "${flake}/scripts/deploy.sh";
-        args = "[host] [address]";
-        summary = "Build and switch another host over SSH";
-        group = "system";
-      };
       update = {
         exec = "${flake}/scripts/update.sh";
         args = "[input...]";

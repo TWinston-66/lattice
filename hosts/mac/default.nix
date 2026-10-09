@@ -67,8 +67,9 @@ _: {
   };
 
   # The Samsung on the desk. Pinned per-host rather than left to the desc-keyed rule in
-  # ~/.dotfiles, so it can be tuned against this laptop without dragging the Dell along --
-  # it happens to agree with that rule's 1.5 today, which is why the value looks redundant.
+  # ~/.dotfiles, so it can be tuned against this laptop without dragging other machines
+  # along -- it happens to agree with that rule's 1.5 today, which is why the value looks
+  # redundant.
   #
   # Set by eye, and the first attempt at setting it by arithmetic is worth recording as a
   # dead end. Matching the panel above on *logical dpi* -- 3840x2160 across 700x390mm is

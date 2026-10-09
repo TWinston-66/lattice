@@ -951,8 +951,8 @@ let
       }
 
       # The bar's power-profile bubble reads net.hadess.PowerProfiles, and so does this:
-      # that is the interface both power-profiles-daemon (the Dell's) and tuned-ppd (this
-      # Mac's, see hosts/mac/default.nix) serve, so neither end has to know which daemon is
+      # that is the interface both power-profiles-daemon and tuned-ppd (see
+      # modules/nixos/hardware/apple-silicon.nix) serve, so neither end has to know which daemon is
       # behind it. busctl rather than powerprofilesctl, which belongs to one of the two.
       profile_now() {
         busctl --json=short get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles \
