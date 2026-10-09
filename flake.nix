@@ -55,6 +55,14 @@
         ];
       };
 
+      # A clean install with nothing personal in it; see hosts/macbook.
+      nixosConfigurations.macbook = nixpkgs.lib.nixosSystem {
+        specialArgs = { inherit inputs; };
+        modules = [
+          ./hosts/macbook
+        ];
+      };
+
       # Tools for scripts/, pinned by flake.lock. The scripts enter it themselves.
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShellNoCC {

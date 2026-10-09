@@ -8,11 +8,15 @@ enter_dev_shell scripts/rebuild.sh "$@"
 host="${1:-$(hostname)}"
 host="${host#lattice-}"
 
-key=/etc/ssh/ssh_host_ed25519_key
-if [[ ! -f "$key" ]]; then
-    sudo ssh-keygen -q -t ed25519 -N "" -f "$key"
+# Only a host that reads its password from sops can be locked out by it; a plain install
+# sets its password with passwd and has no secrets to decrypt.
+if [[ -n "$(nix eval --raw ".#nixosConfigurations.$host.options" --apply 'o: if o ? sops then "1" else ""')" ]]; then
+    key=/etc/ssh/ssh_host_ed25519_key
+    if [[ ! -f "$key" ]]; then
+        sudo ssh-keygen -q -t ed25519 -N "" -f "$key"
+    fi
+    require_recipient "$host" "$(cat "$key.pub")"
 fi
-require_recipient "$host" "$(cat "$key.pub")"
 
 # A switch writes this session's user units but does not start or restart them: systemd
 # manages the system manager's own units and leaves the user manager's to the next login. So
