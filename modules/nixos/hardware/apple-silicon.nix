@@ -24,7 +24,7 @@ in
   imports = [ inputs.apple-silicon.nixosModules.apple-silicon-support ];
 
   options.lattice.asahi.firmwareHash = lib.mkOption {
-    type = lib.types.str;
+    type = lib.types.nullOr lib.types.str;
     example = "sha256-wETBAOJSRK5XrfeTa+vqluv3M1RxIQdGpB+6zW+2mYw=";
     description = ''
       The Asahi installer leaves the Wi-Fi, Bluetooth and camera firmware on the ESP. It is
@@ -53,12 +53,16 @@ in
   config = {
     hardware.asahi = {
       enable = true;
+      extractPeripheralFirmware = config.lattice.asahi.firmwareHash != null;
+      # Under mkIf so that a null hash never reaches fetchTree: even a definition another
+      # module overrides gets evaluated, to read its priority.
       peripheralFirmwareDirectory =
-        (builtins.fetchTree {
-          type = "path";
-          path = "/var/lib/lattice/vendorfw";
-          narHash = config.lattice.asahi.firmwareHash;
-        }).outPath;
+        lib.mkIf (config.lattice.asahi.firmwareHash != null)
+          (builtins.fetchTree {
+            type = "path";
+            path = "/var/lib/lattice/vendorfw";
+            narHash = config.lattice.asahi.firmwareHash;
+          }).outPath;
     };
 
     boot.loader.systemd-boot = {

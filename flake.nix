@@ -56,6 +56,15 @@
         ];
       };
 
+      # Both hosts as CI sees them. The Apple firmware only exists on a Mac that ran the
+      # Asahi installer, so it is left out; everything else is the host as it ships.
+      ci = nixpkgs.lib.mapAttrs (
+        _: host:
+        host.extendModules {
+          modules = [ ({ lib, ... }: { lattice.asahi.firmwareHash = lib.mkForce null; }) ];
+        }
+      ) inputs.self.nixosConfigurations;
+
       # Tools for scripts/, pinned by flake.lock. The scripts enter it themselves.
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShellNoCC {
