@@ -1,9 +1,13 @@
 name: ci
 
+# Prose-only changes skip it. The guides page builds docs/*.md, but cmark takes any text;
+# a new guide also touches guides.nix, which still runs the check.
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "**.md"]
   pull_request:
+    paths-ignore: ["docs/**", "**.md"]
   workflow_dispatch:
 
 # A newer push to the same branch makes the running check moot.
