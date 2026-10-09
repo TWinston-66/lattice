@@ -151,7 +151,7 @@ let
 
     human() { numfmt --to=iec --suffix=B --format=%.1f "$1"; }
 
-    signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
+    signal() { pkill -RTMIN+${toString barSignal} waybar || true; }
   '';
 
   # Root's way onto winston's screen: a transient unit in the user manager, which already

@@ -14,6 +14,10 @@ let
   # The real-time signal each script sends waybar to re-run its pill at once, and the one
   # the pill listens for: SIGRTMIN+n. Shared from here so the two can't drift apart.
   # Other modules hold the rest (waybar.nix asserts no two pills share one).
+  #
+  # Every script sends it with `pkill -RTMIN+n waybar` and never `-x`: the process is
+  # nixpkgs' wrapper's .waybar-wrapped, so an exact match finds nothing and the signal is
+  # silently lost -- six pills refreshed only on their intervals that way.
   signal = {
     tailscale = 2;
     weather = 3;
@@ -1470,7 +1474,7 @@ let
         else
           printf '%s\n' "''${out:-timed out}" | tail -n 1 >"$failure"
         fi
-        pkill -RTMIN+${toString signal.vault} -x waybar || true
+        pkill -RTMIN+${toString signal.vault} waybar || true
       }
 
       status() {

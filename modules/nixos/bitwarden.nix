@@ -97,7 +97,7 @@ let
         else
           hyprctl dispatch 'hl.dsp.workspace.toggle_special("bitwarden")' >/dev/null
         fi
-        pkill -RTMIN+${toString barSignal} -x waybar || true
+        pkill -RTMIN+${toString barSignal} waybar || true
       }
 
       case ''${1:-status} in

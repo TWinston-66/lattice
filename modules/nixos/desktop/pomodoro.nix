@@ -38,7 +38,7 @@ let
       state=$dir/state
       timer=lattice-pomodoro-next
 
-      signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
+      signal() { pkill -RTMIN+${toString barSignal} waybar || true; }
       now() { printf '%(%s)T' -1; }
 
       load() {

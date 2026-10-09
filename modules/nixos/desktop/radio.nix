@@ -65,7 +65,7 @@ let
       sock=$run/mpv.sock
       unit=lattice-radio.service
 
-      signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
+      signal() { pkill -RTMIN+${toString barSignal} waybar || true; }
 
       # channels.tsv: id, title, description, genre, stream, logo URL -- most listeners
       # first. The stream is the 128k AAC playlist; every channel has one (2026-10-08).

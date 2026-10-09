@@ -120,7 +120,7 @@ let
       vault=${lib.escapeShellArg cfg.highlightsDir}
       state=''${XDG_STATE_HOME:-$HOME/.local/state}/lattice/books
 
-      signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
+      signal() { pkill -RTMIN+${toString barSignal} waybar || true; }
 
       # Every banner from here replaces the last one, so a sync reads as one banner that
       # changes rather than a stack.

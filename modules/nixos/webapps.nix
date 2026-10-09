@@ -186,8 +186,10 @@ let
       # Firefox keeps the registry in memory and rewrites the whole file on exit, so a
       # merge landed underneath a running browser is simply discarded. Skipping is right
       # rather than fatal: the unit runs at every session start, and by the next one the
-      # browser will have been closed at least once.
-      if pgrep -x firefox >/dev/null 2>&1; then
+      # browser will have been closed at least once. Not `pgrep -x`: the process is the
+      # nixpkgs wrapper's .firefox-wrapped (cut to .firefox-wrappe), which an exact
+      # "firefox" never matches, so the guard never fired.
+      if pgrep -u "$(id -u)" firefox >/dev/null 2>&1; then
         echo "firefox is running; leaving the Taskbar Tabs registry alone"
         exit 0
       fi
