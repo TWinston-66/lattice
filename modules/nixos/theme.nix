@@ -635,7 +635,7 @@ let
           ) t.ansi
         );
 
-      # nvim, read and watched by ~/.dotfiles nvim theme.lua: the upstream colorscheme, with
+      # nvim, for an nvim config to read and watch (the author's dotfiles have a theme.lua): the upstream colorscheme, with
       # whatever vim.g settings it takes. Every flavour gets its own theme's plugin rather
       # than its palette poured into Catppuccin's highlight groups.
       "theme-nvim.lua" =
@@ -711,7 +711,7 @@ let
         @define-color scrollbar_outline_color rgba(0, 0, 0, 0.5);
       '';
 
-      # fzf, through FZF_DEFAULT_OPTS_FILE (~/.dotfiles .zshrc), which fzf reads on every run.
+      # fzf, through FZF_DEFAULT_OPTS_FILE (set it in your .zshrc), which fzf reads on every run.
       "theme.fzf" = ''
         --color=bg+:${palette.surface0},bg:${palette.base},spinner:${palette.rosewater},hl:${palette.red}
         --color=fg:${palette.text},header:${palette.red},info:${palette.mauve},pointer:${palette.rosewater}
@@ -752,7 +752,7 @@ let
         --theme="${flavor.bat}"
       '';
 
-      # delta, through an [include] at the end of ~/.dotfiles .gitconfig, read on every run.
+      # delta, through an [include] at the end of your .gitconfig, read on every run.
       # The diff backgrounds are the palette's red and green sunk into base, by the same
       # amounts Catppuccin's own delta theme uses.
       "theme.gitconfig" = ''
@@ -1002,7 +1002,7 @@ in
             nvim = {
               colorscheme = lib.mkOption {
                 type = lib.types.str;
-                description = "The upstream nvim colorscheme, plugin installed in ~/.dotfiles.";
+                description = "The upstream nvim colorscheme; the nvim config installs the plugin.";
               };
               globals = lib.mkOption {
                 type = lib.types.attrsOf lib.types.str;
@@ -1513,7 +1513,7 @@ in
       }
     ];
 
-    # Imported by the matching config in ~/.dotfiles, which keeps the layout. Each file
+    # Imported by the matching config in desktop/configs, which keeps the layout. Each file
     # defines the full palette, because a name a config references but a file never defines
     # fails silently in GTK CSS and renders as a transparent or default colour.
     #
@@ -1553,7 +1553,7 @@ in
 
       # mako ini: include=/etc/xdg/mako/lattice
       # Colours only, including the per-urgency borders; geometry, fonts and timeouts
-      # stay in ~/.dotfiles. Criteria here merge with the same criteria there. With a
+      # stay in desktop/configs/mako. Criteria here merge with the same criteria there. With a
       # runtime theme this is nothing but the include: that file always exists and carries
       # its own urgency sections, which a build-time copy after it would override.
       "xdg/mako/lattice".text =

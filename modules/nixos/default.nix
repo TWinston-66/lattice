@@ -4,7 +4,7 @@
 {
   imports = [
     ./base.nix
-    ./dotfiles.nix
+    ./devtools.nix
     ./storage.nix
     ./virtualisation.nix
     ./hardware/apple-silicon.nix

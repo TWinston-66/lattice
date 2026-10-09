@@ -232,8 +232,8 @@ in
     # time the device comes back. It runs with no window and no tray icon at all -- see
     # the note on the package override below.
     #
-    # That config.yaml is a symlink into the dotfiles repo (the solaar stow package), so
-    # the DPI is shared rather than re-set per machine. Solaar rewrites it with a plain
+    # That config.yaml can be a symlink into a dotfiles repo (the author's is), so the DPI
+    # is shared rather than re-set per machine. Solaar rewrites it with a plain
     # open(path, "w"), which writes through the symlink instead of replacing it.
     #
     # enable also turns on hardware.logitech.wireless, which is what installs the udev

@@ -8,7 +8,7 @@ in the modules it imports.
 | Path | What it holds |
 | --- | --- |
 | `hosts/<host>/` | Per-host config and its generated `hardware-configuration.nix` |
-| `modules/nixos/` | The distro: the core, branding, theme, artwork, Plymouth, display, Stream Deck, Home Assistant, web apps, dotfiles. `default.nix` imports all of it |
+| `modules/nixos/` | The distro: the core, branding, theme, artwork, Plymouth, display, Stream Deck, Home Assistant, web apps, the shell and dev tools. `default.nix` imports all of it |
 | `modules/nixos/hardware/` | Apple Silicon: Asahi, video decode, the carried DRM patch, trackpad, suspend, power, charge limit |
 | `modules/personal/` | The author's own setup on top: account, sops secrets, house and homelab. Only `hosts/mac` imports it |
 | `modules/nixos/desktop/` | The desktop by surface: session, apps, theming, bar, menus, notifications, lock, screenshot, greeter, plus the patches they carry |
@@ -65,8 +65,11 @@ it:
 The keybinding cheatsheet takes extra rows the same way: `lattice.keys.extras` for the
 host, `~/.config/lattice/keys.tsv` for you.
 
-Personal tools like Neovim and zsh live in
-[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles).
+The shell and the editors are installed but not configured: zsh, Neovim, git and the rest
+read your own files. The author's live in
+[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles). `lattice doctor`
+expects anything that runs at login (shell rc files, `~/.config/hypr/local.lua`) to be a
+symlink into a git repo, so a change you didn't make shows up as uncommitted there.
 
 ## Adding a command
 

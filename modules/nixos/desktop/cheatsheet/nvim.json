@@ -590,7 +590,7 @@
     {"keys": ["<leader>ud"], "desc": "Diagnostics on / off", "src": "live"},
     {"keys": ["<leader>uh"], "desc": "Inlay hints on / off", "src": "live"},
     {"keys": ["<leader>uz", "z="], "desc": "Spelling suggestions for the word under the cursor", "ess": true, "src": "live"},
-    {"keys": ["zg"], "desc": "Add the word to your dictionary (saved in the dotfiles repo)", "ess": true},
+    {"keys": ["zg"], "desc": "Add the word to your spellfile", "ess": true},
     {"keys": ["zug"], "desc": "Undo that add"},
     {"keys": ["]s", "[s"], "desc": "Next / previous misspelling"}
    ]

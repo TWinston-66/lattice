@@ -329,7 +329,7 @@ let
     }
   '';
 
-  # Switching between them, for a bind in ~/.dotfiles and for the login pick below.
+  # Switching between them, for a bind in hyprland.lua and for the login pick below.
   # hyprpaper 0.8 loads an image when it is asked for -- `preload` is gone -- so the pool
   # only has to exist in the store. hyprpaper can also rotate a directory by itself, with
   # `timeout` and `order` in the wallpaper block further down; this stays a command so that
