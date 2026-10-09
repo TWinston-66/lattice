@@ -103,6 +103,24 @@
     '';
   };
 
+  # Lets the bar's Tailscale pill run `tailscale up`/`down` without sudo.
+  systemd.services.tailscale-operator = lib.mkIf config.services.tailscale.enable {
+    description = "Allow the lattice user to operate tailscaled without sudo";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "tailscaled.service" ];
+    wants = [ "tailscaled.service" ];
+    # A pill that refuses to toggle is the symptom, and it points at the bar rather than
+    # here. At boot there is no session to notify and only the journal line lands; the
+    # failure this actually catches is the one during a `nixos-rebuild switch`, which is
+    # when the ExecStart changes and so when it is most likely to break.
+    onFailure = [ "lattice-notify-failure@%n.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.tailscale}/bin/tailscale set --operator=${config.lattice.user.name}";
+    };
+  };
+
   ### TIME/LOCALE ###
   i18n.defaultLocale = "en_US.UTF-8";
 

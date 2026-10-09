@@ -4,7 +4,9 @@
 {
   imports = [
     inputs.sops-nix.nixosModules.sops
+    ./airplay.nix
     ./books.nix
+    ./mozilla.nix
   ];
 
   ### ACCOUNT ###
@@ -34,6 +36,8 @@
   # The Bitwarden copy of this is the one that matters when the host is gone, since its host
   # key went with it.
   lattice.backup.passwordFile = config.sops.secrets.restic-password.path;
+
+  services.tailscale.enable = true;
 
   time.timeZone = "America/Denver";
 
