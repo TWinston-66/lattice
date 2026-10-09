@@ -145,7 +145,8 @@ in
     #   - content: default zoom 80%. Gecko keeps this per profile in content-prefs.sqlite as
     #     browser.content.full-zoom and exposes no pref for it, so it cannot be set from
     #     here -- it is Settings > General > Zoom if the profile is ever rebuilt.
-    #   - chrome: compact uidensity, plus the stylesheet below for what compact leaves alone.
+    #   - chrome: compact uidensity, plus the stylesheet in desktop/mozilla.nix for what
+    #     compact leaves alone.
     #
     # Status "default" rather than the module's "locked", so the numbers stay adjustable from
     # about:config.
@@ -200,7 +201,7 @@ in
       # allowlist: Firefox's carries that exact pref name as a special case, while
       # Thunderbird's has only prefix entries and no `toolkit.` among them. A pref that fails
       # the filter is dropped with a console message and nothing else -- no build error, no
-      # about:config entry -- so it has to be set from the profile's user.js instead, below.
+      # about:config entry -- so it is set in the wrapper's autoconfig (desktop/mozilla.nix).
       thunderbird = {
         preferences = {
           "layout.css.devPixelsPerPx" = "-1";
