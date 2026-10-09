@@ -104,8 +104,6 @@ let
     "/home/*/.cargo/git"
     "/home/*/.npm"
     "/home/*/go/pkg/mod"
-    # Stremio's torrent piece cache, up to 2 GiB. Its settings beside it are kept.
-    "/home/*/.stremio-server/stremio-cache"
   ];
 
   excludeFile = pkgs.writeText "lattice-backup-exclude" (

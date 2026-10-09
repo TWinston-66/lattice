@@ -55,27 +55,6 @@ let
     '';
   };
 
-  # Stremio's streaming server (server.js) looks for ffmpeg and ffprobe in Debian/Flatpak
-  # paths, finds neither, and spawns `undefined` for every probe: a TypeError per stream
-  # in the log, and no HLS transcoding for codecs the player can't take or for casting.
-  # The nixpkgs package only wraps node in. Playback itself is libmpv, which already
-  # decodes on the Mac's AVD through libva-v4l2-request (HEVC seen 2026-10-07).
-  stremio = pkgs.symlinkJoin {
-    name = "stremio-${pkgs.stremio-linux-shell.version}";
-    paths = [ pkgs.stremio-linux-shell ];
-    nativeBuildInputs = [ pkgs.makeWrapper ];
-    postBuild = ''
-      wrapProgram $out/bin/stremio \
-        --set FFMPEG_BIN ${lib.getExe' pkgs.ffmpeg "ffmpeg"} \
-        --set FFPROBE_BIN ${lib.getExe' pkgs.ffmpeg "ffprobe"}
-      # The D-Bus activation file names the unwrapped binary by store path.
-      svc=share/dbus-1/services/com.stremio.Stremio.service
-      sed "s|${pkgs.stremio-linux-shell}/bin/stremio|$out/bin/stremio|" \
-        "$(readlink -f $out/$svc)" > $out/$svc.new
-      rm $out/$svc && mv $out/$svc.new $out/$svc
-    '';
-  };
-
   # caligula ships no desktop entry, and `caligula burn` won't start without an image, so
   # the launcher row is a foot window that picks one first: disk images under ~, newest
   # first, in fzf. Escape closes the window. caligula finds the removable disks and asks
@@ -183,7 +162,6 @@ in
     # (nvme0n2/n3) have neither, so the refresh thread panics. caligula walks the
     # removable disks itself and does a hash check and readback verify as well.
     vesktop # the wrapped one from the let above
-    stremio # likewise
     cryptomator-cli
     caligula
     flash
