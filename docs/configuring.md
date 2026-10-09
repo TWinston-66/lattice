@@ -65,9 +65,13 @@ it:
 The keybinding cheatsheet takes extra rows the same way: `lattice.keys.extras` for the
 host, `~/.config/lattice/keys.tsv` for you.
 
-The shell and the editors are installed but not configured: zsh, Neovim, git and the rest
-read your own files. The author's live in
-[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles). `lattice doctor`
+zsh comes set up from `/etc/zshrc`: a starship prompt, completion, fzf, zoxide,
+autosuggestions and syntax highlighting, all in the theme's colours, and a notification
+when a command that took 5 seconds or more finishes. Your `~/.zshrc` runs after it, for
+aliases and the like, and can test `$LATTICE_SHELL` if it is shared with another OS. A
+`~/.config/starship.toml` of your own replaces the prompt's layout and keeps the theme's
+colours. Neovim, git and the other tools are installed but not configured. The author's
+own configs live in [a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles). `lattice doctor`
 expects anything that runs at login (shell rc files, `~/.config/hypr/local.lua`) to be a
 symlink into a git repo, so a change you didn't make shows up as uncommitted there.
 

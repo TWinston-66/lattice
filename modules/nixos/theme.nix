@@ -711,7 +711,7 @@ let
         @define-color scrollbar_outline_color rgba(0, 0, 0, 0.5);
       '';
 
-      # fzf, through FZF_DEFAULT_OPTS_FILE (set it in your .zshrc), which fzf reads on every run.
+      # fzf, through FZF_DEFAULT_OPTS_FILE (/etc/zshrc), which fzf reads on every run.
       "theme.fzf" = ''
         --color=bg+:${palette.surface0},bg:${palette.base},spinner:${palette.rosewater},hl:${palette.red}
         --color=fg:${palette.text},header:${palette.red},info:${palette.mauve},pointer:${palette.rosewater}
@@ -720,7 +720,7 @@ let
         --color=border:${palette.overlay0},label:${palette.text}
       '';
 
-      # zsh-syntax-highlighting, which .zshrc re-sources at the prompt whenever this changes.
+      # zsh-syntax-highlighting, which /etc/zshrc re-sources at the prompt whenever this changes.
       "theme.zsh" = ''
         ZSH_HIGHLIGHT_STYLES[default]='fg=${palette.text}'
         ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=${palette.red},bold'
@@ -739,7 +739,7 @@ let
       '';
 
       # starship has no include, so lattice-palette splices this into a copy of
-      # ~/.config/starship.toml (starship.toml here), which .zshrc points STARSHIP_CONFIG at.
+      # ~/.config/starship.toml (starship.toml here), which /etc/zshrc points STARSHIP_CONFIG at.
       # starship reads its config at every prompt.
       "starship-palette.toml" = ''
 
@@ -845,7 +845,7 @@ let
         disabled_colors=#ff${bare palette.overlay0}, #ff${bare palette.surface0}, #ff${bare palette.surface1}, #ff${bare palette.surface0}, #ff${bare palette.crust}, #ff${bare palette.mantle}, #ff${bare palette.overlay0}, #ff${bare palette.text}, #ff${bare palette.overlay0}, #ff${bare palette.base}, #ff${bare palette.mantle}, #ff${bare palette.crust}, #ff${bare palette.mantle}, #ff${bare palette.overlay0}, #ff${bare palette.subtext0}, #ff${bare palette.subtext1}, #ff${bare palette.mantle}, #ffffffff, #ff${bare palette.base}, #ff${bare palette.text}, #80${bare palette.overlay0}, #ff${bare palette.mantle}
       '';
 
-      # btop, at launch: .zshrc runs it with --themes-dir pointed here, which wins over
+      # btop, at launch: /etc/zshrc runs it with --themes-dir pointed here, which wins over
       # ~/.config/btop/themes, and btop.conf names catppuccin_mocha -- hence the file name.
       "catppuccin_mocha.theme" = ''
         theme[main_bg]="#${bare palette.base}"

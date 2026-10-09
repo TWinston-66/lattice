@@ -195,18 +195,18 @@ let
         place "$file"
       done
 
-      # starship has no include, so its config is ~/.config/starship.toml with the palette
-      # line pointed at the kit's [palettes.lattice] and that table appended; .zshrc points
-      # STARSHIP_CONFIG here. Rebuilt on every write, so an edit to the dotfile lands at the
-      # next wallpaper pick, theme switch or login. Skipped where there is no such file --
-      # the build's seed, which has no home to read it from.
-      if [[ -r $HOME/.config/starship.toml ]]; then
-        {
-          sed 's/^palette = .*/palette = "lattice"/' "$HOME/.config/starship.toml"
-          cat "$dir/starship-palette.toml"
-        } >"$dir/.starship.toml.tmp"
-        place starship.toml
-      fi
+      # starship has no include, so its config is ~/.config/starship.toml, or lattice's
+      # (configs/starship.toml) when there is none, with the palette line pointed at the
+      # kit's [palettes.lattice] and that table appended; /etc/zshrc points STARSHIP_CONFIG
+      # here. Rebuilt on every write, so an edit to the file lands at the next wallpaper
+      # pick, theme switch or login. The build's seed has no home and gets lattice's.
+      starship=$HOME/.config/starship.toml
+      [[ -r $starship ]] || starship=${./configs/starship.toml}
+      {
+        sed 's/^palette = .*/palette = "lattice"/' "$starship"
+        cat "$dir/starship-palette.toml"
+      } >"$dir/.starship.toml.tmp"
+      place starship.toml
 
       # The greeter's copy, for the next boot's login screen (see greeterThemeDir in
       # greeter.nix). Before the reload check, because the login pick is --write-only and is

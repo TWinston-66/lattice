@@ -1,6 +1,7 @@
-# The shell and the developer tools: zsh as the login shell with its plugins, the command
-# line tools, neovim and Zed with their language servers, nix-ld and the `fhs` sandbox.
-# Their configs are the user's own (a dotfiles repo, say); lattice installs the programs.
+# The shell and the developer tools: zsh as the login shell, set up in /etc/zshrc
+# (zshrc.zsh), the command line tools, neovim and Zed with their language servers, nix-ld
+# and the `fhs` sandbox. Beyond the shell, their configs are the user's own (a dotfiles
+# repo, say); lattice installs the programs.
 {
   config,
   lib,
@@ -114,8 +115,28 @@ in
   programs = {
     zsh = {
       enable = true;
-      enableGlobalCompInit = false;
+      # zshrc.zsh: the theme, starship, fzf, zoxide, the plugins and the finished-command
+      # notification, ahead of ~/.zshrc. After NixOS's own lines, so the notification's
+      # precmd hook lands ahead of direnv's and sees the command's exit status. starship is
+      # the prompt, so NixOS's is left out.
+      interactiveShellInit = lib.mkAfter (
+        lib.replaceStrings
+          [ "@autosuggestions@" "@syntaxHighlighting@" ]
+          [ "${pkgs.zsh-autosuggestions}" "${pkgs.zsh-syntax-highlighting}" ]
+          (builtins.readFile ./zshrc.zsh)
+      );
       promptInit = "";
+      histSize = 50000;
+      setOptions = [
+        "HIST_IGNORE_DUPS"
+        "HIST_IGNORE_SPACE"
+        "SHARE_HISTORY"
+        "HIST_FCNTL_LOCK"
+      ];
+      # With no ~/.zshrc, zsh would start its new-user wizard; /etc/zshrc already sets the
+      # shell up, so a user who never writes one gets a working shell instead. The newuser
+      # script calls this function if it is defined, and /etc/zshenv runs just before it.
+      shellInit = "zsh-newuser-install() { :; }";
     };
     # Graphical hosts hand this to Bitwarden's agent instead (bitwarden.nix).
     ssh.startAgent = lib.mkDefault true;
