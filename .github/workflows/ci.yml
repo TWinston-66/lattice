@@ -25,6 +25,8 @@ jobs:
 
   # Both hosts are aarch64-linux, so the arm runner builds them natively.
   build:
+    # A format failure fails the run anyway; no point spending half an hour building first.
+    needs: format
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:

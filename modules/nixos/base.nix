@@ -21,6 +21,13 @@
       "nix-command"
       "flakes"
     ];
+    # What CI builds lands here (.github/workflows/ci.yml), so a rebuild after a green run
+    # fetches the lattice packages and overrides instead of compiling them. cache.nixos.org
+    # stays first; NixOS appends it after these.
+    settings.substituters = [ "https://lattice.cachix.org" ];
+    settings.trusted-public-keys = [
+      "lattice.cachix.org-1:A37f+od4LYzAZVpYIpWKJBNFT9wG1N0HRubFlgbm8SY="
+    ];
     optimise.automatic = true;
 
     channel.enable = false;
