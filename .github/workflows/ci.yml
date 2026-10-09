@@ -1,16 +1,15 @@
 name: ci
 
-# Prose-only changes skip it. The guides page builds docs/*.md, but cmark takes any text;
-# a new guide also touches guides.nix, which still runs the check.
+# Work lands on main through pull requests, so they are what gets checked; a push to main
+# would only repeat the check its PR already ran. Prose-only changes skip it. The guides page
+# builds docs/*.md, but cmark takes any text; a new guide also touches guides.nix, which
+# still runs the check.
 on:
-  push:
-    branches: [main]
-    paths-ignore: ["docs/**", "**.md"]
   pull_request:
     paths-ignore: ["docs/**", "**.md"]
   workflow_dispatch:
 
-# A newer push to the same branch makes the running check moot.
+# A newer push to the same PR makes the running check moot.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
