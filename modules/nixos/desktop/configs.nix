@@ -84,9 +84,10 @@ in
     map (path: "L ${home}/.config/${path} - - - - /etc/xdg/${path}") homeOnly
     # btop has no system config and rewrites its own on exit, so it is seeded instead,
     # once: a copy only where there is none, naming the theme /etc/zshrc's btop alias
-    # serves from ~/.cache/lattice. btop fills in every other key with its defaults.
+    # serves from ~/.cache/lattice. btop fills in every other key with its defaults. No
+    # `d` for the directory: `C` makes missing parents itself, and a `d` errors at every
+    # login when ~/.config/btop is a symlink into a dotfiles repo.
     ++ [
-      "d ${home}/.config/btop 0755 - - -"
       "C ${home}/.config/btop/btop.conf - - - - ${pkgs.writeText "btop.conf" ''
         color_theme = "catppuccin_mocha"
       ''}"

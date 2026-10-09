@@ -72,9 +72,19 @@ let
       show_power = true;
       show_caps_lock = true;
     };
+    # Only the uwsm session is offered. Hyprland also installs a plain hyprland.desktop,
+    # and a login through it starts the compositor with no graphical-session.target, so
+    # nothing the desktop runs as a user service -- the bar, the wallpaper, the idle and
+    # lock daemons -- ever starts. Two logins on 2026-10-08 came up that way, with no bar or
+    # wallpaper, and read as a broken desktop.
     session = {
       command = "uwsm start -e -D Hyprland hyprland.desktop";
-      sessions_dirs = [ "${config.services.displayManager.sessionData.desktops}/share/wayland-sessions" ];
+      sessions_dirs = [
+        "${pkgs.runCommand "lattice-wayland-sessions" { } ''
+          mkdir -p $out
+          ln -s ${config.programs.hyprland.package}/share/wayland-sessions/hyprland-uwsm.desktop $out/
+        ''}"
+      ];
     };
     remember.username = true;
     # hyprlock's dots.
