@@ -24,6 +24,7 @@ in
     ../../modules/nixos/dotfiles.nix
     ../../modules/nixos/profiles/laptop.nix
     ../../modules/nixos/profiles/graphical.nix
+    ../../modules/personal
   ];
 
   networking.hostName = "lattice-mac";

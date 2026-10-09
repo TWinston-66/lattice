@@ -7,7 +7,6 @@
 }:
 {
   imports = [
-    inputs.sops-nix.nixosModules.sops
     inputs.nix-index-database.nixosModules.nix-index
     ./branding.nix
     ./backup.nix
@@ -104,21 +103,7 @@
     '';
   };
 
-  ### SECRETS ###
-  services.openssh.hostKeys = [
-    {
-      type = "ed25519";
-      path = "/etc/ssh/ssh_host_ed25519_key";
-    }
-  ];
-  sops = {
-    defaultSopsFile = ../../secrets/common.yaml;
-    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-    secrets.winston-password.neededForUsers = true;
-  };
-
   ### TIME/LOCALE ###
-  time.timeZone = "America/Denver";
   i18n.defaultLocale = "en_US.UTF-8";
 
   ### PACKAGES ###

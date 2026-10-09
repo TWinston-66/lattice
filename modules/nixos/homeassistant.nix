@@ -7,16 +7,6 @@
 let
   cfg = config.lattice.homeassistant;
 
-  # An entity id, as one of the seven the Stream Deck's home page presses. The default is a
-  # guess at the usual naming and is meant to be corrected: `lattice-ha entities` prints
-  # what this instance actually calls things, and the id is the first column.
-  entity =
-    default: description:
-    lib.mkOption {
-      type = lib.types.str;
-      inherit default description;
-    };
-
   ha = pkgs.writeShellApplication {
     name = "lattice-ha";
     runtimeInputs = [
@@ -173,61 +163,32 @@ let
 in
 {
   options.lattice.homeassistant = {
+    enable = lib.mkEnableOption "the Home Assistant client: `lattice ha`, launcher rows and deck keys";
+
     url = lib.mkOption {
       type = lib.types.str;
-      default = "http://ha.home.lan:8123";
+      example = "http://homeassistant.local:8123";
       description = ''
-        Where Home Assistant answers, with no trailing slash. Plain HTTP on the LAN name
-        rather than a tailnet address: the deck's keys are pressed at the desk, and the
-        token that authenticates them never leaves the wire between here and the house.
+        Where Home Assistant answers, with no trailing slash. A LAN name rather than a
+        tailnet address is fine: the deck's keys are pressed at the desk, and the token that
+        authenticates them never leaves the wire between here and the house.
       '';
     };
 
     tokenFile = lib.mkOption {
       type = lib.types.path;
-      default = config.sops.secrets.ha-token.path;
       description = ''
-        A file holding one Home Assistant long-lived access token and nothing else. The
-        default is the sops secret this module declares, which has to exist in
-        secrets/common.yaml as `ha-token` before a rebuild will activate.
+        A file holding one Home Assistant long-lived access token and nothing else, readable
+        by the lattice user: `lattice-ha` runs as the session, from the deck and a shell.
 
         Mint one from the Security tab of your Home Assistant profile page -- the bottom of
-        `/profile/security` on the `url` above -- and paste it in with
-        `sops secrets/common.yaml`.
-        The token does not expire and is shown once, so it is worth naming it "lattice" at
-        the prompt to know which one to revoke later.
+        `/profile/security` on the `url` above. The token does not expire and is shown once,
+        so it is worth naming it "lattice" at the prompt to know which one to revoke later.
       '';
-    };
-
-    entities = {
-      # The two light groups rather than any of the bulbs inside them: `light.bedroom` is
-      # ceiling + lamp + hex panel, `light.bathroom_lights` is the four over the mirror. A
-      # group reports `on` when any member is, which is the reading the key wants -- one
-      # bulb left on is not a key that should be showing off.
-      bedroomLights = entity "light.bedroom" "The bedroom's lights, as a toggle key.";
-      bathroomLights = entity "light.bathroom_lights" "The bathroom's lights, as a toggle key.";
-
-      # The same physical fan is on the bus twice -- `fan.fan` and `switch.fan`, one device
-      # named Fan in the Bedroom area. The fan domain is the honest one of the two, and it
-      # is what a speed would hang off if this ever grows one; `switch.fan` is the outlet
-      # underneath it.
-      bedroomFan = entity "fan.fan" "The bedroom fan, as a toggle key.";
-
-      # All four are scenes today. They are pressed through `activate`, which reads the
-      # domain and picks the service -- so one that later becomes a script, or an
-      # automation, is a changed id here and nothing else.
-      bedTime = entity "scene.bed_time" "Bed time: the whole house, set for sleep.";
-      calm = entity "scene.calm_work" "Calm.";
-      focus = entity "scene.focus" "Focus.";
-      windDown = entity "scene.wind_down" "Wind down: the hour before bed time.";
     };
   };
 
-  config = {
-    # Owned by winston rather than root: lattice-ha runs as the session, both from the deck's
-    # user unit and from a shell. 0400 is sops-nix's default and is what is wanted.
-    sops.secrets.ha-token.owner = "winston";
-
+  config = lib.mkIf cfg.enable {
     # On the PATH rather than named by store path in the deck's button commands, which is
     # what lets lattice-deck call it and it call lattice-deck back without a cycle between
     # the two derivations. See sessionPath in modules/nixos/streamdeck.nix.

@@ -78,10 +78,9 @@ let
     dusk = "󰖚"; # md-weather_sunset
   };
 
-  # The seven entities the home page presses, by the names modules/nixos/homeassistant.nix
-  # gives them. Read through here rather than written out again, so correcting an id after
-  # `lattice-ha entities` is one edit in the module that owns it.
-  entities = config.lattice.homeassistant.entities;
+  # The house's keys, from lattice.streamdeck.homePage. Without any, the deck has no home
+  # page and its rail has two keys instead of three.
+  hasHome = cfg.homePage != [ ];
 
   # The one path in the repo that already knows where the repo is.
   flake = config.programs.nh.flake;
@@ -132,14 +131,15 @@ let
   pages = [
     "desktop"
     "media"
-    "home"
-  ];
+  ]
+  ++ lib.optional hasHome "home";
 
-  # The rail: three keys down the right-hand edge, the same on every page, each switching to
-  # one page and lit when that page is the one showing. Its art depends only on the key
-  # index -- which is what decides a key's slice of the deck-wide lattice -- so the six faces
-  # are shared across all three pages rather than drawn once per page.
-  railKeys = [
+  # The rail: a key per page down the right-hand edge, the same on every page, each
+  # switching to one page and lit when that page is the one showing. Its art depends only on
+  # the key index -- which is what decides a key's slice of the deck-wide lattice -- so the
+  # faces are shared across all the pages rather than drawn once per page. A slot with no
+  # page behind it is left as the lattice ground.
+  railSlots = [
     {
       index = 4;
       glyph = g.dashboard;
@@ -153,6 +153,8 @@ let
       glyph = g.home;
     }
   ];
+  railKeys = lib.take (lib.length pages) railSlots;
+  railGaps = map (rail: blank rail.index) (lib.drop (lib.length pages) railSlots);
 
   # A button: one key on one page, its faces, and the argv one press runs.
   #
@@ -593,72 +595,40 @@ let
       ];
     };
 
-  # Devices along the top, moods along the middle, and the bottom row left as the lattice
-  # ground for whatever the house grows next. Two rows rather than one long run, because the
-  # two halves are pressed for different reasons: the top three are switches that are on or
-  # off and say so, the four below are a whole room set at once and are over the moment they
-  # are pressed.
-  homePage = [
-    (haToggle {
-      index = 0;
-      name = "bedroom-lights";
-      entity = entities.bedroomLights;
-      label = "bedroom";
-      off = g.bulb;
-      on = g.bulbOn;
-    })
-    (haToggle {
-      index = 1;
-      name = "bathroom-lights";
-      entity = entities.bathroomLights;
-      label = "bathroom";
-      off = g.bulb;
-      on = g.bulbOn;
-    })
-    (haToggle {
-      index = 2;
-      name = "bedroom-fan";
-      entity = entities.bedroomFan;
-      label = "fan";
-      off = g.fan;
-      on = g.fanOn;
-    })
-    (blank 3)
-    (haScene {
-      index = 5;
-      name = "bed-time";
-      entity = entities.bedTime;
-      glyph = g.bed;
-      label = "bed time";
-    })
-    (haScene {
-      index = 6;
-      name = "calm";
-      entity = entities.calm;
-      glyph = g.meditation;
-      label = "calm";
-    })
-    (haScene {
-      index = 7;
-      name = "focus";
-      entity = entities.focus;
-      glyph = g.target;
-      label = "focus";
-    })
-    (haScene {
-      index = 8;
-      name = "wind-down";
-      entity = entities.windDown;
-      glyph = g.dusk;
-      label = "wind down";
-    })
-  ]
-  ++ map blank [
-    10
-    11
-    12
-    13
-  ];
+  # The house: lattice.streamdeck.homePage's keys where they asked to go, and the lattice
+  # ground everywhere else off the rail.
+  homePage = map (
+    index:
+    let
+      key = lib.findFirst (key: key.index == index) null cfg.homePage;
+    in
+    if key == null then
+      blank index
+    else if key.kind == "toggle" then
+      haToggle {
+        inherit (key)
+          index
+          name
+          entity
+          label
+          ;
+        off = g.${key.icon};
+        on = g."${key.icon}On";
+      }
+    else
+      haScene {
+        inherit (key)
+          index
+          name
+          entity
+          label
+          ;
+        glyph = g.${key.icon};
+      }
+  ) homeSlots;
+
+  # Every key that is not on the rail, in the order the page lists them.
+  homeSlots = lib.subtractLists (map (rail: rail.index) railSlots) (lib.range 0 13);
 
   # The rail on each page, and then every button with its page index attached.
   railFor =
@@ -689,14 +659,15 @@ let
     }) railKeys;
 
   buttons = lib.concatMap (
-    page: map (button: button // { inherit page; }) (lib.elemAt pageButtons page) ++ railFor page
+    page:
+    map (button: button // { inherit page; }) (lib.elemAt pageButtons page ++ railGaps) ++ railFor page
   ) (lib.range 0 (lib.length pages - 1));
 
   pageButtons = [
     desktopPage
     mediaPage
-    homePage
-  ];
+  ]
+  ++ lib.optional hasHome homePage;
 
   # Every distinct face, as the artwork module wants them: `index` is what gives a face its
   # slice of the lattice, so it comes from the button rather than from the face. The rail
@@ -844,7 +815,10 @@ let
     let
       pagesWith = lib.unique (map (button: button.page) haButtons);
     in
-    if lib.length pagesWith != 1 then
+    if !hasHome then
+      # No page will ever be this, so switching pages never syncs the house.
+      "-1"
+    else if lib.length pagesWith != 1 then
       throw "lattice.streamdeck: Home Assistant keys are spread over ${toString (lib.length pagesWith)} pages; sync_home assumes one."
     else
       toString (lib.head pagesWith);
@@ -1020,9 +994,12 @@ let
           # The separator carries the indentation of the generated lines: interpolated text
           # is not touched by the ''-string's own dedent, so it has to arrive already at the
           # indent the line above it ends up at.
-          lib.concatMapStringsSep "\n  " (
-            button: "home_face ${button.haEntity} ${toString button.page} ${toString button.index}"
-          ) haButtons
+          if haButtons == [ ] then
+            ":"
+          else
+            lib.concatMapStringsSep "\n  " (
+              button: "home_face ${button.haEntity} ${toString button.page} ${toString button.index}"
+            ) haButtons
         }
       }
 
@@ -1330,23 +1307,22 @@ let
   };
 in
 {
-  # All three are read here rather than assumed: the keys are drawn by the artwork module,
-  # the web-app keys launch what webapps.nix declares, and the home page's keys press the
-  # entities homeassistant.nix names.
+  # Both are read here rather than assumed: the keys are drawn by the artwork module and the
+  # web-app keys launch what webapps.nix declares.
   imports = [
     ./artwork.nix
-    ./homeassistant.nix
     ./webapps.nix
   ];
 
   options.lattice.streamdeck = {
+    enable = lib.mkEnableOption "the themed layout for an Elgato Stream Deck (the 15-key MK.2)";
+
     serial = lib.mkOption {
       type = lib.types.str;
-      default = "AL24J2C03581";
+      example = "AL24J2C03581";
       description = ''
         The deck this layout is for. streamdeck-ui keys its configuration by serial, so this
-        is what makes one generated file work on either host -- whichever one the deck is
-        plugged into is the one that finds a layout for it. Read it off a connected deck with
+        is what ties the generated file to the deck. Read it off a connected deck with
         `cat /sys/bus/usb/devices/*/serial` against idVendor 0fd9, or from the title bar of
         `streamdeck` itself.
       '';
@@ -1361,9 +1337,59 @@ in
         here, which is how the deck follows the screen going to sleep.
       '';
     };
+
+    homePage = lib.mkOption {
+      type = lib.types.listOf (
+        lib.types.submodule {
+          options = {
+            index = lib.mkOption {
+              type = lib.types.enum homeSlots;
+              description = "The key, counted from 0 along each row from the top left; 4, 9 and 14 are the rail.";
+            };
+            name = lib.mkOption {
+              type = lib.types.str;
+              example = "bedroom-lights";
+              description = "Names the key's face images, so it has to be unique on the deck.";
+            };
+            entity = lib.mkOption {
+              type = lib.types.str;
+              example = "light.bedroom";
+              description = "The Home Assistant entity id; `lattice ha entities` lists them.";
+            };
+            label = lib.mkOption {
+              type = lib.types.str;
+              description = "The word under the glyph.";
+            };
+            kind = lib.mkOption {
+              type = lib.types.enum [
+                "toggle"
+                "scene"
+              ];
+              description = ''
+                A toggle is a device that is on or off and shows which; a scene (or script, or
+                automation) is pressed and over, with one face.
+              '';
+            };
+            icon = lib.mkOption {
+              type = lib.types.enum (lib.attrNames g);
+              example = "bulb";
+              description = ''
+                A glyph from the table at the top of streamdeck.nix. A toggle shows this when off
+                and its `On` variant (bulb, bulbOn) when on.
+              '';
+            };
+          };
+        }
+      );
+      default = [ ];
+      description = ''
+        Home Assistant keys, on a page of their own behind the rail's third key. Empty leaves
+        the deck with two pages.
+      '';
+    };
   };
 
-  config = {
+  config = lib.mkIf cfg.enable {
     # Both for the keys, which name lattice-deck bare and find it here through the unit's
     # PATH, and for the shell: `lattice-deck sync` and `lattice-deck audio` are worth having
     # by hand, and `streamdeck` is what opens the GUI once the service is stopped.
@@ -1464,6 +1490,14 @@ in
         # of them the icon build wrote last.
         assertion = lib.length (lib.unique (map (art: art.name) faceArt)) == lib.length faceArt;
         message = "lattice.streamdeck: two different key faces share an icon name.";
+      }
+      {
+        assertion = hasHome -> config.lattice.homeassistant.enable;
+        message = "lattice.streamdeck.homePage presses Home Assistant entities, so it needs lattice.homeassistant.enable.";
+      }
+      {
+        assertion = lib.all (key: key.kind == "toggle" -> g ? "${key.icon}On") cfg.homePage;
+        message = "lattice.streamdeck.homePage: a toggle's icon needs an \"On\" variant to show when it is on.";
       }
       {
         assertion = flake != null;

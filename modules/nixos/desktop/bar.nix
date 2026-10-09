@@ -251,9 +251,12 @@ let
       pkgs.procps
       pkgs.coreutils # mktemp
     ];
+    # With no place set there is nothing to ask for, and an empty line hides the pill.
     text = ''
-      lat=${config.lattice.weather.latitude}
-      lon=${config.lattice.weather.longitude}
+      ${
+        lib.optionalString (config.lattice.weather.latitude == null) "exit 0\n"
+      }lat=${toString config.lattice.weather.latitude}
+      lon=${toString config.lattice.weather.longitude}
       label=${lib.escapeShellArg config.lattice.weather.label}
 
       cache="''${XDG_RUNTIME_DIR:-/tmp}/lattice-weather.json"

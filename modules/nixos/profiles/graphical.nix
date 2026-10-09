@@ -6,6 +6,7 @@
     ../plymouth.nix
     ../display.nix
     ../weather.nix
+    ../homeassistant.nix
     ../streamdeck.nix
     ../webapps.nix
     ../widevine.nix
@@ -19,7 +20,6 @@
     ../desktop/menus.nix
     ../desktop/launcher.nix
     ../desktop/radio.nix
-    ../desktop/books.nix
     ../desktop/pomodoro.nix
     ../desktop/guides.nix
     ../desktop/notifications.nix
