@@ -7,6 +7,7 @@
     ./airplay.nix
     ./books.nix
     ./mozilla.nix
+    ./mouse.nix
   ];
 
   ### ACCOUNT ###

@@ -47,14 +47,26 @@ aliases.
 
 ## Desktop configs and your dotfiles
 
-The terminal, tmux, the bar, rofi, mako, the on-screen display and the other desktop
-programs run on configs lattice ships in `modules/nixos/desktop/configs/`, installed
-under `/etc`. A file of your own in `~/.config` takes over from lattice's for that
-program. The bar's modules are declared in Nix, each next to the script that feeds it,
-as `lattice.bar.modules` (see `desktop/waybar.nix`). Hyprland still lives in
-[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles) while it moves
-over, along with personal tools like Neovim and zsh. Everything reads its colours from
-the generated theme files.
+Hyprland, the terminal, tmux, the bar, rofi, mako, the on-screen display and the other
+desktop programs run on configs lattice ships in `modules/nixos/desktop/configs/`,
+installed under `/etc`. A file of your own in `~/.config` takes over from lattice's for
+that program. The bar's modules are declared in Nix, each next to the script that feeds
+it, as `lattice.bar.modules` (see `desktop/waybar.nix`). Everything reads its colours
+from the generated theme files.
+
+Hyprland's config runs two more files at the end, so you can add to it without replacing
+it:
+
+- `/etc/xdg/hypr/lattice.lua`, the host's: monitor rules from `lattice.display.monitors`,
+  plus any Lua in `lattice.hyprland.extraConfig`, such as an external monitor's
+  workspaces or a mouse's device block.
+- `~/.config/hypr/local.lua`, your own, run last.
+
+The keybinding cheatsheet takes extra rows the same way: `lattice.keys.extras` for the
+host, `~/.config/lattice/keys.tsv` for you.
+
+Personal tools like Neovim and zsh live in
+[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles).
 
 ## Adding a command
 

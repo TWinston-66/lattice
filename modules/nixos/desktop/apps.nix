@@ -222,9 +222,9 @@ in
     # what makes the pointer read as fast however far down Hyprland's per-device
     # `sensitivity` goes -- libinput can only discard motion counts after the fact, so it
     # buys slowness at the cost of precision. `solaar config <device> dpi <n>` moves it at
-    # the source instead, which is why the device block in ~/.dotfiles/hypr/.config/hypr/
-    # hyprland.lua now sits at sensitivity 0 with accel_profile flat: DPI is the only
-    # speed knob, and pointer travel is proportional to hand travel so it means one thing.
+    # the source instead, which is why the mouse's Hyprland device block
+    # (modules/personal/mouse.nix) sits at sensitivity 0 with accel_profile flat: DPI is the
+    # only speed knob, and pointer travel is proportional to hand travel so it means one thing.
     #
     # DPI is volatile: the mouse forgets it whenever it power-cycles or the Bluetooth link
     # drops. The CLI alone would hold only until the next reconnect; the

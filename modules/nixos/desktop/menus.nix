@@ -554,8 +554,9 @@ let
   # is written down twice -- the rows come live from the configs themselves, Hyprland binds
   # with a description, tmux binds with a note and nvim maps with a desc, so a key goes on
   # the sheet by being described where it is bound, and a rebind can't leave it stale.
-  # ~/.config/hypr/keys.tsv (the hypr stow package) adds what no config can report -- the
-  # trackpad gesture, the mouse's Solaar rules -- and hides rows not worth the space.
+  # /etc/xdg/lattice/keys.tsv adds what no config can report -- the trackpad gesture, the
+  # host's lattice.keys.extras -- and hides rows not worth the space, and a user's
+  # ~/.config/lattice/keys.tsv adds to that.
   # Vim's own keys are the exception, with no config to read them from: they come from
   # cheatsheet/nvim.json. `lattice cheatsheet` writes the same rows out as a browser page,
   # so the picker and the page never disagree.
@@ -716,7 +717,7 @@ let
       appWindow
     ];
     text = ''
-      extras="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/keys.tsv"
+      extras=(/etc/xdg/lattice/keys.tsv "''${XDG_CONFIG_HOME:-$HOME/.config}/lattice/keys.tsv")
 
       # The real nvim config, headless, against an empty buffer. timeout so a plugin that
       # wants an answer at startup costs a missing section rather than a picker that never
@@ -732,7 +733,7 @@ let
       # still listed and searchable; this only saves scrolling past the rest. The browser
       # page opens on the same tool's tab.
       focus=hypr
-      if [[ $(hyprctl activewindow -j 2>/dev/null | jq -r '.class // ""') == com.mitchellh.ghostty ]]; then
+      if [[ $(hyprctl activewindow -j 2>/dev/null | jq -r '.class // ""') == foot ]]; then
         focus=tmux
         pane=$(tmux list-clients -F '#{client_activity} #{pane_current_command}' 2>/dev/null \
           | sort -rn | head -n1 | cut -d' ' -f2-) || true
@@ -769,7 +770,8 @@ let
 
       # keys.tsv rows are added, and a "-" description takes the matching live row out. awk
       # reads the extras first so it knows what to drop by the time the live rows arrive. By
-      # name rather than FNR == NR, which an empty or missing keys.tsv would turn true for both.
+      # name rather than FNR == NR, which empty or missing keys.tsv files would turn true for
+      # both.
       rows=$(
         awk -F '\t' -v OFS='\t' -v order="''${order[*]}" '
           BEGIN { n = split(order, o, " "); for (i = 1; i <= n; i++) rank[o[i]] = i }
@@ -781,7 +783,7 @@ let
           }
           !(($1 FS $2) in hide) && !seen[$0]++ { print rank[$1] + 0, ++i, $0 }
           END { for (j = 1; j <= e; j++) { split(extra[j], f, FS); print rank[f[1]] + 0, ++i, extra[j] } }
-        ' <(cat "$extras" 2>/dev/null || true) <(live) \
+        ' <(cat "''${extras[@]}" 2>/dev/null || true) <(live) \
           | sort -t$'\t' -k1,1n -k2,2n | cut -f3-
       )
 
@@ -1019,179 +1021,197 @@ let
   };
 in
 {
-  # The session menu. lattice-power toggles wlogout, themed from here rather than from
-  # wlogout's own files -- see powerMenu above.
-  lattice.bar.modules."custom/power" = {
-    section = "right";
-    order = 70;
-    settings = {
-      format = "󰐥";
-      tooltip = true;
-      tooltip-format = "Session";
-      on-click = "lattice-power";
-    };
+  options.lattice.keys.extras = lib.mkOption {
+    type = lib.types.lines;
+    default = "";
+    example = "mouse\tBack / Forward\tSpeaker volume";
+    description = ''
+      Extra rows for the SUPER + / cheatsheet, for keys no config can report: a gesture, a
+      mouse button remapped in its own software. Tab-separated `<section> <keys>
+      <description>`; a description of `-` hides the matching row instead. Written to
+      /etc/xdg/lattice/keys.tsv after lattice's own rows, and a user's
+      ~/.config/lattice/keys.tsv is read after that.
+    '';
   };
 
-  environment.systemPackages = [
-    rofiWithCalc
-    wifiMenu
-    audioMenu
-    powerMenu
-    keybindings
-    cheatsheetItem
-  ];
-
-  systemd.user.services.waybar.path = [
-    wifiMenu
-    audioMenu
-    powerMenu
-  ];
-
-  ### POWER MENU ###
-  # Replaces the rofi -dmenu confirmation the logout bind used to shell out to, which is
-  # gone from ~/.dotfiles/hypr/hyprland.lua entirely -- CTRL + SUPER + Q opens this instead.
-  # Lock runs hyprlock directly, matching the SUPER + L bind rather than going through
-  # `loginctl lock-session`, which does nothing if hypridle isn't there to answer it. The
-  # layout is a sequence of bare JSON objects, not an array -- that is the format
-  # wlogout's parser wants. `label` is also the CSS id of the button it makes.
-  #
-  # Icons are Nerd Font glyphs in the label rather than wlogout's shipped PNGs, which
-  # are a fixed white and would stay that colour through a re-accent. They have to sit
-  # on one line with the word: wlogout's JSON reader doesn't decode escapes, so a "\n"
-  # in `text` reaches the button as a literal backslash-n.
-  #
-  # With --buttons-per-row 3 the grid comes out as
-  #     1 Lock      2 Suspend   3 Hibernate
-  #     4 Log out   5 Reboot    6 Shut down
-  # which puts the three that end the session along the bottom row. A host that can't
-  # hibernate gets one row of five instead: wlogout reads a button for every cell of its
-  # grid, so five buttons in a three-wide grid would run off the end of the list.
-  environment.etc."xdg/wlogout/layout".text = lib.concatMapStrings (button: ''
-    {
-      "label": "${button.label}",
-      "action": "${button.action}",
-      "text": "${button.text}",
-      "keybind": "${button.keybind}"
-    }
-  '') powerButtons;
-
-  # GTK CSS, like waybar's and swayosd's, but written here rather than imported from
-  # ~/.dotfiles: wlogout is Wayland-only, so there is no macOS half to keep in step.
-  # The pill treatment carries over -- translucent @base, @surface0 border -- scaled up,
-  # over a scrim that dims the desktop behind it. Every colour comes in through the bar's
-  # palette by name rather than as a literal, so the menu follows lattice-palette's flavour
-  # and accent like the bar does.
-  environment.etc."xdg/wlogout/style.css".text = ''
-    @import url("file:///etc/xdg/waybar/lattice.css");
-
-    * {
-      background-image: none;
-      box-shadow: none;
-      font-family: "${theme.fonts.monospace}", "Symbols Nerd Font";
-      font-size: 17px;
-    }
-
-    window {
-      background-color: alpha(@crust, 0.72);
-    }
-
-    button {
-      color: @text;
-      background-color: alpha(@base, ${toString theme.opacity});
-      border: 2px solid @surface0;
-      border-radius: 14px;
-      /* Outside the height lattice-power sizes the grid to -- keep `gap` there in step. */
-      margin: 14px;
-      padding: 28px;
-      outline-style: none;
-      /* GTK animates between the two states, so hover and focus fade rather than snap. */
-      transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-    }
-
-    button:focus,
-    button:hover {
-      color: @accent;
-      background-color: alpha(@surface0, ${toString theme.opacity});
-      border-color: @accent;
-    }
-
-    /* The two that can't be taken back warn in their own colour on the way past. */
-    #reboot:focus,
-    #reboot:hover {
-      color: @peach;
-      border-color: @peach;
-    }
-
-    #shutdown:focus,
-    #shutdown:hover {
-      color: @red;
-      border-color: @red;
-    }
-  '';
-
-  lattice.cli.commands = {
-    wifi = {
-      exec = lib.getExe wifiMenu;
-      summary = "Join, rescan, disconnect or switch off Wi-Fi";
-      group = "session";
-      launch = [
-        {
-          label = "Wi-Fi…";
-          icon = "network-wireless";
-        }
-      ];
+  config = {
+    # The session menu. lattice-power toggles wlogout, themed from here rather than from
+    # wlogout's own files -- see powerMenu above.
+    lattice.bar.modules."custom/power" = {
+      section = "right";
+      order = 70;
+      settings = {
+        format = "󰐥";
+        tooltip = true;
+        tooltip-format = "Session";
+        on-click = "lattice-power";
+      };
     };
-    audio = {
-      exec = lib.getExe audioMenu;
-      args = "<output|input>";
-      summary = "Pick an output or input; what is playing moves with it";
-      group = "session";
-      launch = [
-        {
-          label = "Audio output…";
-          args = "output";
-          icon = "audio-speakers";
-        }
-        {
-          label = "Audio input…";
-          args = "input";
-          icon = "audio-input-microphone";
-        }
-      ];
-    };
-    "power menu" = {
-      exec = lib.getExe powerMenu;
-      summary = "Lock, suspend, log out, reboot or shut down";
-      group = "session";
-      launch = [
-        {
-          label = "Power menu…";
-          icon = "system-shutdown";
-        }
-      ];
-    };
-    keys = {
-      exec = lib.getExe keybindings;
-      summary = "Search every Hyprland, tmux and Neovim binding";
-      group = "session";
-      launch = [
-        {
-          label = "Keybindings…";
-          icon = "preferences-desktop-keyboard-shortcuts";
-        }
-      ];
-    };
-    cheatsheet = {
-      exec = "${lib.getExe keybindings} sheet";
-      args = "[nvim|tmux|hypr]";
-      summary = "Open the keybinding cheatsheet in the browser, fresh from the live configs";
-      group = "session";
-      launch = [
-        {
-          label = "Keybinding cheatsheet";
-          icon = "preferences-desktop-keyboard-shortcuts";
-        }
-      ];
+
+    environment.etc."xdg/lattice/keys.tsv".text =
+      builtins.readFile ./configs/keys.tsv
+      + lib.optionalString (config.lattice.keys.extras != "") "\n${config.lattice.keys.extras}";
+
+    environment.systemPackages = [
+      rofiWithCalc
+      wifiMenu
+      audioMenu
+      powerMenu
+      keybindings
+      cheatsheetItem
+    ];
+
+    systemd.user.services.waybar.path = [
+      wifiMenu
+      audioMenu
+      powerMenu
+    ];
+
+    ### POWER MENU ###
+    # Replaces the rofi -dmenu confirmation the logout bind used to shell out to, which is
+    # gone from hyprland.lua entirely -- CTRL + SUPER + Q opens this instead.
+    # Lock runs hyprlock directly, matching the SUPER + L bind rather than going through
+    # `loginctl lock-session`, which does nothing if hypridle isn't there to answer it. The
+    # layout is a sequence of bare JSON objects, not an array -- that is the format
+    # wlogout's parser wants. `label` is also the CSS id of the button it makes.
+    #
+    # Icons are Nerd Font glyphs in the label rather than wlogout's shipped PNGs, which
+    # are a fixed white and would stay that colour through a re-accent. They have to sit
+    # on one line with the word: wlogout's JSON reader doesn't decode escapes, so a "\n"
+    # in `text` reaches the button as a literal backslash-n.
+    #
+    # With --buttons-per-row 3 the grid comes out as
+    #     1 Lock      2 Suspend   3 Hibernate
+    #     4 Log out   5 Reboot    6 Shut down
+    # which puts the three that end the session along the bottom row. A host that can't
+    # hibernate gets one row of five instead: wlogout reads a button for every cell of its
+    # grid, so five buttons in a three-wide grid would run off the end of the list.
+    environment.etc."xdg/wlogout/layout".text = lib.concatMapStrings (button: ''
+      {
+        "label": "${button.label}",
+        "action": "${button.action}",
+        "text": "${button.text}",
+        "keybind": "${button.keybind}"
+      }
+    '') powerButtons;
+
+    # GTK CSS, like waybar's and swayosd's, written here rather than kept in ./configs.
+    # The pill treatment carries over -- translucent @base, @surface0 border -- scaled up,
+    # over a scrim that dims the desktop behind it. Every colour comes in through the bar's
+    # palette by name rather than as a literal, so the menu follows lattice-palette's flavour
+    # and accent like the bar does.
+    environment.etc."xdg/wlogout/style.css".text = ''
+      @import url("file:///etc/xdg/waybar/lattice.css");
+
+      * {
+        background-image: none;
+        box-shadow: none;
+        font-family: "${theme.fonts.monospace}", "Symbols Nerd Font";
+        font-size: 17px;
+      }
+
+      window {
+        background-color: alpha(@crust, 0.72);
+      }
+
+      button {
+        color: @text;
+        background-color: alpha(@base, ${toString theme.opacity});
+        border: 2px solid @surface0;
+        border-radius: 14px;
+        /* Outside the height lattice-power sizes the grid to -- keep `gap` there in step. */
+        margin: 14px;
+        padding: 28px;
+        outline-style: none;
+        /* GTK animates between the two states, so hover and focus fade rather than snap. */
+        transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+      }
+
+      button:focus,
+      button:hover {
+        color: @accent;
+        background-color: alpha(@surface0, ${toString theme.opacity});
+        border-color: @accent;
+      }
+
+      /* The two that can't be taken back warn in their own colour on the way past. */
+      #reboot:focus,
+      #reboot:hover {
+        color: @peach;
+        border-color: @peach;
+      }
+
+      #shutdown:focus,
+      #shutdown:hover {
+        color: @red;
+        border-color: @red;
+      }
+    '';
+
+    lattice.cli.commands = {
+      wifi = {
+        exec = lib.getExe wifiMenu;
+        summary = "Join, rescan, disconnect or switch off Wi-Fi";
+        group = "session";
+        launch = [
+          {
+            label = "Wi-Fi…";
+            icon = "network-wireless";
+          }
+        ];
+      };
+      audio = {
+        exec = lib.getExe audioMenu;
+        args = "<output|input>";
+        summary = "Pick an output or input; what is playing moves with it";
+        group = "session";
+        launch = [
+          {
+            label = "Audio output…";
+            args = "output";
+            icon = "audio-speakers";
+          }
+          {
+            label = "Audio input…";
+            args = "input";
+            icon = "audio-input-microphone";
+          }
+        ];
+      };
+      "power menu" = {
+        exec = lib.getExe powerMenu;
+        summary = "Lock, suspend, log out, reboot or shut down";
+        group = "session";
+        launch = [
+          {
+            label = "Power menu…";
+            icon = "system-shutdown";
+          }
+        ];
+      };
+      keys = {
+        exec = lib.getExe keybindings;
+        summary = "Search every Hyprland, tmux and Neovim binding";
+        group = "session";
+        launch = [
+          {
+            label = "Keybindings…";
+            icon = "preferences-desktop-keyboard-shortcuts";
+          }
+        ];
+      };
+      cheatsheet = {
+        exec = "${lib.getExe keybindings} sheet";
+        args = "[nvim|tmux|hypr]";
+        summary = "Open the keybinding cheatsheet in the browser, fresh from the live configs";
+        group = "session";
+        launch = [
+          {
+            label = "Keybinding cheatsheet";
+            icon = "preferences-desktop-keyboard-shortcuts";
+          }
+        ];
+      };
     };
   };
 }

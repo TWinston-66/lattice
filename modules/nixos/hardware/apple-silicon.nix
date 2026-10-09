@@ -248,7 +248,7 @@ in
     ### TRACKPAD ###
     # The pad is a clickpad -- one physical button under the whole surface, BTN_LEFT the only
     # key code it reports -- so which button a press *means* is libinput's to decide. That
-    # half is settled in the hypr dotfiles (clickfinger_behavior), which counts fingers the
+    # half is settled in hyprland.lua (clickfinger_behavior), which counts fingers the
     # way macOS does instead of cutting the bottom of the pad into invisible zones.
     #
     # Counting fingers only works if libinput knows which contacts are fingers, and that is

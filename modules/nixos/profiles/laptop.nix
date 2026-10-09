@@ -310,7 +310,7 @@ let
   };
 
   # Neither laptop has a key for the keyboard backlight, so this is what the binds in
-  # ~/.dotfiles/hypr call.
+  # hyprland.lua (desktop/configs) call.
   #
   # On the Mac there is genuinely no such key to find: hid-apple picks its fn translation
   # table by bus and product, and this keyboard (on BUS_SPI) is not one of the two

@@ -78,7 +78,7 @@ let
 
   # Everything mako has already shown and timed out on, as a browsable list -- the whole of
   # what a "notification centre" would otherwise be a daemon for. Bound to SUPER+ALT+N; see
-  # the mako binds in ~/.dotfiles/hypr/.config/hypr/hyprland.lua.
+  # the mako binds in configs/hyprland.lua.
   #
   # jq, not a format string: `makoctl history` grew -f only after 1.11, which is what this
   # nixpkgs carries, so -j and a filter is the version-proof way to read it. The JSON is a

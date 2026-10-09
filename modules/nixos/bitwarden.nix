@@ -33,7 +33,7 @@ let
   # icon) and this stands in for it.
   #
   # Without a tray the app's window is its only presence, and closing it quits the app. So
-  # the window lives on the special:bitwarden workspace (a window rule in ~/.dotfiles/hypr),
+  # the window lives on the special:bitwarden workspace (a window rule in hyprland.lua),
   # where it opens silently at login and again whenever the unit below restarts it; a click
   # here shows or hides that workspace.
   #

@@ -565,7 +565,7 @@ let
         border-color=${palette.peach}
       '';
 
-      # Hyprland, loadfile()d by ~/.dotfiles hyprland.lua and eval'd into the running one.
+      # Hyprland, loadfile()d by /etc/xdg/hypr/hyprland.lua and eval'd into the running one.
       "theme.lua" = ''
         hl.config({ general = { col = { active_border = { colors = { "rgba(%ACCENT_BARE%ff)", "rgba(%ALT_BARE%ff)" }, angle = 45 }, inactive_border = "rgba(${bare palette.surface1}aa)" } } })
       '';
@@ -1363,7 +1363,7 @@ in
       description = ''
         Background opacity for the shell surfaces that Hyprland blurs -- the waybar
         pills, the rofi window and mako notifications. 1.0 is fully opaque, which
-        makes the `blur` layer rules in ~/.dotfiles/hypr a no-op.
+        makes the `blur` layer rules in hyprland.lua a no-op.
       '';
     };
 

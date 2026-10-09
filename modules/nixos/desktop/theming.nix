@@ -79,7 +79,7 @@ let
   # rebuild. Every consumer is pointed at a file in ${currentDir} rather than sent the
   # colours: waybar, swayosd and wlogout through theme.css, which the palettes in /etc/xdg
   # import last (lattice.theme.runtimeTheme); rofi and mako through their own syntax of the
-  # same; Hyprland's borders through theme.lua, which hyprland.lua in ~/.dotfiles loads
+  # same; Hyprland's borders through theme.lua, which hyprland.lua (./configs) loads
   # after its own default so a `hyprctl reload` keeps the pick; the lock screen through
   # theme.hyprlock; tmux, foot and nvim through theme.tmux, theme.foot and
   # theme-nvim.lua. The files themselves are lattice.theme.runtimeKits, one directory per
@@ -877,6 +877,15 @@ in
   lattice.theme.runtimeState = themeState;
 
   xdg.icons.fallbackCursorThemes = [ cursorTheme ];
+
+  # Hyprland's own cursor and its children's. XCURSOR for X11 and toolkit apps, HYPRCURSOR
+  # for the compositor; the Catppuccin package carries both formats.
+  lattice.hyprland.extraConfig = lib.mkBefore ''
+    hl.env("XCURSOR_THEME", "${cursorTheme}")
+    hl.env("XCURSOR_SIZE", "16")
+    hl.env("HYPRCURSOR_THEME", "${cursorTheme}")
+    hl.env("HYPRCURSOR_SIZE", "16")
+  '';
 
   programs.dconf.profiles.user.databases = [
     {

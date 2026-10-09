@@ -15,6 +15,7 @@
     ../desktop/session.nix
     ../desktop/apps.nix
     ../desktop/configs.nix
+    ../desktop/hyprland.nix
     ../desktop/theming.nix
     ../desktop/waybar.nix
     ../desktop/bar.nix

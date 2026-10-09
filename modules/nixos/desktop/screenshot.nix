@@ -20,7 +20,7 @@ let
   # what actually takes the pixels, but HyprQuickFrame builds the geometry and the pipeline.
   #
   # Reachable two ways, because neither one covers both hosts on its own. Print is bound in
-  # ~/.dotfiles/hypr/.config/hypr/hyprland.lua, and the key comes from the external keyboard
+  # configs/hyprland.lua, and the key comes from the external keyboard
   # (NuPhy Halo65 V2), which is remapped in firmware and so emits a real KEY_SYSRQ wherever
   # it is plugged in. The Dell's built-in keyboard has a Print key too, but the Mac's
   # (hid-apple) lands on the magic_keyboard_2021_and_2024 fn table, which has no
