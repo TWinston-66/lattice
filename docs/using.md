@@ -7,17 +7,14 @@ Everything goes through one command. `lattice` alone lists it all,
 
 ```sh
 lattice rebuild [host]              # build this machine from the checkout and switch
-lattice deploy [host] [address]     # build and switch another host over SSH
 lattice update [input...]           # move flake.lock forward, then offer a rebuild
 lattice version                     # what is running, and whether the checkout has moved
 ```
 
-`lattice deploy` evaluates locally and builds on the target, reaching it by its MagicDNS
-name. Pass an address for a host that isn't on the tailnet yet.
-
 > [!NOTE]
-> Both switch commands refuse a host that can't decrypt its secrets, since it would boot
-> with every account locked. See [Recovery](recovery.md) if one ever does.
+> On a host that keeps its password in sops, `lattice rebuild` refuses to switch until the
+> host can decrypt its secrets, since it would boot with every account locked. See
+> [Recovery](recovery.md) if one ever does.
 
 ## Secrets
 

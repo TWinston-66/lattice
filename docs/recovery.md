@@ -6,7 +6,7 @@ a new password, and reinstall over the top from a USB stick.
 
 > [!TIP]
 > Keep a NixOS USB stick around. On the Mac, the Asahi installer stick from
-> [installing](install.md#installing-on-apple-silicon) is the one.
+> [installing](install.md#installing) is the one.
 
 ## Locked out
 

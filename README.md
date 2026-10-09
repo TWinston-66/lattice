@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://nixos.org"><img src="https://img.shields.io/badge/NixOS-unstable-89B4FA?style=flat-square&labelColor=313244&logo=nixos&logoColor=CDD6F4" alt="NixOS unstable"></a>
   <a href="https://hyprland.org"><img src="https://img.shields.io/badge/Hyprland-Wayland-94E2D5?style=flat-square&labelColor=313244" alt="Hyprland"></a>
-  <a href="https://asahilinux.org"><img src="https://img.shields.io/badge/runs%20on-x86__64%20%C2%B7%20Apple%20Silicon-F5C2E7?style=flat-square&labelColor=313244" alt="x86_64 and Apple Silicon"></a>
+  <a href="https://asahilinux.org"><img src="https://img.shields.io/badge/runs%20on-Apple%20Silicon-F5C2E7?style=flat-square&labelColor=313244" alt="Apple Silicon"></a>
   <a href="https://github.com/Mic92/sops-nix"><img src="https://img.shields.io/badge/secrets-sops--nix-B4BEFE?style=flat-square&labelColor=313244" alt="sops-nix"></a>
   <a href="https://github.com/TWinston-66/lattice/commits/main"><img src="https://img.shields.io/github/last-commit/TWinston-66/lattice?style=flat-square&color=A6E3A1&labelColor=313244" alt="Last commit"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-CBA6F7?style=flat-square&labelColor=313244" alt="MIT license"></a>
@@ -31,11 +31,12 @@
 - **Built for laptops.** Battery-aware refresh rates, charge limiting, measured
   suspend drain, smart hibernation, captive-portal sign-in and a guard against
   failed suspends.
-- **Runs on Apple Silicon.** A first-class MacBook host on the Asahi kernel, with
-  Widevine DRM, tuned trackpad and keyboard, and display fixes carried as patches.
-- **Reproducible and recoverable.** Every host is a flake output. Secrets live in
-  sops, deploys go over Tailscale, and the system refuses to switch to a host
-  that couldn't log anyone in.
+- **Built for Apple Silicon.** M1 and M2 MacBooks on the Asahi kernel, with
+  Widevine DRM, hardware video decode, tuned trackpad and keyboard, and display fixes
+  carried as patches.
+- **Reproducible and recoverable.** Every host is a flake output, and a new one starts
+  from `hosts/macbook`. Secrets can live in sops, and then the system refuses to switch
+  to a host that couldn't log anyone in.
 
 ## A tour
 
@@ -128,16 +129,16 @@ sign-in, and an ambient light sensor driving the panel and keyboard on the Mac.
 **Development.** `fhs`, a shell with a normal `/usr` for toolchains that expect one, plus
 nix-ld, comma, `nh`, Docker and virtualization.
 
-**Security and backups.** Root locked, passwords only from sops-nix, SSH reachable only over
-Tailscale, Bitwarden holding the SSH key, and hourly encrypted restic backups to an external
+**Security and backups.** Root locked, passwords optionally pinned in sops-nix, SSH reachable
+only over Tailscale when it is on, Bitwarden holding the SSH key, and hourly encrypted restic backups to an external
 drive, taken from btrfs snapshots.
 
 ## Hosts
 
 | Host | Hardware | Notes |
 | --- | --- | --- |
-| `dell` | Dell laptop | Hibernation tuned for a day of classes, Thunderbolt via bolt |
-| `mac` | MacBook | Asahi kernel next to macOS, aarch64 Widevine, VA-API video decode |
+| `macbook` | Any M1/M2 MacBook | The distro alone: what an install starts from |
+| `mac` | The author's MacBook Pro | `macbook` plus `modules/personal`: sops secrets, Home Assistant, Stream Deck, books |
 
 ## Get started
 
