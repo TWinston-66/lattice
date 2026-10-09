@@ -45,11 +45,15 @@ aliases.
 > Use `accent` and `accentAlt` rather than literal hex. An undefined colour makes GTK
 > render transparent, with no error to tell you why.
 
-## Your dotfiles
+## Desktop configs and your dotfiles
 
-User-level configs (Hyprland, waybar, rofi, Neovim, tmux…) live in
-[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles) and read their
-colours from the generated theme files. Tweaking a bar or a menu needs no rebuild.
+The terminal, tmux, rofi, mako, the on-screen display and the other desktop programs run
+on configs lattice ships in `modules/nixos/desktop/configs/`, installed under `/etc`.
+A file of your own in `~/.config` takes over from lattice's for that program. Hyprland
+and waybar still live in
+[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles) while they move
+over, along with personal tools like Neovim and zsh. Everything reads its colours from
+the generated theme files.
 
 ## Adding a command
 

@@ -12,7 +12,7 @@ let
     ;
 
   # Do not disturb, as a mako mode rather than anything of our own: `[mode=dnd] invisible=1`
-  # in ~/.dotfiles/mako is the whole implementation, and this only flips the mode and tells
+  # in ./configs/mako is the whole implementation, and this only flips the mode and tells
   # the bar. mako owns the state, so the pill cannot desync from the daemon -- the same
   # reason lattice-sunset reads hyprsunset instead of keeping a state file.
   #
@@ -184,7 +184,7 @@ let
       # -- the one failure this cannot raise a banner for -- the attempt is still on record.
       printf '%s failed: %s\n' "$unit" "''${result:-unknown}"
 
-      # Critical, so the default-timeout=0 in ~/.dotfiles/mako leaves it up until it is
+      # Critical, so the default-timeout=0 in ./configs/mako leaves it up until it is
       # dismissed: a unit breaking while nobody is looking is the case that must not time
       # out. Keyed synchronous per unit, so a unit that fails, gets fixed and fails again
       # replaces its own banner rather than stacking, while two units still get one each.

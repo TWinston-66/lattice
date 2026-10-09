@@ -53,7 +53,7 @@ let
       # The rest is what makes this read as a bar dropdown rather than as the launcher
       # wearing a different position. The launcher is a full-attention surface and sized
       # for it; this is a glance, so the type is two points down from the 12 in
-      # ~/.dotfiles/rofi/config.rasi and the rows are tightened to match. Overriding it
+      # ./configs/rofi.rasi and the rows are tightened to match. Overriding it
       # here rather than in config.rasi is deliberate: config.rasi still dresses `rofi
       # -show drun` at its own size.
       theme='

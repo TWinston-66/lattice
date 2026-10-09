@@ -276,11 +276,16 @@ in
       wantedBy = [ "graphical-session.target" ];
       # Inherit the session PATH instead of NixOS's minimal one; plugins and panes need the full system.
       environment.PATH = lib.mkForce null;
+      # Never restarted by a switch. Every terminal is a client of this server, so a restart
+      # closes every foot window at once -- which is what happened the first time the unit
+      # changed under a rebuild (its ExecStop is a store path, so a resurrect bump is
+      # enough). A changed tmux.conf is `prefix r` away, or the next login.
+      restartIfChanged = false;
       serviceConfig = {
         Type = "forking";
         ExecStart = "${pkgs.tmux}/bin/tmux new-session -d";
         ExecStop = [
-          "%h/.local/share/tmux/plugins/tmux-resurrect/scripts/save.sh"
+          "${pkgs.tmuxPlugins.resurrect}/share/tmux-plugins/resurrect/scripts/save.sh"
           "${pkgs.tmux}/bin/tmux kill-server"
         ];
       };

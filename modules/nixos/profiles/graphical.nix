@@ -14,6 +14,7 @@
     ../bitwarden.nix
     ../desktop/session.nix
     ../desktop/apps.nix
+    ../desktop/configs.nix
     ../desktop/theming.nix
     ../desktop/bar.nix
     ../desktop/backup.nix

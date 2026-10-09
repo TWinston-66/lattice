@@ -46,7 +46,7 @@ let
   # and HQF_OCR=1 starts with it on.
   #
   # Note that HyprQuickFrame spawns satty itself, with its own flags, so the only settings
-  # of ours it honours are the ones in ~/.dotfiles/satty/.config/satty/config.toml that it
+  # of ours it honours are the ones in ./configs/satty.toml (desktop/configs.nix) that it
   # does not override -- `fullscreen` among them, which is why that moved out of the CLI
   # and into the config file. It passes its own --output-filename, --early-exit,
   # --init-tool and --copy-command.

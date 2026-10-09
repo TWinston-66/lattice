@@ -234,7 +234,7 @@ let
       # Only with a server already up: source-file is not one of the commands that starts
       # one, but has-session says so without the error.
       if [[ $changed == *" theme.tmux "* ]] && tmux has-session 2>/dev/null; then
-        tmux source-file "$HOME/.config/tmux/tmux.conf" >/dev/null 2>&1 || true
+        tmux source-file /etc/tmux.conf \; source-file -q "$HOME/.config/tmux/tmux.conf" >/dev/null 2>&1 || true
       fi
       # GTK3 reads a theme's CSS once, when the theme is set, and the colours are a theme --
       # lattice-a and lattice-b, the same directory under two names (see gtkUserTheme). So a
@@ -702,7 +702,7 @@ let
   # GTK3 reads a theme's CSS once, when the theme is set, so a running app only restyles
   # when the name changes -- lattice-palette flips between the two whenever theme.gtk.css
   # changes. libadwaita apps take no GTK theme at all; they read ~/.config/gtk-4.0/gtk.css,
-  # which in ~/.dotfiles imports the same file, at launch.
+  # which configs.nix links to a file importing the same CSS, at launch.
   #
   # Cursors and folder icons stay Catppuccin's, built in the build-time flavour's nearest
   # one and blue: they are packaged per flavour and accent and cannot change at run time.
@@ -730,7 +730,7 @@ let
 
   cursorTheme = "catppuccin-${catppuccinFlavor}-dark-cursors";
 
-  # 9pt (12px) keeps UI text close to foot and waybar; qt6ct in ~/.dotfiles uses the same fonts.
+  # 9pt (12px) keeps UI text close to foot and waybar; qt6ct.conf in ./configs uses the same fonts.
   uiFont = "${theme.fonts.ui} ${toString theme.fonts.size}";
 
   monospaceFont = "${theme.fonts.monospace} ${toString theme.fonts.size}";
@@ -855,7 +855,7 @@ in
     }
   ];
 
-  # Qt apps (hyprpolkitagent) take their palette and fonts from qt6ct, configured in ~/.dotfiles.
+  # Qt apps (hyprpolkitagent) take their palette and fonts from qt6ct, configured in ./configs.
   qt = {
     enable = true;
     platformTheme = "qt5ct";

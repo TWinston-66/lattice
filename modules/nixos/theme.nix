@@ -409,7 +409,7 @@ let
 
   # "#1e1e2e" -> "#1e1e2ed1" at the configured opacity. rofi's rasi and mako's ini have
   # no alpha() function, so a translucent surface has to be baked in as a literal; GTK
-  # CSS does have one, so waybar/swayosd use `alpha(@base, ...)` in ~/.dotfiles instead.
+  # CSS does have one, so waybar's and swayosd's stylesheets use `alpha(@base, ...)` instead.
   alphaOf =
     color:
     let
@@ -584,7 +584,7 @@ let
         $lockCaps = ${bare palette.yellow}
       '';
 
-      # catppuccin/tmux, sourced by ~/.dotfiles tmux.conf ahead of the plugin. The plugin's
+      # catppuccin/tmux, sourced by /etc/tmux.conf ahead of the plugin. The plugin's
       # own flavour files set these with -o, so plain -g here wins over them. Its two
       # subtext names are the other way round from the palette's in every flavour upstream
       # ships, so they are crossed here too, to draw exactly what the plugin would.
@@ -613,7 +613,7 @@ let
           "set -g @catppuccin_pane_active_border_style \"##{?pane_in_mode,fg=%ACCENT%,##{?pane_synchronized,fg=#{@thm_mauve},fg=%ACCENT%}}\"\n"
         ];
 
-      # foot, included by ~/.dotfiles foot.ini: the flavour's terminal colours. foot cannot
+      # foot, included by /etc/xdg/foot/foot.ini: the flavour's terminal colours. foot cannot
       # reload its config, so lattice-palette also reads this file back to recolour the
       # windows already open, with the OSC 4/10/11/12/17/19 equivalent of each line.
       "theme.foot" =
@@ -660,7 +660,7 @@ let
       '';
 
       # GTK, through the named colours adw-gtk3 and libadwaita draw everything from. Imported
-      # by the user GTK3 theme in desktop/theming.nix and by ~/.dotfiles gtk-4.0/gtk.css.
+      # by the user GTK3 theme in desktop/theming.nix and by gtk-4.0/gtk.css (desktop/configs.nix).
       "theme.gtk.css" = ''
         @define-color accent_color %ACCENT%;
         @define-color accent_bg_color %ACCENT%;
@@ -802,7 +802,7 @@ let
             "*": "%ALT%"
       '';
 
-      # zathura, through an `include` at the end of ~/.dotfiles zathurarc, at launch.
+      # zathura, through an `include` at the end of /etc/zathurarc, at launch.
       "theme.zathura" = ''
         set default-fg                "#${bare palette.text}"
         set default-bg                "#${bare palette.base}"
@@ -837,7 +837,7 @@ let
         set recolor-darkcolor         "#${bare palette.text}"
       '';
 
-      # Qt, as qt6ct's colour scheme (color_scheme_path in ~/.dotfiles qt6ct.conf), at launch.
+      # Qt, as qt6ct's colour scheme (color_scheme_path in /etc/xdg/qt6ct/qt6ct.conf), at launch.
       "theme.qt6ct.conf" = ''
         [ColorScheme]
         active_colors=  #ff${bare palette.text}, #ff${bare palette.surface1}, #ff${bare palette.surface2}, #ff${bare palette.surface0}, #ff${bare palette.crust}, #ff${bare palette.mantle}, #ff${bare palette.text}, #ff${bare palette.text}, #ff${bare palette.text}, #ff${bare palette.base}, #ff${bare palette.mantle}, #ff${bare palette.crust}, #ff%ACCENT_BARE%, #ff${bare palette.crust}, #ff%ACCENT_BARE%, #ff${bare palette.lavender}, #ff${bare palette.mantle}, #ffffffff, #ff${bare palette.base}, #ff${bare palette.text}, #80${bare palette.overlay0}, #ff%ACCENT_BARE%
