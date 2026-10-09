@@ -1389,150 +1389,155 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    # Both for the keys, which name lattice-deck bare and find it here through the unit's
-    # PATH, and for the shell: `lattice-deck sync` and `lattice-deck audio` are worth having
-    # by hand, and `streamdeck` is what opens the GUI once the service is stopped.
-    environment.systemPackages = [
-      deck
-      streamdeckUi
-    ];
+  config = lib.mkMerge [
+    # lattice-deck on every host, deck or not. The mute and play keys, the bar's mute
+    # clicks, its power-profile pill and hypridle's dim all go through it, so that a deck
+    # that is there follows them -- and without one, each verb still does its work and the
+    # repaint after it fails quietly in deck(), the way it does for an unplugged deck.
+    {
+      environment.systemPackages = [ deck ];
 
-    # The rules ship with the package: TAG+="uaccess" on Elgato's whole vendor id, at
-    # 70-streamdeck.rules. The number is the load-bearing part and it is already right --
-    # uaccess is applied by systemd's 73-seat-late.rules, so a tag set after that does
-    # nothing at all. See the note on nuphyHidAccess in desktop/apps.nix, which is the
-    # same trap the other way round.
-    services.udev.packages = [ streamdeckUi ];
+      # waybar clicks lattice-dnd and lattice-sunset, and both repaint the deck's key for
+      # it as well as signalling the bar. Those scripts find lattice-deck on the PATH of
+      # whoever ran them, and waybar's is the fixed list the desktop modules build -- so it
+      # is handed the one command it did not have before.
+      systemd.user.services.waybar.path = [ deck ];
 
-    systemd.user.services = {
-      streamdeck = {
-        description = "Elgato Stream Deck";
+      # hypridle's PATH is a fixed list inside its own NixOS module -- hyprland, hyprlock,
+      # procps -- so the listener in desktop/lock.nix that dims the deck with the screen
+      # has to be handed the command it names. It goes here rather than there because this
+      # is the module that has lattice-deck in scope.
+      systemd.user.services.hypridle.path = lib.mkIf config.services.hypridle.enable [ deck ];
 
-        partOf = [ "graphical-session.target" ];
-        after = [ "graphical-session.target" ];
-        wantedBy = [ "graphical-session.target" ];
-        onFailure = [ "lattice-notify-failure@%n.service" ];
+      lattice.cli.commands.deck = {
+        exec = lib.getExe deck;
+        args = "<verb> [args...]";
+        complete = [
+          "sync"
+          "page"
+          "play"
+          "mute"
+          "mic"
+          "audio"
+          "audio-restart"
+          "profile"
+          "dim"
+          "wake"
+          "arm"
+          "rebuild"
+        ];
+        summary = "Drive the Stream Deck and repaint its keys";
+        details = ''
+          sync [--wait] [reading...]   repaint the live keys; everything, by default
+          page <index>                 switch page and light its rail key
+          play | mute | mic | audio    media and audio, with the key repainted after
+          audio-restart                restart PipeWire when the speakers vanish
+          profile                      cycle the power profile, as the bar's bubble does
+          dim | wake                   the deck's own backlight
+          arm | rebuild                the two halves of the rebuild key
+        '';
+        group = "devices";
+      };
+    }
 
-        path = sessionPath;
+    (lib.mkIf cfg.enable {
+      # `streamdeck` is what opens the GUI once the service is stopped.
+      environment.systemPackages = [ streamdeckUi ];
 
-        environment = {
-          STREAMDECK_UI_CONFIG = "%S/lattice/streamdeck.json";
-          # Otherwise this lands in $HOME as a dotfile.
-          STREAMDECK_UI_LOG_FILE = "%S/lattice/streamdeck.log";
+      # The rules ship with the package: TAG+="uaccess" on Elgato's whole vendor id, at
+      # 70-streamdeck.rules. The number is the load-bearing part and it is already right --
+      # uaccess is applied by systemd's 73-seat-late.rules, so a tag set after that does
+      # nothing at all. See the note on nuphyHidAccess in desktop/apps.nix, which is the
+      # same trap the other way round.
+      services.udev.packages = [ streamdeckUi ];
+
+      systemd.user.services = {
+        streamdeck = {
+          description = "Elgato Stream Deck";
+
+          partOf = [ "graphical-session.target" ];
+          after = [ "graphical-session.target" ];
+          wantedBy = [ "graphical-session.target" ];
+          onFailure = [ "lattice-notify-failure@%n.service" ];
+
+          path = sessionPath;
+
+          environment = {
+            STREAMDECK_UI_CONFIG = "%S/lattice/streamdeck.json";
+            # Otherwise this lands in $HOME as a dotfile.
+            STREAMDECK_UI_LOG_FILE = "%S/lattice/streamdeck.log";
+          };
+
+          serviceConfig = {
+            Type = "simple";
+            StateDirectory = "lattice";
+            ExecStartPre = lib.getExe seed;
+            # -n: no window. With the tray icon patched out above there is no way to raise one
+            # either, which is the intended state -- see the note on streamdeckUi.
+            ExecStart = "${streamdeckUi}/bin/streamdeck -n";
+            Restart = "on-failure";
+            # A clean stop takes well under a second (see the QTimer patch on streamdeckUi).
+            # Anything longer is a hang, and the default 90s holds up every other unit a
+            # switch is restarting.
+            TimeoutStopSec = 5;
+          };
         };
 
-        serviceConfig = {
-          Type = "simple";
-          StateDirectory = "lattice";
-          ExecStartPre = lib.getExe seed;
-          # -n: no window. With the tray icon patched out above there is no way to raise one
-          # either, which is the intended state -- see the note on streamdeckUi.
-          ExecStart = "${streamdeckUi}/bin/streamdeck -n";
-          Restart = "on-failure";
-          # A clean stop takes well under a second (see the QTimer patch on streamdeckUi).
-          # Anything longer is a hang, and the default 90s holds up every other unit a
-          # switch is restarting.
-          TimeoutStopSec = 5;
+        # The toggles' faces come from the config file, and the config file is a guess: it was
+        # written before the session it is being read into. This is what makes the deck agree
+        # with the machine -- at login, and every few minutes after that for the two readings
+        # that go stale on their own.
+        lattice-deck-sync = {
+          description = "Repaint the Stream Deck's live keys";
+
+          after = [ "streamdeck.service" ];
+          wantedBy = [ "streamdeck.service" ];
+          partOf = [ "graphical-session.target" ];
+
+          # The readings it takes are lattice-dnd and lattice-sunset.
+          path = sessionPath;
+
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${lib.getExe deck} sync --wait";
+          };
         };
       };
 
-      # The toggles' faces come from the config file, and the config file is a guess: it was
-      # written before the session it is being read into. This is what makes the deck agree
-      # with the machine -- at login, and every few minutes after that for the two readings
-      # that go stale on their own.
-      lattice-deck-sync = {
-        description = "Repaint the Stream Deck's live keys";
-
-        after = [ "streamdeck.service" ];
-        wantedBy = [ "streamdeck.service" ];
-        partOf = [ "graphical-session.target" ];
-
-        # The readings it takes are lattice-dnd and lattice-sunset.
-        path = sessionPath;
-
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${lib.getExe deck} sync --wait";
+      systemd.user.timers.lattice-deck-sync = {
+        description = "Re-check what the Stream Deck's toggles are showing";
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnActiveSec = "5min";
+          OnUnitActiveSec = "5min";
+          Unit = "lattice-deck-sync.service";
         };
       };
-    };
 
-    # waybar clicks lattice-dnd and lattice-sunset, and both now repaint the deck's key for
-    # it as well as signalling the bar. Those scripts find lattice-deck on the PATH of
-    # whoever ran them, and waybar's is the fixed list the desktop modules build -- so it is
-    # handed the one command it did not have before.
-    systemd.user.services.waybar.path = [ deck ];
-
-    # hypridle's PATH is a fixed list inside its own NixOS module -- hyprland, hyprlock,
-    # procps -- so the listener in desktop/lock.nix that dims the deck with the screen
-    # has to be handed the command it names. It goes here rather than there because this is
-    # the module that has lattice-deck in scope.
-    systemd.user.services.hypridle.path = lib.mkIf config.services.hypridle.enable [ deck ];
-
-    systemd.user.timers.lattice-deck-sync = {
-      description = "Re-check what the Stream Deck's toggles are showing";
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnActiveSec = "5min";
-        OnUnitActiveSec = "5min";
-        Unit = "lattice-deck-sync.service";
-      };
-    };
-
-    assertions = [
-      {
-        assertion = lib.all (button: button.faces != [ ]) buttons;
-        message = "lattice.streamdeck: a key with no faces has nothing to draw.";
-      }
-      {
-        # Two faces drawn differently under one name would silently share a PNG -- whichever
-        # of them the icon build wrote last.
-        assertion = lib.length (lib.unique (map (art: art.name) faceArt)) == lib.length faceArt;
-        message = "lattice.streamdeck: two different key faces share an icon name.";
-      }
-      {
-        assertion = hasHome -> config.lattice.homeassistant.enable;
-        message = "lattice.streamdeck.homePage presses Home Assistant entities, so it needs lattice.homeassistant.enable.";
-      }
-      {
-        assertion = lib.all (key: key.kind == "toggle" -> g ? "${key.icon}On") cfg.homePage;
-        message = "lattice.streamdeck.homePage: a toggle's icon needs an \"On\" variant to show when it is on.";
-      }
-      {
-        assertion = flake != null;
-        message = "lattice.streamdeck: the rebuild key needs programs.nh.flake, which is where the repo's path is written down.";
-      }
-    ];
-
-    lattice.cli.commands.deck = {
-      exec = lib.getExe deck;
-      args = "<verb> [args...]";
-      complete = [
-        "sync"
-        "page"
-        "play"
-        "mute"
-        "mic"
-        "audio"
-        "audio-restart"
-        "profile"
-        "dim"
-        "wake"
-        "arm"
-        "rebuild"
+      assertions = [
+        {
+          assertion = lib.all (button: button.faces != [ ]) buttons;
+          message = "lattice.streamdeck: a key with no faces has nothing to draw.";
+        }
+        {
+          # Two faces drawn differently under one name would silently share a PNG -- whichever
+          # of them the icon build wrote last.
+          assertion = lib.length (lib.unique (map (art: art.name) faceArt)) == lib.length faceArt;
+          message = "lattice.streamdeck: two different key faces share an icon name.";
+        }
+        {
+          assertion = hasHome -> config.lattice.homeassistant.enable;
+          message = "lattice.streamdeck.homePage presses Home Assistant entities, so it needs lattice.homeassistant.enable.";
+        }
+        {
+          assertion = lib.all (key: key.kind == "toggle" -> g ? "${key.icon}On") cfg.homePage;
+          message = "lattice.streamdeck.homePage: a toggle's icon needs an \"On\" variant to show when it is on.";
+        }
+        {
+          assertion = flake != null;
+          message = "lattice.streamdeck: the rebuild key needs programs.nh.flake, which is where the repo's path is written down.";
+        }
       ];
-      summary = "Drive the Stream Deck and repaint its keys";
-      details = ''
-        sync [--wait] [reading...]   repaint the live keys; everything, by default
-        page <index>                 switch page and light its rail key
-        play | mute | mic | audio    media and audio, with the key repainted after
-        audio-restart                restart PipeWire when the speakers vanish
-        profile                      cycle the power profile, as the bar's bubble does
-        dim | wake                   the deck's own backlight
-        arm | rebuild                the two halves of the rebuild key
-      '';
-      group = "devices";
-    };
-  };
+    })
+  ];
 }
