@@ -268,11 +268,10 @@ let
       pkgs.procps
       pkgs.coreutils # mktemp
     ];
-    # With no place set there is nothing to ask for, and an empty line hides the pill.
+    # Only built with a place set (see waybar.path below): with none there is nothing to
+    # ask for, and the pill and the `lattice weather` command are left out too.
     text = ''
-      ${
-        lib.optionalString (config.lattice.weather.latitude == null) "exit 0\n"
-      }lat=${toString config.lattice.weather.latitude}
+      lat=${toString config.lattice.weather.latitude}
       lon=${toString config.lattice.weather.longitude}
       label=${lib.escapeShellArg config.lattice.weather.label}
 
@@ -1648,7 +1647,6 @@ in
     # there.
     waybar.path = [
       tailscale
-      weather
       # Both ends of the power-profile pill: waybar runs `status` on the interval and
       # `cycle` on a click, and the script's own runtimeInputs cover everything it calls
       # except lattice-deck, which streamdeck.nix puts on this same PATH.
@@ -1664,7 +1662,9 @@ in
       vault
       pkgs.wireplumber
       config.programs.firefox.finalPackage
-    ];
+    ]
+    # The weather pill's, when there is a place to ask about.
+    ++ lib.optional (config.lattice.weather.latitude != null) weather;
   };
 
   lattice.bar.modules = {
@@ -1825,7 +1825,7 @@ in
         }
       ];
     };
-    weather = {
+    weather = lib.mkIf (config.lattice.weather.latitude != null) {
       exec = lib.getExe weather;
       args = "[status|refresh]";
       summary = "The bar's weather; refresh drops the cache";
