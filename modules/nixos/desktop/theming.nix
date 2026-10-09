@@ -89,7 +89,7 @@ let
   # actually changed -- a wallpaper step changes the accent and nothing in foot, and
   # re-sourcing tmux.conf for nothing costs a status-bar redraw (tmux does take the accent,
   # for its active pane border). waybar watches
-  # theme.css itself (reload_style_on_change in ~/.dotfiles/waybar/config.jsonc): that
+  # theme.css itself (reload_style_on_change in waybar.nix): that
   # restyles the bar in place, where the SIGUSR2 it used to get rebuilt every bar surface,
   # ate the next click on the wallpaper pill and aborted waybar outright on a few picks in
   # quick succession. nvim watches theme-nvim.lua the same way. mako has `makoctl reload`;
@@ -559,7 +559,7 @@ let
   # makes this worth being a menu at all: the names are the palette's, and "sapphire"
   # against "sky" is a distinction the eye makes instantly in colour and slowly in words.
   # The glyph is md-wallpaper, the one the pill that opens this wears and the one on the
-  # deck's key for `next` -- see ~/.dotfiles/waybar/config.jsonc and streamdeck.nix.
+  # deck's key for `next` -- see the pill below and streamdeck.nix.
   wallpaperMenu = pkgs.writeShellApplication {
     name = "lattice-wallpaper-menu";
     runtimeInputs = [
@@ -746,6 +746,43 @@ let
   '';
 in
 {
+  # The wallpaper. An action rather than a toggle -- the pool has fourteen members and none
+  # of them is an "on" -- so there is no state to read back and the pill is a static format
+  # with click handlers. Left click is `next`, exactly what the deck's paper key runs; right
+  # click opens lattice-wallpaper-menu, a rofi list of the pool by accent name with a swatch
+  # per row and the one already up marked. Middle click re-rolls -- `random` skips whatever
+  # is up, so a re-roll always lands somewhere new.
+  #
+  # And the flavour, its other half: that one moves the accent, this one the whole palette
+  # under it -- bar, borders, menus, lock screen, terminal, tmux and nvim. Left click steps
+  # to the next flavour, right click opens lattice-theme-menu, a strip of each flavour's
+  # colours. Both keep the wallpaper that is up and redraw it in the new flavour.
+  lattice.bar.modules = {
+    "custom/wallpaper" = {
+      section = "group/toggles";
+      order = 40;
+      settings = {
+        format = "󰸉";
+        tooltip = true;
+        tooltip-format = "Wallpaper";
+        on-click = "lattice-wallpaper next";
+        on-click-right = "lattice-wallpaper-menu";
+        on-click-middle = "lattice-wallpaper random";
+      };
+    };
+    "custom/theme" = {
+      section = "group/toggles";
+      order = 50;
+      settings = {
+        format = "󰏘";
+        tooltip = true;
+        tooltip-format = "Theme";
+        on-click = "lattice-theme next";
+        on-click-right = "lattice-theme-menu";
+      };
+    };
+  };
+
   environment.systemPackages = with pkgs; [
     adw-gtk3
     (catppuccin-papirus-folders.override {

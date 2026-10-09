@@ -665,24 +665,33 @@ let
   # it -- rofi gets its rows as TSV here, the browser page embeds the whole file -- so the
   # two can't drift. Rows marked "live" are the ones the dump already reports; rofi takes
   # those from the dump, and the page checks them against it.
-  nvimBuiltins = pkgs.runCommand "lattice-keys-nvim-builtins.tsv" { nativeBuildInputs = [ pkgs.jq ]; } ''
-    jq -r '
-      .sections[] as $s | $s.rows[] | select(.keys and .src != "live")
-      | (.mode // $s.mode) as $m
-      | [(.keys | join(" / ")),
-         (.desc | gsub("<[^>]+>"; "") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&amp;"; "&"))
-           + (if $s.ctx then " (" + $s.ctx + ")" else "" end)
-           + (if $m == "n" then "" else "  [" + $m + "]" end)]
-      | @tsv
-    ' ${./cheatsheet/nvim.json} > $out
-  '';
+  nvimBuiltins =
+    pkgs.runCommand "lattice-keys-nvim-builtins.tsv" { nativeBuildInputs = [ pkgs.jq ]; }
+      ''
+        jq -r '
+          .sections[] as $s | $s.rows[] | select(.keys and .src != "live")
+          | (.mode // $s.mode) as $m
+          | [(.keys | join(" / ")),
+             (.desc | gsub("<[^>]+>"; "") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&amp;"; "&"))
+               + (if $s.ctx then " (" + $s.ctx + ")" else "" end)
+               + (if $m == "n" then "" else "  [" + $m + "]" end)]
+          | @tsv
+        ' ${./cheatsheet/nvim.json} > $out
+      '';
 
   # The browser cheatsheet: sheet.html with nvim.json, groups.json (how the Hyprland and
   # tmux rows are sorted into sections) and page-themes.json (shared with the guides) inlined, so the page opens from file:// with nothing
   # to fetch. The picker's rows go in at @LIVE@ when `lattice cheatsheet` writes it out.
   # "</" is escaped so a </code> in a description can't close the script element early.
   cheatsheetPage =
-    pkgs.runCommand "lattice-cheatsheet.html" { nativeBuildInputs = [ pkgs.jq pkgs.gawk pkgs.gnused ]; }
+    pkgs.runCommand "lattice-cheatsheet.html"
+      {
+        nativeBuildInputs = [
+          pkgs.jq
+          pkgs.gawk
+          pkgs.gnused
+        ];
+      }
       ''
         jq -c -s '{nvim: .[0], groups: .[1]}' ${./cheatsheet/nvim.json} ${./cheatsheet/groups.json} \
           | sed 's#</#<\\/#g' > sheet.json
@@ -1010,6 +1019,19 @@ let
   };
 in
 {
+  # The session menu. lattice-power toggles wlogout, themed from here rather than from
+  # wlogout's own files -- see powerMenu above.
+  lattice.bar.modules."custom/power" = {
+    section = "right";
+    order = 70;
+    settings = {
+      format = "󰐥";
+      tooltip = true;
+      tooltip-format = "Session";
+      on-click = "lattice-power";
+    };
+  };
+
   environment.systemPackages = [
     rofiWithCalc
     wifiMenu

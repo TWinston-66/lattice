@@ -11,6 +11,20 @@ let
     rofiWithCalc
     ;
 
+  # The real-time signal each script sends waybar to re-run its pill at once, and the one
+  # the pill listens for: SIGRTMIN+n. Shared from here so the two can't drift apart.
+  # Other modules hold the rest (waybar.nix asserts no two pills share one).
+  signal = {
+    tailscale = 2;
+    weather = 3;
+    powerProfile = 6;
+    vault = 7;
+  };
+
+  # The power-profile pill's sample rate, which its graph needs to know; see `period` in
+  # the script.
+  powerProfileInterval = 2;
+
   # Tailscale has no Linux GUI, so the bar pill is the interface: the tooltip carries the
   # connection report and a click brings the tunnel up or down. `tailscale status --json`
   # exposes the daemon's own view, so there is no separate session state to keep in step --
@@ -201,11 +215,10 @@ let
           ;;
         esac
 
-        # RTMIN+2 matches the "signal" of custom/tailscale in ~/.dotfiles/waybar. After a
-        # sign-in it only repaints the pill as "signed out" again -- the browser leg is
-        # still in progress at this point -- so the switch to connected arrives with the
-        # module's 30s interval.
-        pkill -RTMIN+2 waybar 2>/dev/null || true
+        # After a sign-in this only repaints the pill as "signed out" again -- the browser
+        # leg is still in progress at this point -- so the switch to connected arrives with
+        # the module's 30s interval.
+        pkill -RTMIN+${toString signal.tailscale} waybar 2>/dev/null || true
       }
 
       web() {
@@ -394,8 +407,7 @@ let
       status) status ;;
       # The signal is the whole of it: waybar re-runs `status` on receipt, and that is what
       # re-fetches. Doing the fetch here as well would make every click two round trips.
-      # RTMIN+3 matches the "signal" of custom/weather in ~/.dotfiles/waybar.
-      refresh) pkill -RTMIN+3 waybar 2>/dev/null || true ;;
+      refresh) pkill -RTMIN+${toString signal.weather} waybar 2>/dev/null || true ;;
       *)
         echo "usage: lattice weather [status|refresh]" >&2
         exit 2
@@ -449,10 +461,10 @@ let
       c_none=''${c[overlay0]}
       c_warn=''${c[red]}
       # The graph is `width` samples of the waybar interval, so these two are the window: 60 at
-      # 2s is the last two minutes. Keep `period` in step with "interval" on custom/power-profile
-      # in ~/.dotfiles/waybar/config.jsonc -- it is only used to say how long the window is.
+      # 2s is the last two minutes. `period` is that interval, used only to say how long the
+      # window is.
       width=60
-      period=2
+      period=${toString powerProfileInterval}
       extras_every=10
 
       state="''${XDG_RUNTIME_DIR:-/tmp}/lattice-power-profile"
@@ -470,9 +482,7 @@ let
         # bar and the deck from disagreeing about which profile is on -- the same reason both
         # audio pills mute through lattice-deck.
         lattice-deck profile
-        # RTMIN+6 matches the "signal" of custom/power-profile in ~/.dotfiles/waybar. 1 to 5 are
-        # sunset, tailscale, weather, dnd and idle.
-        pkill -RTMIN+6 waybar 2>/dev/null || true
+        pkill -RTMIN+${toString signal.powerProfile} waybar 2>/dev/null || true
         exit 0
         ;;
       *)
@@ -1414,7 +1424,6 @@ let
   # it lands. BatchMode keeps a locked agent from turning into a prompt -- the fetch just
   # fails, and the tooltip says how long ago the remote was last seen.
   #
-  # RTMIN+7 matches the "signal" of custom/vault in ~/.dotfiles/waybar. 1 to 6 are taken.
   vault = pkgs.writeShellApplication {
     name = "lattice-vault";
     runtimeInputs = [
@@ -1461,7 +1470,7 @@ let
         else
           printf '%s\n' "''${out:-timed out}" | tail -n 1 >"$failure"
         fi
-        pkill -RTMIN+7 -x waybar || true
+        pkill -RTMIN+${toString signal.vault} -x waybar || true
       }
 
       status() {
@@ -1606,8 +1615,6 @@ let
   };
 in
 {
-  programs.waybar.enable = true;
-
   environment.systemPackages = [
     tailscale
     powerProfile
@@ -1618,8 +1625,8 @@ in
     # systemd -- and notably *not* /run/current-system/sw/bin. Waybar runs its module
     # commands through `sh -c` with that environment, so anything they call has to be
     # named here or it fails with "command not found" and the module silently renders
-    # empty. Keep this in step with the on-click/on-scroll/exec commands in
-    # ~/.dotfiles/waybar/config.jsonc.
+    # empty. Keep this in step with the exec and on-click commands of the pills below and
+    # in waybar.nix.
     #
     # Each desktop module appends the scripts it owns (theming.nix the wallpaper and theme
     # pills, menus.nix the menus, and so on); what is here is the bar's own share.
@@ -1654,6 +1661,145 @@ in
       pkgs.wireplumber
       config.programs.firefox.finalPackage
     ];
+  };
+
+  lattice.bar.modules = {
+    # Caps lock, for the keyboards without an LED for it. Only on the bar while it is on --
+    # lattice-capslock prints empty text otherwise.
+    "custom/capslock" = {
+      section = "left";
+      order = 20;
+      settings = {
+        exec = "lattice-capslock";
+        return-type = "json";
+        tooltip = true;
+      };
+    };
+
+    # The clock, from lattice-clock rather than waybar's built-in module: that one's
+    # calendar colours could only be literals in the config, which is only re-read on a
+    # full reload. lattice-clock draws the hover calendar from the run-time theme and
+    # redraws it when the theme changes. A click opens lattice-calendar, the month with
+    # previous / today / next buttons under it.
+    "custom/clock" = {
+      section = "center";
+      order = 10;
+      settings = {
+        exec = "lattice-clock";
+        return-type = "json";
+        tooltip = true;
+        on-click = "lattice-calendar";
+      };
+    };
+
+    # Weather, from Open-Meteo via lattice-weather, for the place in lattice.weather -- and
+    # only with one: no coordinates, no pill. The exec emits the glyph, both temperatures
+    # and a class per temperature band; nothing here spells the conditions out, because the
+    # glyph and the colour in style.css already carry them.
+    #
+    # First on the right, so it is still the pill the clock is read next to: "what time is
+    # it" and "what is it doing outside" get answered in the same glance. Kept to the glyph
+    # and the temperature, with the feels-like reading in the tooltip.
+    #
+    # interval 900 is the API's own cadence, not a guess: Open-Meteo stamps its `current`
+    # block "interval":900, so a faster poll returns the same numbers. A click doesn't have
+    # to wait it out -- `lattice-weather refresh` signals the bar and waybar re-runs the exec.
+    "custom/weather" = lib.mkIf (config.lattice.weather.latitude != null) {
+      section = "right";
+      order = 10;
+      settings = {
+        exec = "lattice-weather status";
+        return-type = "json";
+        signal = signal.weather;
+        interval = 900;
+        on-click = "lattice-weather refresh";
+      };
+    };
+
+    # The Obsidian vault's git state: uncommitted files as a count, then ↑ for commits not
+    # pushed and ↓ for commits on GitHub not pulled, coloured by the worst of them. A
+    # readout rather than a toggle, so it sits after them. The script checks GitHub on its
+    # own every five minutes and signals the bar when it has; the interval only re-reads the
+    # working tree. Click fetches now, right-click opens lazygit in the vault. Empty, and so
+    # hidden, where there is no vault.
+    "custom/vault" = {
+      section = "group/toggles";
+      order = 60;
+      settings = {
+        exec = "lattice-vault status";
+        return-type = "json";
+        signal = signal.vault;
+        interval = 10;
+        on-click = "lattice-vault fetch";
+        on-click-right = "lattice-vault open";
+      };
+    };
+
+    # Tailscale has no Linux GUI, so the pill is the interface: hover for the connection
+    # report, click to bring the tunnel up or down, right-click for the admin console. The
+    # glyph and colour are chosen by lattice-tailscale per state, so nothing here spells the
+    # state out -- the script emits `text` and the class style.css keys off. It signals the
+    # bar itself after a toggle, so the interval is only a safety net for changes made from
+    # a shell. Icon-only, and just right of network. Only on a host that runs Tailscale.
+    "custom/tailscale" = lib.mkIf config.services.tailscale.enable {
+      section = "group/links";
+      order = 20;
+      settings = {
+        exec = "lattice-tailscale status";
+        return-type = "json";
+        signal = signal.tailscale;
+        interval = 30;
+        on-click = "lattice-tailscale toggle";
+        on-click-right = "lattice-tailscale web";
+      };
+    };
+
+    # The power profile, and -- on hover -- what the machine is doing with it: four
+    # sparklines over the last two minutes (load, each core cluster's clock, and the
+    # package's own draw in watts), then the fans, the hottest sensor that names itself and
+    # the battery. lattice-power-profile, above, emits the lot as one JSON object.
+    #
+    # Waybar's own power-profiles-daemon module was here and drew the same three glyphs. It
+    # could not grow this tooltip: its tooltip-format takes exactly one placeholder,
+    # {profile}, and nothing that reaches sysfs.
+    #
+    # Icon-only, as that one was: the three glyphs are distinct enough to read at a glance,
+    # and dropping the labels frees ~42px of bar. The profile's name is still one hover
+    # away, at the head of the graphs.
+    #
+    # The interval is the graph's sample rate rather than a refresh rate. The script keeps
+    # a 60-sample window in XDG_RUNTIME_DIR and each tick is one column of it, so a hover
+    # shows the two minutes that have already happened instead of starting a graph when the
+    # pointer arrives -- which is also why the sampling cannot be made lazy.
+    #
+    # The signal is what makes a click land at once; the click itself cycles through
+    # lattice-deck, so a deck's profile key and this pill cannot disagree.
+    "custom/power-profile" = {
+      section = "group/energy";
+      order = 10;
+      settings = {
+        exec = "lattice-power-profile status";
+        return-type = "json";
+        signal = signal.powerProfile;
+        interval = powerProfileInterval;
+        on-click = "lattice-power-profile cycle";
+      };
+    };
+
+    # The battery, from lattice-battery-pill rather than waybar's built-in module: that one
+    # works the percentage out from energy_now / energy_full and never reads the kernel's
+    # capacity, so on the Mac it read 77% while upower, fastfetch and the power-profile
+    # tooltip all read 80%. The script sets the charging / plugged / warning / critical
+    # classes the stylesheet colours.
+    "custom/battery" = {
+      section = "group/energy";
+      order = 20;
+      settings = {
+        exec = "lattice-battery-pill";
+        return-type = "json";
+        tooltip = true;
+      };
+    };
   };
 
   lattice.cli.commands = {

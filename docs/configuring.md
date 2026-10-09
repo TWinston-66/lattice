@@ -47,11 +47,12 @@ aliases.
 
 ## Desktop configs and your dotfiles
 
-The terminal, tmux, rofi, mako, the on-screen display and the other desktop programs run
-on configs lattice ships in `modules/nixos/desktop/configs/`, installed under `/etc`.
-A file of your own in `~/.config` takes over from lattice's for that program. Hyprland
-and waybar still live in
-[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles) while they move
+The terminal, tmux, the bar, rofi, mako, the on-screen display and the other desktop
+programs run on configs lattice ships in `modules/nixos/desktop/configs/`, installed
+under `/etc`. A file of your own in `~/.config` takes over from lattice's for that
+program. The bar's modules are declared in Nix, each next to the script that feeds it,
+as `lattice.bar.modules` (see `desktop/waybar.nix`). Hyprland still lives in
+[a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles) while it moves
 over, along with personal tools like Neovim and zsh. Everything reads its colours from
 the generated theme files.
 

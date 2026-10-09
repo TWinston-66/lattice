@@ -29,6 +29,9 @@
 # password is read from lattice.backup.passwordFile, and should also live somewhere that
 # survives the host, such as a password manager.
 let
+  # SIGRTMIN+9, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 9;
+
   cfg = config.lattice.backup;
 
   label = "lattice-backup";
@@ -148,8 +151,7 @@ let
 
     human() { numfmt --to=iec --suffix=B --format=%.1f "$1"; }
 
-    # RTMIN+9 matches the "signal" of custom/backup in ~/.dotfiles/waybar. 1 to 8 are taken.
-    signal() { pkill -RTMIN+9 -x waybar || true; }
+    signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
   '';
 
   # Root's way onto winston's screen: a transient unit in the user manager, which already
@@ -876,6 +878,24 @@ in
   };
 
   config = {
+    # Hidden unless there is something to see: the drive is plugged in, the last run
+    # failed, or the last backup is a week old. The text is the age of the last backup, or
+    # progress while one runs; the tooltip has the rest. The runner signals the bar on every
+    # change, so the interval is only for the age ticking over. Click backs up now,
+    # right-click is the menu (browse, check, eject; desktop/backup.nix).
+    lattice.bar.modules."custom/backup" = {
+      section = "group/toggles";
+      order = 70;
+      settings = {
+        exec = "lattice-backup bar";
+        return-type = "json";
+        signal = barSignal;
+        interval = 30;
+        on-click = "lattice-backup now";
+        on-click-right = "lattice-backup-menu";
+      };
+    };
+
     environment.systemPackages = [
       cli
       pkgs.restic

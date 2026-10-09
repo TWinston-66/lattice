@@ -12,6 +12,9 @@
 # keyboard's -- reaches the radio like any other player. It is loaded into this service
 # only, not into the system mpv.
 let
+  # SIGRTMIN+10, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 10;
+
   inherit (import ./lib.nix { inherit config lib pkgs; }) rofiWithCalc;
 
   # Tells lattice-radio about each new track and each pause, so it can raise the banner
@@ -62,8 +65,7 @@ let
       sock=$run/mpv.sock
       unit=lattice-radio.service
 
-      # RTMIN+10 matches the "signal" of custom/radio in ~/.dotfiles/waybar. 1 to 9 are taken.
-      signal() { pkill -RTMIN+10 -x waybar || true; }
+      signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
 
       # channels.tsv: id, title, description, genre, stream, logo URL -- most listeners
       # first. The stream is the 128k AAC playlist; every channel has one (2026-10-08).
@@ -325,6 +327,26 @@ let
   };
 in
 {
+  # SomaFM. Hidden unless the radio is on; the text is the channel, the tooltip the track.
+  # Click is the player -- cover art, pause, change channel, stop -- right-click pauses,
+  # middle-click stops. The player and every track change signal the bar, so the interval
+  # only backs that up. Capped in length: the channel names run to "Department Store
+  # Christmas", and the left side has no room to give.
+  lattice.bar.modules."custom/radio" = {
+    section = "left";
+    order = 40;
+    settings = {
+      exec = "lattice-radio bar";
+      return-type = "json";
+      signal = barSignal;
+      interval = 30;
+      max-length = 22;
+      on-click = "lattice-radio menu";
+      on-click-right = "lattice-radio toggle";
+      on-click-middle = "lattice-radio stop";
+    };
+  };
+
   environment.systemPackages = [ radio ];
 
   # The pill's exec and its clicks; see the PATH note on waybar.path in bar.nix.

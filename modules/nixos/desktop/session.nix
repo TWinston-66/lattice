@@ -5,6 +5,9 @@
   ...
 }:
 let
+  # SIGRTMIN+1, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 1;
+
   # hyprsunset runs from session start but idles at its 6000K default, which is no filter
   # at all -- the daemon is only useful once something sets a temperature.
   #
@@ -54,8 +57,7 @@ let
         ;;
       esac
 
-      # RTMIN+1 matches the "signal" of the custom/sunset module in ~/.dotfiles/waybar.
-      pkill -RTMIN+1 waybar || true
+      pkill -RTMIN+${toString barSignal} waybar || true
 
       # And the Stream Deck's key for it, the other consumer of the `status` above. `|| true`
       # for the same reason as the signal: a deck that is unplugged, or a lattice-deck that
@@ -91,6 +93,21 @@ let
   };
 in
 {
+  # Night light. lattice-sunset emits the JSON and signals the bar after every change, so
+  # the pill updates on click instead of waiting out an interval. It queries hyprsunset
+  # itself, so an external `hyprctl hyprsunset` still shows up here within the interval.
+  lattice.bar.modules."custom/sunset" = {
+    section = "group/toggles";
+    order = 10;
+    settings = {
+      exec = "lattice-sunset status";
+      return-type = "json";
+      signal = barSignal;
+      interval = 30;
+      on-click = "lattice-sunset toggle";
+    };
+  };
+
   ### SESSION ###
   programs.hyprland = {
     enable = true;

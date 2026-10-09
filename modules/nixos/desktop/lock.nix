@@ -5,6 +5,9 @@
   ...
 }:
 let
+  # SIGRTMIN+5, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 5;
+
   inherit (import ./lib.nix { inherit config lib pkgs; })
     theme
     palette
@@ -74,9 +77,7 @@ let
         ;;
       esac
 
-      # RTMIN+5 matches the "signal" of custom/idle in ~/.dotfiles/waybar. 1 to 4 are
-      # sunset, tailscale, weather and dnd.
-      pkill -RTMIN+5 waybar || true
+      pkill -RTMIN+${toString barSignal} waybar || true
 
       # And the deck's key for it, as the other three do.
       lattice-deck sync awake || true
@@ -84,6 +85,27 @@ let
   };
 in
 {
+  # Keep awake, a click-toggle like the night light and do not disturb beside it. The
+  # built-in idle_inhibitor was here until the Stream Deck grew a key for the same thing and
+  # the two could not be made to agree: waybar's inhibitor is a lock held on waybar's own
+  # surface, and nothing outside waybar can read it or let it go. lattice-idle holds a
+  # logind idle inhibitor instead, which is a state both surfaces can read.
+  #
+  # Icon-only to save bar width; the colour carries the state. The interval is a backstop
+  # for a change made from somewhere else entirely; the signal is what makes a click land
+  # immediately.
+  lattice.bar.modules."custom/idle" = {
+    section = "group/toggles";
+    order = 30;
+    settings = {
+      exec = "lattice-idle status";
+      return-type = "json";
+      signal = barSignal;
+      interval = 30;
+      on-click = "lattice-idle toggle";
+    };
+  };
+
   environment.systemPackages = [
     idleInhibit
   ];

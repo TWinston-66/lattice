@@ -1,5 +1,8 @@
 { lib, pkgs, ... }:
 let
+  # SIGRTMIN+8, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 8;
+
   # The desktop app is what lets the Firefox extension unlock with polkit instead of the
   # master password: the extension talks to desktop_proxy over native messaging, the proxy
   # talks to the running app, and the app asks polkit. Passkeys themselves need none of
@@ -35,7 +38,7 @@ let
   # here shows or hides that workspace.
   #
   # The lock state is read off the SSH agent: an unlocked vault serves its keys, a locked
-  # one lists none. RTMIN+8 matches the "signal" of custom/bitwarden in ~/.dotfiles/waybar.
+  # one lists none.
   pill = pkgs.writeShellApplication {
     name = "lattice-bitwarden";
     runtimeInputs = [
@@ -94,7 +97,7 @@ let
         else
           hyprctl dispatch 'hl.dsp.workspace.toggle_special("bitwarden")' >/dev/null
         fi
-        pkill -RTMIN+8 -x waybar || true
+        pkill -RTMIN+${toString barSignal} -x waybar || true
       }
 
       case ''${1:-status} in
@@ -109,6 +112,22 @@ let
   };
 in
 {
+  # The pill: the lock state as a glyph, and a click that shows or hides the app's window.
+  # A minute, not ten seconds: every poll is an `ssh-add -l` that wakes the Electron app and
+  # logs a line, times two bars when docked. A click repaints it at once through the
+  # signal, so only a lock or unlock done in the app itself waits for the next tick.
+  lattice.bar.modules."custom/bitwarden" = {
+    section = "group/toggles";
+    order = 80;
+    settings = {
+      exec = "lattice-bitwarden status";
+      return-type = "json";
+      signal = barSignal;
+      interval = 60;
+      on-click = "lattice-bitwarden toggle";
+    };
+  };
+
   # On systemPackages rather than a bare reference so its share/polkit-1 lands in
   # /run/current-system/sw, where polkit looks for com.bitwarden.Bitwarden.unlock. The
   # app's own "set up" button wants to write it under /usr/share, which does not exist here.

@@ -5,6 +5,9 @@
   ...
 }:
 let
+  # SIGRTMIN+4, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 4;
+
   user = config.lattice.user.name;
 
   inherit (import ./lib.nix { inherit config lib pkgs; })
@@ -64,9 +67,7 @@ let
         ;;
       esac
 
-      # RTMIN+4 matches the "signal" of the custom/dnd module in ~/.dotfiles/waybar. 1, 2
-      # and 3 are sunset, tailscale and weather.
-      pkill -RTMIN+4 waybar || true
+      pkill -RTMIN+${toString barSignal} waybar || true
 
       # And the Stream Deck's key for it, the other consumer of the `status` above. `|| true`
       # for the same reason as the signal: a deck that is unplugged, or a lattice-deck that
@@ -195,6 +196,28 @@ let
   };
 in
 {
+  # Do not disturb. The whole of the mechanism is `[mode=dnd] invisible=1` in the mako
+  # config -- lattice-dnd only flips mako's mode and signals the bar, so mako owns the state
+  # and this pill reads it back rather than tracking it. Same contract as the night light's
+  # pill, and the same reason: a pill that keeps its own copy can disagree with the thing it
+  # claims to describe.
+  #
+  # The tooltip counts what is waiting, which is not the same as what was missed. A hidden
+  # notification is still live, so the count is what will appear the moment the mode goes
+  # off; a normal notification that timed out while it was on is already in the history,
+  # and SUPER+ALT+N is where that lives.
+  lattice.bar.modules."custom/dnd" = {
+    section = "group/toggles";
+    order = 20;
+    settings = {
+      exec = "lattice-dnd status";
+      return-type = "json";
+      signal = barSignal;
+      interval = 30;
+      on-click = "lattice-dnd toggle";
+    };
+  };
+
   environment.systemPackages = [
     notifyHistory
     dnd

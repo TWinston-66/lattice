@@ -16,6 +16,7 @@
     ../desktop/apps.nix
     ../desktop/configs.nix
     ../desktop/theming.nix
+    ../desktop/waybar.nix
     ../desktop/bar.nix
     ../desktop/backup.nix
     ../desktop/menus.nix

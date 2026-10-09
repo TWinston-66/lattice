@@ -291,7 +291,7 @@ in
     example = 0.85;
     description = ''
       Size of the waybar pills -- font, padding, corner radius and the bar's height --
-      relative to what ~/.dotfiles/waybar/style.css draws. GTK CSS has no zoom, so anything
+      relative to what the bar's style.css (desktop/configs/waybar.css) draws. GTK CSS has no zoom, so anything
       but 1.0 writes /etc/xdg/waybar/lattice-bar.css with those lengths multiplied out and
       rounded to whole pixels, and imports it from the palette drop-in style.css already
       pulls in.
@@ -349,7 +349,7 @@ in
       };
     })
 
-    # Every length here mirrors one in ~/.dotfiles/waybar/style.css, so a change there wants
+    # Every length here mirrors one in desktop/configs/waybar.css, so a change there wants
     # the same number changed here. The selectors carry `window#waybar` to outrank the
     # stylesheet's own single-id rules: this file is @imported, and GTK only takes an
     # @import ahead of every rule, so it can't win on source order. That also keeps it off

@@ -13,6 +13,9 @@
 # transient systemd timer on the wall clock, so it still fires on time -- or at once on
 # resume -- after a suspend, which a monotonic timer would have slept through.
 let
+  # SIGRTMIN+11, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 11;
+
   inherit (import ./lib.nix { inherit config lib pkgs; }) rofiWithCalc;
 
   pomodoro = pkgs.writeShellApplication {
@@ -35,8 +38,7 @@ let
       state=$dir/state
       timer=lattice-pomodoro-next
 
-      # RTMIN+11 matches the "signal" of custom/pomodoro in ~/.dotfiles/waybar.
-      signal() { pkill -RTMIN+11 -x waybar || true; }
+      signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
       now() { printf '%(%s)T' -1; }
 
       load() {
@@ -201,6 +203,23 @@ let
   };
 in
 {
+  # Last in the toggles so the countdown growing and shrinking the segment moves nothing
+  # else. A timer icon when off; click starts or pauses, right-click is a menu with skip and
+  # stop -- the Mac's trackpad has no middle click. Ticks every second for the countdown,
+  # and signals the bar on every change.
+  lattice.bar.modules."custom/pomodoro" = {
+    section = "group/toggles";
+    order = 100;
+    settings = {
+      exec = "lattice-pomodoro bar";
+      return-type = "json";
+      signal = barSignal;
+      interval = 1;
+      on-click = "lattice-pomodoro toggle";
+      on-click-right = "lattice-pomodoro menu";
+    };
+  };
+
   environment.systemPackages = [ pomodoro ];
 
   # The pill's exec and its clicks; see the PATH note on waybar.path in bar.nix.

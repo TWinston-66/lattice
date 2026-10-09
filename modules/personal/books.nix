@@ -18,6 +18,9 @@
 #     macOS leftovers a Finder session sprays over a FAT disk.
 #   - A bar pill reads KoInsight: the reading streak, and the book in progress.
 let
+  # SIGRTMIN+12, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
+  barSignal = 12;
+
   cfg = config.lattice.books;
 
   home = config.users.users.winston.home;
@@ -117,8 +120,7 @@ let
       vault=${lib.escapeShellArg cfg.highlightsDir}
       state=''${XDG_STATE_HOME:-$HOME/.local/state}/lattice/books
 
-      # RTMIN+12 matches the "signal" of custom/reading in ~/.dotfiles/waybar. 1 to 11 are taken.
-      signal() { pkill -RTMIN+12 -x waybar || true; }
+      signal() { pkill -RTMIN+${toString barSignal} -x waybar || true; }
 
       # Every banner from here replaces the last one, so a sync reads as one banner that
       # changes rather than a stack.
@@ -544,6 +546,24 @@ in
   };
 
   config = {
+    # Reading on the Kindle, from KoInsight. A book and the streak in days beside it; the
+    # tooltip has the book in progress and today's minutes. Green once something has been
+    # read today, peach while a streak is still waiting on today, muted with no streak.
+    # KoInsight only hears from the Kindle when it syncs -- on sleep, or when it's plugged
+    # in, which signals the bar -- so a slow interval is all the polling it needs. Click
+    # opens KoInsight.
+    lattice.bar.modules."custom/reading" = {
+      section = "group/toggles";
+      order = 90;
+      settings = {
+        exec = "lattice-books bar";
+        return-type = "json";
+        signal = barSignal;
+        interval = 600;
+        on-click = "lattice-books stats";
+      };
+    };
+
     sops.secrets.abs-token.owner = "winston";
 
     environment.systemPackages = [ books ];
