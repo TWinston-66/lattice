@@ -80,9 +80,17 @@ in
     "xdg/gtk-4.0/gtk.css".text = gtk4Css;
   };
 
-  systemd.user.tmpfiles.users.${user}.rules = map (
-    path: "L ${home}/.config/${path} - - - - /etc/xdg/${path}"
-  ) homeOnly;
+  systemd.user.tmpfiles.users.${user}.rules =
+    map (path: "L ${home}/.config/${path} - - - - /etc/xdg/${path}") homeOnly
+    # btop has no system config and rewrites its own on exit, so it is seeded instead,
+    # once: a copy only where there is none, naming the theme /etc/zshrc's btop alias
+    # serves from ~/.cache/lattice. btop fills in every other key with its defaults.
+    ++ [
+      "d ${home}/.config/btop 0755 - - -"
+      "C ${home}/.config/btop/btop.conf - - - - ${pkgs.writeText "btop.conf" ''
+        color_theme = "catppuccin_mocha"
+      ''}"
+    ];
 
   environment.systemPackages = [ desktopEntries ];
 }
