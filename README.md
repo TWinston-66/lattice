@@ -6,6 +6,7 @@
   <a href="https://nixos.org"><img src="https://img.shields.io/badge/NixOS-unstable-89B4FA?style=flat-square&labelColor=313244&logo=nixos&logoColor=CDD6F4" alt="NixOS unstable"></a>
   <a href="https://hyprland.org"><img src="https://img.shields.io/badge/Hyprland-Wayland-94E2D5?style=flat-square&labelColor=313244" alt="Hyprland"></a>
   <a href="https://asahilinux.org"><img src="https://img.shields.io/badge/runs%20on-Apple%20Silicon-F5C2E7?style=flat-square&labelColor=313244" alt="Apple Silicon"></a>
+  <a href="https://github.com/TWinston-66/lattice/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/TWinston-66/lattice/ci.yml?event=pull_request&style=flat-square&label=CI&labelColor=313244" alt="CI"></a>
   <a href="https://github.com/Mic92/sops-nix"><img src="https://img.shields.io/badge/secrets-sops--nix-B4BEFE?style=flat-square&labelColor=313244" alt="sops-nix"></a>
   <a href="https://github.com/TWinston-66/lattice/commits/main"><img src="https://img.shields.io/github/last-commit/TWinston-66/lattice?style=flat-square&color=A6E3A1&labelColor=313244" alt="Last commit"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-CBA6F7?style=flat-square&labelColor=313244" alt="MIT license"></a>
@@ -29,13 +30,12 @@
 - **Switch themes live.** Seven dark flavours, fourteen accents and a matching wallpaper
   for each. Change them from the bar, and they apply without a rebuild or a logout.
 - **Built for laptops.** Battery-aware refresh rates, charge limiting, measured
-  suspend drain, smart hibernation, captive-portal sign-in and a guard against
-  failed suspends.
+  suspend drain, captive-portal sign-in and a guard against failed suspends.
 - **Built for Apple Silicon.** M1 and M2 MacBooks on the Asahi kernel, with
   Widevine DRM, hardware video decode, tuned trackpad and keyboard, and display fixes
   carried as patches.
-- **Reproducible and recoverable.** Every host is a flake output, and a new one starts
-  from `hosts/macbook`. Secrets can live in sops, and then the system refuses to switch
+- **Reproducible and recoverable.** Every host is a flake output, built and cached by CI,
+  and a new one starts from `hosts/macbook`. Secrets can live in sops, and then the system refuses to switch
   to a host that couldn't log anyone in.
 
 ## A tour
@@ -100,7 +100,7 @@
     <td><b>hyprlock</b>, laid out around the wallpaper's mark. Its colours follow the
     live theme, and it shares the password box with the boot splash.</td>
     <td><b>The power menu</b>: lock, suspend, log out, reboot or shut down, sized to fit
-    every attached screen. Hosts that hibernate get a sixth button.</td>
+    every attached screen.</td>
   </tr>
 </table>
 
@@ -156,7 +156,7 @@ lattice guide        # these guides, as a page
 | | |
 | --- | --- |
 | [Everyday use](docs/using.md) | The `lattice` command, rebuilding, secrets, themes |
-| [Installing lattice](docs/install.md) | PCs, Apple Silicon Macs, and adding a host to the flake |
+| [Installing lattice](docs/install.md) | Apple Silicon Macs, and adding a host to the flake |
 | [Backups](docs/backups.md) | Setting up the drive, getting files back, restoring a machine |
 | [Recovery](docs/recovery.md) | When a host can't decrypt its secrets |
 | [Configuring lattice](docs/configuring.md) | Where things live, the theme, your dotfiles |

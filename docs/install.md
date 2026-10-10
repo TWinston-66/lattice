@@ -43,7 +43,17 @@ has the details. In short:
    ```
 
 4. Edit `/mnt/etc/nixos/configuration.nix` as the guide says, plus NetworkManager, git, and
-   a user with an `initialPassword`. Then run `nixos-install` and reboot into it.
+   a user with an `initialPassword`. Add lattice's binary cache too, so the first lattice
+   build downloads what CI has already built instead of compiling it:
+
+   ```nix
+   nix.settings.substituters = [ "https://lattice.cachix.org" ];
+   nix.settings.trusted-public-keys = [
+     "lattice.cachix.org-1:A37f+od4LYzAZVpYIpWKJBNFT9wG1N0HRubFlgbm8SY="
+   ];
+   ```
+
+   Then run `nixos-install` and reboot into it.
 5. On NixOS, clone lattice to `~/lattice` and make a host for this machine:
 
    ```sh
@@ -64,7 +74,7 @@ has the details. In short:
    ```
 
 7. `git add` the new host, then run `scripts/rebuild.sh <name>`. The first switch builds the
-   Asahi kernel, so give it a while. After that, `lattice rebuild` does the same.
+   Asahi kernel, which is the one thing the cache doesn't hold, so give it a while. After that, `lattice rebuild` does the same.
 
 ## Secrets (optional)
 
