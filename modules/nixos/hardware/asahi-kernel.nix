@@ -40,10 +40,29 @@ _: {
   # the apple-drm component master and all of card1 (eDP included) with it, so it is not a
   # recovery path. Related upstream reports: AsahiLinux/linux#625 (same dcpext, same
   # swallowed-swap signature on a j416s) and #634.
+  #
+  # The USB-C ports lose USB3 after one failed PHY handshake, and then everything plugged in
+  # comes up USB2, full speed, or not at all. Seen 2026-10-10: a stick that mounted at
+  # SuperSpeed was pulled, phy-apple-atc logged "Pipehandler lock not acked" / "Failed to
+  # lock pipehandler" in the same instant, and from then on the T3 came up high-speed only
+  # and the stick failed at full speed with error -71. With both plugged in at power-on, one
+  # port came up USB2 and the other hung the controller (hub_event stuck in xhci_alloc_dev).
+  # The driver polls the lock ACK once for 1ms when it can take hundreds, leaves the
+  # RXDETECT override set when that fails, and at boot can lose a race between xhci and
+  # tipd's debounced mux switch. Likely the same thing as the iPhone's -71 loop in phone.nix.
+  #
+  # Carried locally, from AsahiLinux/linux PR #503 (commit 87a2ad1, "phy: apple: atc: fix
+  # USB3 bring-up reliability at boot and on DP alt-mode hotplug"), open upstream since
+  # 2026-05. Measured on an M1 (t8103) there; this Mac is an M2 Max. It applies to
+  # asahi-7.1.13 with offsets only; re-check it on every kernel bump.
   boot.kernelPatches = [
     {
       name = "drm-apple-complete-swallowed-swaps";
       patch = ./patches/drm-apple-complete-swallowed-swaps.patch;
+    }
+    {
+      name = "phy-apple-atc-usb3-bringup";
+      patch = ./patches/phy-apple-atc-usb3-bringup.patch;
     }
   ];
 }
