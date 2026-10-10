@@ -45,6 +45,7 @@ let
       openssh
       sops
       ssh-to-age
+      stow
       systemd
       util-linux
     ];

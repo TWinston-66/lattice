@@ -24,6 +24,17 @@ in
         install gets one.
       '';
     };
+
+    dotfiles = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "https://github.com/alice/dotfiles";
+      description = ''
+        A git URL for the account's own configs. lattice-install clones it to ~/.dotfiles
+        and runs its dotfiles.sh, if it has one, with HOME set to the new home. Nothing on
+        a running system reads it.
+      '';
+    };
   };
 
   config = {

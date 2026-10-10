@@ -14,6 +14,7 @@
   lattice.user = {
     name = "winston";
     hashedPasswordFile = config.sops.secrets.winston-password.path;
+    dotfiles = "https://github.com/TWinston-66/.dotfiles";
   };
   programs.nh.flake = "/home/winston/Documents/Projects/lattice";
 

@@ -73,6 +73,7 @@ fi
 # sops. A machine of theirs takes it, and then the account, time zone and where the flake
 # lives are personal's, not questions here.
 personal=""
+dotfiles=""
 if [[ -d "$work/modules/personal" ]]; then
     read -rp "Install the personal setup in modules/personal (secrets, tailscale, Home Assistant)? [Y/n]: " answer
     [[ "${answer,,}" == n* ]] || personal=1
@@ -101,6 +102,7 @@ if [[ -n "$personal" ]]; then
     user="$(nix_string name "$personal_nix")"
     tz="$(nix_string time.timeZone "$personal_nix")"
     flake_dir="$(nix_string programs.nh.flake "$personal_nix")"
+    dotfiles="$(nix_string dotfiles "$personal_nix")"
     [[ -n "$user" && -n "$tz" && -n "$flake_dir" ]] ||
         die "modules/personal/default.nix changed shape; can't read the user, time zone and flake path from it"
     echo "The account ($user), its password and the time zone ($tz) come from modules/personal."
@@ -153,6 +155,10 @@ while [[ -z "$personal" ]]; do
     fi
     echo "no such zone; they look like Europe/Berlin (ls /etc/zoneinfo)"
 done
+
+if [[ -z "$personal" ]]; then
+    read -rp "A git URL for your dotfiles, cloned to ~/.dotfiles (blank for none): " dotfiles
+fi
 
 ### THE SECRETS KEY ###
 # Personal's secrets open with each host's own SSH host key. This one is new, so it has to
@@ -252,6 +258,7 @@ cat <<EOF
   user       $user
   time zone  $tz
   personal   $([[ -n "$personal" ]] && echo "yes, the host added to the secrets" || echo no)
+  dotfiles   ${dotfiles:-none}
   disk       $disk
   into       ${labels[$((choice - 1))]}
   boot       $esp (the Asahi ESP, kept as it is)
@@ -449,6 +456,25 @@ say "Setting up $user"
 # With personal, the password is in the secrets and the install has already set it.
 if [[ -z "$personal" ]]; then
     printf '%s:%s\n' "$user" "$password_hash" | nixos-enter --root /mnt -c "chpasswd -e"
+fi
+# Cloned from here rather than at first login, which may be offline. Their dotfiles.sh runs
+# against the new home; Stow makes relative links, so they resolve the same after the
+# reboot. A failure here leaves the install standing: it is one clone to redo by hand.
+if [[ -n "${dotfiles:-}" ]]; then
+    say "Setting up the dotfiles"
+    home="/mnt/home/$user"
+    if git clone -q "$dotfiles" "$home/.dotfiles"; then
+        # Stow links a whole directory when nothing else is in it yet, and in an empty home
+        # that made ~/.local itself a link into the repo, so every app's state landed in it.
+        # Made first, the directories stay real and only the files are linked.
+        mkdir -p "$home/.config" "$home/.local/share/applications" "$home/.local/state"
+        if [[ -x "$home/.dotfiles/dotfiles.sh" ]]; then
+            HOME="$home" "$home/.dotfiles/dotfiles.sh" ||
+                echo "dotfiles.sh failed; run ~/.dotfiles/dotfiles.sh after logging in"
+        fi
+    else
+        echo "couldn't clone $dotfiles; clone it to ~/.dotfiles after logging in"
+    fi
 fi
 # Everything in the new home is the installer's doing, the flake's parent folders included.
 nixos-enter --root /mnt -c "chown -R $user: /home/$user"

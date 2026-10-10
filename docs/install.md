@@ -35,7 +35,8 @@ host in the flake: a folder under `hosts/`, built from the distro in `modules/ni
    With no network yet, it opens `nmtui` to join Wi-Fi, and the network it joins is kept on
    the installed system. It asks whether to install the personal setup in
    `modules/personal` (see [Secrets](#secrets-optional) below), a machine name, your user
-   name and password, a disk passphrase and a time zone, then where to put lattice: the free space the Asahi installer left, or a Linux
+   name and password, a disk passphrase, a time zone and a git URL for your dotfiles
+   (cloned to `~/.dotfiles`, with its `dotfiles.sh` run if it has one), then where to put lattice: the free space the Asahi installer left, or a Linux
    partition from an earlier install, which it erases. Apple's partitions, the ESP and the
    partition table are never touched. Nothing is written until you type `yes` at the summary.
 
@@ -79,7 +80,8 @@ flake; `scripts/rebuild.sh` then refuses to switch until the host's age key is a
 `secrets/common.yaml`, since otherwise it would boot with every account locked.
 
 Answering yes to the personal setup does that at install time: the account, its password and
-the time zone come from `modules/personal` instead of being asked for. The installer looks
+the time zone come from `modules/personal` instead of being asked for, and so do the
+dotfiles (`lattice.user.dotfiles`). The installer looks
 for the admin age key, `sops-age-keys.txt`, at the top of any USB drive and checks that it
 opens the secrets, makes the new host's SSH key, adds it to `.sops.yaml` and re-encrypts
 `secrets/common.yaml`. The admin key stays in RAM and is never written to the new disk;
