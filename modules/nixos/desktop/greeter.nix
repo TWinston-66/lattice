@@ -18,7 +18,7 @@ let
   # Where the greeter finds the theme the desktop was last in. It runs as `greeter`, which
   # cannot read ~/.cache/lattice, so lattice-palette copies the two files the greeter needs
   # here on every write -- the login pick, a wallpaper step, a theme switch -- and the next
-  # boot's greeter wears whatever the last session ended on. Owned by winston, since the
+  # boot's greeter wears whatever the last session ended on. Owned by the user, since the
   # writer runs as them; the greeter only reads.
   greeterThemeDir = "/var/lib/lattice/greeter";
 

@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 source scripts/lib.sh
 enter_dev_shell scripts/set-password.sh "$@"
 
-user="${1:-winston}"
+user="${1:-$USER}"
 file=secrets/common.yaml
 export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/sops/age/keys.txt}"
 

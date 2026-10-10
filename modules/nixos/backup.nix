@@ -15,7 +15,7 @@
 # points with `exclude` taken out, so state nobody thought to list still comes back.
 #
 # The pieces:
-#   - udev hides the drive from udisks, or udiskie would automount it as winston;
+#   - udev hides the drive from udisks, or udiskie would automount it as the user;
 #   - the drive's by-label device unit pulls in the mount, the mount pulls in
 #     lattice-backup-drive (the plugged/unplugged notifications), and that starts the timer;
 #   - lattice-backup@auto.service is what the timer runs, @now is a click on the pill, @check
@@ -152,7 +152,7 @@ let
     signal() { pkill -RTMIN+${toString barSignal} waybar || true; }
   '';
 
-  # Root's way onto winston's screen: a transient unit in the user manager, which already
+  # Root's way onto the user's screen: a transient unit in the user manager, which already
   # has the session bus in its environment. With nobody logged in it fails, and the line
   # this echoes to the journal is all that is left. Every banner shares one synchronous
   # tag, so "Backing up" turns into "Backup complete" in place rather than stacking, and
@@ -260,7 +260,7 @@ let
 
       # Runs inside `unshare --mount`, so none of these mounts are seen outside it and
       # all of them go when it exits. The snapshots are mounted where they came from inside
-      # a chroot, so restic records /home/winston and not /.lattice-backup/_home/winston,
+      # a chroot, so restic records /home/<user> and not /.lattice-backup/_home/<user>,
       # and a restore lands where it should. The repo and the password come in under a
       # private tmpfs on /run.
       capture() {
@@ -607,7 +607,7 @@ let
   };
 
   # The human end: `lattice backup ...`, the pill's JSON and the menu's actions. Everything
-  # it starts is a system unit polkit lets winston start (see the rule below), so none of
+  # it starts is a system unit polkit lets the user start (see the rule below), so none of
   # it needs sudo.
   cli = pkgs.writeShellApplication {
     name = "lattice-backup";
@@ -899,7 +899,7 @@ in
       pkgs.restic
     ];
 
-    # udiskie would otherwise mount it under /run/media as winston the moment it appears.
+    # udiskie would otherwise mount it under /run/media as the user the moment it appears.
     services.udev.extraRules = ''
       SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="${label}", ENV{UDISKS_IGNORE}="1"
     '';
@@ -967,8 +967,8 @@ in
       };
 
       # Every backup as a folder, for `lattice backup browse`. FUSE with allow_other, so
-      # winston can read it, and with the default permission checks, so only what was
-      # already winston's. It holds a lock that keeps forget and prune waiting.
+      # the user can read it, and with the default permission checks, so only what was
+      # already theirs. It holds a lock that keeps forget and prune waiting.
       lattice-backup-browse = {
         description = "Mount the backups for browsing";
         after = [ mountUnit ];

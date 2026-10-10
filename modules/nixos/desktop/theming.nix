@@ -951,7 +951,7 @@ in
   # shows it, which is why it surfaced in the fresh-user test and nowhere else.
   #
   # Per-user rather than systemd.user.tmpfiles.rules: those go to every user manager, and
-  # the greeter's starts one too, failing on winston's home at every boot.
+  # the greeter's starts one too, failing on the user's home at every boot.
   systemd.user.tmpfiles.users.${user}.rules = [
     "d ${currentDir} 0755 - - -"
   ]
