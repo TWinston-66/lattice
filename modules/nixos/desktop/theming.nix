@@ -6,6 +6,7 @@
 }:
 let
   user = config.lattice.user.name;
+  group = config.users.users.${user}.group;
 
   inherit (import ./lib.nix { inherit config lib pkgs; })
     theme
@@ -943,7 +944,11 @@ in
   '';
 
   # `C` copies only when the target is absent, so this seeds the theme files on a fresh home
-  # and then never touches them again -- every later write is lattice-palette's.
+  # and then never touches them again -- every later write is lattice-palette's. The owner
+  # and group are spelled out: given `-`, user-mode tmpfiles tries to keep the store file's
+  # root ownership, fails with EPERM before it applies the mode, and leaves a read-only copy
+  # and a failed systemd-tmpfiles-setup behind. Only a home that has never been seeded
+  # shows it, which is why it surfaced in the fresh-user test and nowhere else.
   #
   # Per-user rather than systemd.user.tmpfiles.rules: those go to every user manager, and
   # the greeter's starts one too, failing on winston's home at every boot.
@@ -956,7 +961,9 @@ in
     "L ${currentDesk} - - - - ${wallpaper}"
     "L ${currentPanel} - - - - ${lib.head panelWallpapers.${theme.flavor}}"
   ]
-  ++ map (file: "C ${currentDir}/${file} 0644 - - - ${themeSeed}/${file}") theme.runtimeFiles
+  ++ map (
+    file: "C ${currentDir}/${file} 0644 ${user} ${group} - ${themeSeed}/${file}"
+  ) theme.runtimeFiles
   # The GTK user theme under both of its names; see gtkUserTheme. `L+` so each boot points
   # them at this build's copy.
   ++
