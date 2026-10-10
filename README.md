@@ -9,6 +9,7 @@
   <a href="https://github.com/TWinston-66/lattice/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/TWinston-66/lattice/ci.yml?event=pull_request&style=flat-square&label=CI&labelColor=313244" alt="CI"></a>
   <a href="https://github.com/Mic92/sops-nix"><img src="https://img.shields.io/badge/secrets-sops--nix-B4BEFE?style=flat-square&labelColor=313244" alt="sops-nix"></a>
   <a href="https://github.com/TWinston-66/lattice/commits/main"><img src="https://img.shields.io/github/last-commit/TWinston-66/lattice?style=flat-square&color=A6E3A1&labelColor=313244" alt="Last commit"></a>
+  <a href="https://github.com/TWinston-66/.dotfiles"><img src="https://img.shields.io/badge/dotfiles-.dotfiles-FAB387?style=flat-square&labelColor=313244&logo=github&logoColor=CDD6F4" alt="The dotfiles"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-CBA6F7?style=flat-square&labelColor=313244" alt="MIT license"></a>
 </p>
 
@@ -164,6 +165,13 @@ lattice guide        # these guides, as a page
 On a running system, `lattice guide` opens them as a themed page with checkable steps and
 commands that fill in your host names. Install and recovery read just as well here, for
 when lattice isn't running yet.
+
+## Dotfiles
+
+lattice is the system and the desktop. The author's own configs (zsh, Neovim, git and the
+rest) live in [TWinston-66/.dotfiles](https://github.com/TWinston-66/.dotfiles), which
+also sets up macOS. They are kept apart, so lattice runs without them, and a user's own
+dotfiles go where they do; see [Configuring lattice](docs/configuring.md).
 
 ## License
 
