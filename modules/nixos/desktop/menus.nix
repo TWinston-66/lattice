@@ -857,10 +857,6 @@ let
     ];
   };
 
-  # Resuming needs somewhere to resume from, so a host without a resume device has no
-  # business offering hibernation.
-  canHibernate = config.boot.resumeDevice != "";
-
   powerButton = label: action: icon: word: {
     inherit label action word;
     text = "${icon}  ${word}";
@@ -874,13 +870,14 @@ let
 
   reboot = powerButton "reboot" "systemctl reboot" "󰜉" "Reboot";
 
-  hibernate = powerButton "hibernate" "systemctl hibernate" "󰋊" "Hibernate";
-
   shutdown = powerButton "shutdown" "systemctl poweroff" "󰐥" "Shut down";
 
-  # The buttons as they read on screen, left to right and then down, which is also the
-  # order they are numbered in: each one's number is the key that presses it, and sits
-  # under its name as a keycap. wlogout takes one key per button, so the numbers are
+  # No Hibernate: Asahi has no hibernation (/sys/power/disk is [disabled], and the only
+  # swap is zram), so there is nothing for one to call.
+  #
+  # The buttons as they read on screen, left to right, which is also the order they are
+  # numbered in: each one's number is the key that presses it, and sits under its name as
+  # a keycap. wlogout takes one key per button, so the numbers are
   # instead of letters.
   #
   # The label is plain text -- no markup, and GTK left-justifies a label's lines with no
@@ -912,11 +909,8 @@ let
     "󰎬"
     "󰎮"
     "󰎰"
-    "󰎵"
   ];
-  powerRows = if canHibernate then 2 else 1;
-  powerCols = if canHibernate then 3 else 5;
-  powerButtonsReading =
+  powerButtons =
     lib.imap1
       (
         n: button:
@@ -926,31 +920,13 @@ let
           text = "${button.text}\n\n${powerPad button.word}${lib.elemAt powerKeycaps (n - 1)}";
         }
       )
-      (
-        if canHibernate then
-          [
-            lock
-            suspend
-            hibernate
-            logout
-            reboot
-            shutdown
-          ]
-        else
-          [
-            lock
-            suspend
-            logout
-            reboot
-            shutdown
-          ]
-      );
-
-  # wlogout fills its grid *down the columns*, so the layout file wants the reading order
-  # transposed: the k-th button it reads goes in row k mod rows, column k / rows.
-  powerButtons = lib.genList (
-    k: lib.elemAt powerButtonsReading ((lib.mod k powerRows) * powerCols + k / powerRows)
-  ) (lib.length powerButtonsReading);
+      [
+        lock
+        suspend
+        logout
+        reboot
+        shutdown
+      ];
 
   # wlogout reads $XDG_CONFIG_HOME/wlogout/{layout,style.css} and then falls straight back
   # to its own store path -- it never consults XDG_CONFIG_DIRS, so the /etc/xdg drop-in
@@ -986,15 +962,13 @@ let
       # screen and give the rest away.
       #
       # It is measured rather than written down because one number is a different button on
-      # every screen -- this menu is a single row of five here and two rows of three on a host
-      # that hibernates, and the Mac's 840 logical rows are not the Dell's.
+      # every screen -- the Mac's 840 logical rows are not a desk monitor's.
       #
       # The measurement is the *shortest* screen attached, not the focused one. wlogout draws
       # the grid on every output and has only one set of margins for all of them, so a margin
       # taken from a tall docked screen is more than a laptop panel has to give -- the band it
       # asks to keep clear is taller than the panel, and the menu lands off the bottom of it.
       # The shortest screen is the one that fits everywhere.
-      rows=${toString powerRows}
       height=140
       # The button's own margin in /etc/xdg/wlogout/style.css, which is outside the height
       # above -- so a change there wants the same change here.
@@ -1003,7 +977,7 @@ let
       margin=()
       if screen=$(hyprctl monitors -j 2>/dev/null |
         jq -e -r '[.[] | .height / .scale] | min | floor'); then
-        v=$(((screen - rows * (height + 2 * gap)) / 2))
+        v=$(((screen - height - 2 * gap) / 2))
         # A screen too short to seat the menu at that height keeps a thin band top and bottom
         # rather than a negative margin, and the buttons come out shorter than asked for.
         [ "$v" -lt 40 ] && v=40
@@ -1016,7 +990,7 @@ let
         --layout /etc/xdg/wlogout/layout \
         --css /etc/xdg/wlogout/style.css \
         "''${margin[@]}" \
-        --buttons-per-row ${toString powerCols}
+        --buttons-per-row ${toString (lib.length powerButtons)}
     '';
   };
 in
@@ -1080,12 +1054,8 @@ in
     # on one line with the word: wlogout's JSON reader doesn't decode escapes, so a "\n"
     # in `text` reaches the button as a literal backslash-n.
     #
-    # With --buttons-per-row 3 the grid comes out as
-    #     1 Lock      2 Suspend   3 Hibernate
-    #     4 Log out   5 Reboot    6 Shut down
-    # which puts the three that end the session along the bottom row. A host that can't
-    # hibernate gets one row of five instead: wlogout reads a button for every cell of its
-    # grid, so five buttons in a three-wide grid would run off the end of the list.
+    # One row of five: wlogout reads a button for every cell of its grid, so five buttons
+    # in a narrower grid would run off the end of the list.
     environment.etc."xdg/wlogout/layout".text = lib.concatMapStrings (button: ''
       {
         "label": "${button.label}",

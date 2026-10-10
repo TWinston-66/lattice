@@ -1,12 +1,11 @@
-{ lib, pkgs, ... }:
+{ pkgs, ... }:
 let
   # The DRM module every subscription service decrypts with -- Apple Music, Spotify,
-  # Netflix. Firefox normally installs it itself, as a Gecko Media Plugin pulled from
-  # Mozilla's update service at first use, so on x86_64 there is nothing to configure.
-  # aarch64 Linux is the gap: asking aus5.mozilla.org for GMPs as this machine does
-  # (Linux_aarch64-gcc3) returns openh264 and nothing else, and Firefox's own
-  # toolkit/content/gmp-sources/widevinecdm.json lists Windows and macOS on ARM64 but no
-  # Linux entry to serve. So Firefox here asks, is told there is no such plugin, and
+  # Netflix. Elsewhere Firefox installs it itself, as a Gecko Media Plugin pulled from
+  # Mozilla's update service at first use, but aarch64 Linux is the gap: asking
+  # aus5.mozilla.org for GMPs as this machine does (Linux_aarch64-gcc3) returns openh264
+  # and nothing else, and Firefox's own toolkit/content/gmp-sources/widevinecdm.json
+  # lists Windows and macOS on ARM64 but no Linux entry to serve. So Firefox here asks, is told there is no such plugin, and
   # reports DRM content as unplayable -- silently, since the page just never starts.
   #
   # Google does build one for ARM64 Linux; it ships inside ChromeOS. pkgs.widevine-cdm on
@@ -29,7 +28,7 @@ let
   # It is the older 4.10.2662.3 and declares CDM interface version 10 in its manifest,
   # where Firefox 155 prefers 11. That is a negotiation, not a floor: the adapter tries 11,
   # logs "FAILED to create cdm version 11", and comes back at 10, which is also the
-  # interface version of the 4.10.3050.0 CDM Mozilla serves to x86_64 -- 10 is simply what
+  # interface version of the newer CDMs Mozilla serves elsewhere -- 10 is simply what
   # Widevine still speaks. Both cenc and cbcs come back supported.
   #
   # The library needs libnspr4.so, which is not in the plugin directory and does not have
@@ -47,10 +46,7 @@ let
       $out/gmp-widevinecdm/system-installed/libwidevinecdm.so
   '';
 in
-# x86_64 is left alone deliberately: there Mozilla serves the CDM, Firefox keeps it current
-# on its own, and pinning a hand-placed one would replace a maintained plugin with a
-# frozen one.
-lib.mkIf pkgs.stdenv.hostPlatform.isAarch64 {
+{
   # Each entry of MOZ_GMP_PATH is a plugin *version* directory, not a search root: Firefox
   # reads the plugin name and version off its last two path components, which is why the
   # variable points all the way down to .../gmp-widevinecdm/system-installed and why the

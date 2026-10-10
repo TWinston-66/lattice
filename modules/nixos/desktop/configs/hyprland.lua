@@ -380,7 +380,7 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(terminal), { description = "Terminal" })
 local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close(), { description = "Close window" })
 -- closeWindowBind:set_enabled(false)
--- Session menu: lock, log out, suspend, hibernate, reboot, shut down. Themed and wired up
+-- Session menu: lock, suspend, log out, reboot, shut down. Themed and wired up
 -- in modules/nixos/desktop/menus.nix; the wrapper is what passes wlogout its config, so
 -- don't call bare `wlogout` here.
 hl.bind("CTRL + " .. mainMod .. " + Q", hl.dsp.exec_cmd("lattice-power"), { description = "Power menu" })
