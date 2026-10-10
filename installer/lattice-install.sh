@@ -446,7 +446,9 @@ rm "$swapfile"
 # a session fetches at start need it. NetworkManager keeps its profiles as keyfiles whatever
 # the Wi-Fi backend, so the live system's iwd and the installed one's wpa_supplicant read
 # the same files.
-if compgen -G "/etc/NetworkManager/system-connections/*" >/dev/null; then
+# A glob rather than compgen, which the non-interactive bash of writeShellApplication lacks.
+connections=(/etc/NetworkManager/system-connections/*)
+if [[ -e "${connections[0]}" ]]; then
     say "Keeping the network connection"
     install -d -m 0700 /mnt/etc/NetworkManager/system-connections
     cp -a /etc/NetworkManager/system-connections/. /mnt/etc/NetworkManager/system-connections/
