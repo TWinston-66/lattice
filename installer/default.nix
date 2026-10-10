@@ -37,10 +37,14 @@ let
       gnugrep
       gnused
       gptfdisk
+      kmod
       mkpasswd
       networkmanager
       nix
       nixos-install-tools
+      openssh
+      sops
+      ssh-to-age
       systemd
       util-linux
     ];

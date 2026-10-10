@@ -26,14 +26,16 @@ host in the flake: a folder under `hosts/`, built from the distro in `modules/ni
    sudo dd if=lattice-<version>-apple-silicon.iso of=/dev/<stick> bs=4M status=progress oflag=sync
    ```
 
-3. Join Wi-Fi with `nmtui` if there is no cable, then run:
+3. Run:
 
    ```sh
    sudo lattice-install
    ```
 
-   It asks for a machine name, your user name and password, a disk passphrase and a time
-   zone, then where to put lattice: the free space the Asahi installer left, or a Linux
+   With no network yet, it opens `nmtui` to join Wi-Fi, and the network it joins is kept on
+   the installed system. It asks whether to install the personal setup in
+   `modules/personal` (see [Secrets](#secrets-optional) below), a machine name, your user
+   name and password, a disk passphrase and a time zone, then where to put lattice: the free space the Asahi installer left, or a Linux
    partition from an earlier install, which it erases. Apple's partitions, the ESP and the
    partition table are never touched. Nothing is written until you type `yes` at the summary.
 
@@ -45,7 +47,8 @@ host in the flake: a folder under `hosts/`, built from the distro in `modules/ni
 4. Take out the stick and reboot. If macOS comes up, hold the power button at startup and
    pick lattice. The disk passphrase comes first, then the login.
 
-The flake is in `~/lattice`, with the new host staged but not committed. Commit it, and from
+The flake is in `~/lattice` (or where `modules/personal` keeps it), with the new host
+staged but not committed. Commit it, and from
 then on `lattice rebuild` applies changes. A log of the install is in
 `/var/log/lattice-install.log`.
 
@@ -74,6 +77,13 @@ the service tokens in [sops](https://github.com/getsops/sops), via `modules/pers
 `lattice.user.hashedPasswordFile` set, users are immutable and the password lives only in the
 flake; `scripts/rebuild.sh` then refuses to switch until the host's age key is a recipient of
 `secrets/common.yaml`, since otherwise it would boot with every account locked.
+
+Answering yes to the personal setup does that at install time: the account, its password and
+the time zone come from `modules/personal` instead of being asked for. The installer looks
+for the admin age key, `sops-age-keys.txt`, at the top of any USB drive and checks that it
+opens the secrets, makes the new host's SSH key, adds it to `.sops.yaml` and re-encrypts
+`secrets/common.yaml`. The admin key stays in RAM and is never written to the new disk;
+`.sops.yaml` and `secrets/common.yaml` are left staged next to the host, to commit and push.
 
 ## Next
 

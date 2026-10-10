@@ -40,7 +40,10 @@ cryptsetup close "$mapper" 2>/dev/null || true
 say "lattice $LATTICE_VERSION installer"
 
 ### NETWORK ###
-# Everything past here downloads: the repo, and the system from the binary caches.
+# Everything past here downloads: the repo, and the system from the binary caches. The radio
+# can come up blocked or off, which leaves nmtui with no networks to list.
+rfkill unblock wifi 2>/dev/null || true
+nmcli radio wifi on 2>/dev/null || true
 until nm-online -q -t 5; do
     echo "No network yet. Opening nmtui: pick \"Activate a connection\", join a network, then quit."
     read -rp "Press Enter to continue."
@@ -65,6 +68,22 @@ else
 fi
 
 ### QUESTIONS ###
+# modules/personal is the author's own setup on top of the distro: the account and its
+# password, the time zone, tailscale, Home Assistant and the rest, most of it unlocked by
+# sops. A machine of theirs takes it, and then the account, time zone and where the flake
+# lives are personal's, not questions here.
+personal=""
+if [[ -d "$work/modules/personal" ]]; then
+    read -rp "Install the personal setup in modules/personal (secrets, tailscale, Home Assistant)? [Y/n]: " answer
+    [[ "${answer,,}" == n* ]] || personal=1
+fi
+
+# One "name = value;" out of a Nix file, for the few values the installer needs to know
+# before anything evaluates. Empty if the file no longer says it that way.
+nix_string() {
+    sed -n "s/^ *$1 = \"\\([^\"]*\\)\";/\\1/p" "$2" | head -n 1
+}
+
 while :; do
     read -rp "Name for this machine [lattice]: " host
     host="${host:-lattice}"
@@ -77,7 +96,17 @@ while :; do
     fi
 done
 
-while :; do
+if [[ -n "$personal" ]]; then
+    personal_nix="$work/modules/personal/default.nix"
+    user="$(nix_string name "$personal_nix")"
+    tz="$(nix_string time.timeZone "$personal_nix")"
+    flake_dir="$(nix_string programs.nh.flake "$personal_nix")"
+    [[ -n "$user" && -n "$tz" && -n "$flake_dir" ]] ||
+        die "modules/personal/default.nix changed shape; can't read the user, time zone and flake path from it"
+    echo "The account ($user), its password and the time zone ($tz) come from modules/personal."
+fi
+
+while [[ -z "$personal" ]]; do
     read -rp "Your user name: " user
     if [[ ! "$user" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
         echo "lowercase letters, digits, dashes and underscores, starting with a letter"
@@ -107,14 +136,16 @@ ask_secret() {
     done
 }
 
-password="$(ask_secret "Password for $user")"
-password_hash="$(mkpasswd --method=yescrypt --stdin <<<"$password")"
-unset password
+if [[ -z "$personal" ]]; then
+    password="$(ask_secret "Password for $user")"
+    password_hash="$(mkpasswd --method=yescrypt --stdin <<<"$password")"
+    unset password
+fi
 
 echo "The disk is encrypted, and asks for its own passphrase at every boot."
 passphrase="$(ask_secret "Disk passphrase")"
 
-while :; do
+while [[ -z "$personal" ]]; do
     read -rp "Time zone [America/New_York]: " tz
     tz="${tz:-America/New_York}"
     if [[ -f "/etc/zoneinfo/$tz" ]]; then
@@ -122,6 +153,55 @@ while :; do
     fi
     echo "no such zone; they look like Europe/Berlin (ls /etc/zoneinfo)"
 done
+
+### THE SECRETS KEY ###
+# Personal's secrets open with each host's own SSH host key. This one is new, so it has to
+# be added to them, and that takes the admin age key (see .sops.yaml): read off a USB stick
+# into RAM, used for that one step, and never written to the new disk.
+age_key=/tmp/lattice-age-key
+age_key_name=sops-age-keys.txt
+trap 'rm -f "$age_key"' EXIT
+
+# Looks for the key at the top of every filesystem not on the Mac's own disk.
+find_age_key() {
+    local own dev dir found=1
+    own="$(lsblk -no PKNAME "$esp")"
+    dir="$(mktemp -d)"
+    while read -r dev fstype parent; do
+        [[ -n "$fstype" && "$fstype" != crypto_LUKS && "$parent" != "$own" ]] || continue
+        mount -o ro "/dev/$dev" "$dir" 2>/dev/null || continue
+        if [[ -f "$dir/$age_key_name" ]]; then
+            install -m 0600 "$dir/$age_key_name" "$age_key"
+            found=0
+        fi
+        umount "$dir"
+        ((found)) || break
+    done < <(lsblk -rno NAME,FSTYPE,PKNAME)
+    rmdir "$dir"
+    return "$found"
+}
+
+if [[ -n "$personal" ]]; then
+    while :; do
+        if ! find_age_key; then
+            echo "Plug in the drive with $age_key_name at its top and press Enter, or type the key file's path:"
+            read -r path
+            [[ -z "$path" ]] && continue
+            [[ -f "$path" ]] || {
+                echo "no such file"
+                continue
+            }
+            install -m 0600 "$path" "$age_key"
+        fi
+        if SOPS_AGE_KEY_FILE="$age_key" sops decrypt "$work/secrets/common.yaml" >/dev/null 2>&1; then
+            echo "Found the admin key; it opens the secrets."
+            break
+        fi
+        rm -f "$age_key"
+        echo "That key doesn't open secrets/common.yaml. Is it the admin key from .sops.yaml?"
+        read -rp "Press Enter to look again." _
+    done
+fi
 
 ### WHERE ###
 # The disk is the one holding the ESP the Asahi installer made. lattice goes into the free
@@ -171,6 +251,7 @@ cat <<EOF
   machine    $host
   user       $user
   time zone  $tz
+  personal   $([[ -n "$personal" ]] && echo "yes, the host added to the secrets" || echo no)
   disk       $disk
   into       ${labels[$((choice - 1))]}
   boot       $esp (the Asahi ESP, kept as it is)
@@ -223,7 +304,12 @@ unset passphrase
 # The layout hosts/macbook's stand-in hardware config describes: the top level is /, with
 # home and nix in their own subvolumes.
 say "Formatting"
-mkfs.btrfs -q -f -L lattice "/dev/mapper/$mapper"
+# 4 KiB blocks, so the disk mounts on any kernel, the 4 KiB-page ones a rescue might boot
+# included; the 16 KiB-page Asahi kernel handles them too. mkfs confirms that from
+# /sys/fs/btrfs, which only exists once the module is in, and warns that the size may not
+# mount until then.
+modprobe btrfs
+mkfs.btrfs -q -f -L lattice --sectorsize 4096 "/dev/mapper/$mapper"
 mount "/dev/mapper/$mapper" /mnt
 btrfs -q subvolume create /mnt/home
 btrfs -q subvolume create /mnt/nix
@@ -252,27 +338,71 @@ firmware_hash="$(nix hash path /var/lib/lattice/vendorfw)"
 
 ### THE HOST ###
 say "Writing hosts/$host"
-repo="/mnt/home/$user/lattice"
-mkdir -p "/mnt/home/$user"
+# Where programs.nh.flake will say it is: personal names its own place, the distro ~/lattice.
+flake_dir="${flake_dir:-/home/$user/lattice}"
+repo="/mnt$flake_dir"
+mkdir -p "$(dirname "$repo")"
 cp -a "$work" "$repo"
 
 hostdir="$repo/hosts/$host"
 mkdir "$hostdir"
 nixos-generate-config --root /mnt --show-hardware-config >"$hostdir/hardware-configuration.nix"
+# With personal, the account and time zone are its own, and saying them here as well would
+# be two definitions of one option, so those lines go and the import comes in instead.
+if [[ -n "$personal" ]]; then
+    edits=(
+        -e '/time.timeZone = /d'
+        -e '/# No hashedPasswordFile/,/lattice.user.name = /d'
+        -e 's|^\( *\)\.\./\.\./modules/nixos$|&\n\1../../modules/personal|'
+    )
+    wants=("\"$host\"" "\"$firmware_hash\"" "../../modules/personal")
+else
+    edits=(
+        -e "s|time.timeZone = \".*\";|time.timeZone = \"$tz\";|"
+        -e "s|lattice.user.name = \".*\";|lattice.user.name = \"$user\";|"
+    )
+    wants=("\"$host\"" "\"$tz\"" "\"$user\"" "\"$firmware_hash\"")
+fi
 {
     echo "# $host, installed by lattice-install $LATTICE_VERSION on $(date +%F)."
     sed -e '1,3d' \
         -e "s|networking.hostName = \".*\";|networking.hostName = \"$host\";|" \
-        -e "s|time.timeZone = \".*\";|time.timeZone = \"$tz\";|" \
-        -e "s|lattice.user.name = \".*\";|lattice.user.name = \"$user\";|" \
         -e "s|lattice.asahi.firmwareHash = \".*\";|lattice.asahi.firmwareHash = \"$firmware_hash\";|" \
-        "$repo/hosts/macbook/default.nix"
+        "${edits[@]}" \
+        "$repo/hosts/macbook/default.nix" | cat -s
 } >"$hostdir/default.nix"
-for want in "\"$host\"" "\"$tz\"" "\"$user\"" "\"$firmware_hash\""; do
+for want in "${wants[@]}"; do
     grep -qF "$want" "$hostdir/default.nix" || die "hosts/macbook/default.nix changed shape; $want did not make it into hosts/$host"
 done
 # A flake sees only what git tracks.
 git -C "$repo" add "hosts/$host"
+
+# The new host key, made now rather than at first boot so the secrets can be opened to it
+# before the install needs them: the account's password is one. Added to .sops.yaml under
+# the host's name, then every secret re-encrypted to the new set of keys.
+if [[ -n "$personal" ]]; then
+    say "Adding $host to the secrets"
+    install -d -m 0755 /mnt/etc/ssh
+    ssh-keygen -q -t ed25519 -N "" -C "root@$host" -f /mnt/etc/ssh/ssh_host_ed25519_key
+    recipient="$(ssh-to-age </mnt/etc/ssh/ssh_host_ed25519_key.pub)"
+    anchor="host_${host//-/_}"
+    # After the last key, and after the last key named in a rule, matching its indent.
+    awk -v anchor="$anchor" -v recipient="$recipient" '
+        NR == FNR {
+            if ($0 ~ /^  - &/) k = FNR
+            if ($0 ~ /^ *- \*/) { r = FNR; indent = $0; sub(/-.*/, "", indent) }
+            next
+        }
+        { print }
+        FNR == k { print "  - &" anchor " " recipient }
+        FNR == r { print indent "- *" anchor }
+    ' "$repo/.sops.yaml" "$repo/.sops.yaml" >"$repo/.sops.yaml.new"
+    mv "$repo/.sops.yaml.new" "$repo/.sops.yaml"
+    grep -qF "$recipient" "$repo/.sops.yaml" || die ".sops.yaml changed shape; couldn't add $host to it"
+    (cd "$repo" && SOPS_AGE_KEY_FILE="$age_key" sops updatekeys --yes secrets/common.yaml)
+    rm -f "$age_key"
+    git -C "$repo" add .sops.yaml secrets/common.yaml
+fi
 
 ### INSTALL ###
 # Kernel builds and the like go to the new disk, not to the live system's RAM-backed /tmp.
@@ -305,9 +435,23 @@ TMPDIR=/mnt/var/tmp nixos-install --root /mnt --flake "$repo#$host" --no-root-pa
 swapoff "$swapfile"
 rm "$swapfile"
 
+# The network joined above, so the first login is online: the Flatpaks and the rest of what
+# a session fetches at start need it. NetworkManager keeps its profiles as keyfiles whatever
+# the Wi-Fi backend, so the live system's iwd and the installed one's wpa_supplicant read
+# the same files.
+if compgen -G "/etc/NetworkManager/system-connections/*" >/dev/null; then
+    say "Keeping the network connection"
+    install -d -m 0700 /mnt/etc/NetworkManager/system-connections
+    cp -a /etc/NetworkManager/system-connections/. /mnt/etc/NetworkManager/system-connections/
+fi
+
 say "Setting up $user"
-printf '%s:%s\n' "$user" "$password_hash" | nixos-enter --root /mnt -c "chpasswd -e"
-nixos-enter --root /mnt -c "chown $user: /home/$user && chown -R $user: /home/$user/lattice"
+# With personal, the password is in the secrets and the install has already set it.
+if [[ -z "$personal" ]]; then
+    printf '%s:%s\n' "$user" "$password_hash" | nixos-enter --root /mnt -c "chpasswd -e"
+fi
+# Everything in the new home is the installer's doing, the flake's parent folders included.
+nixos-enter --root /mnt -c "chown -R $user: /home/$user"
 
 cp "$log" /mnt/var/log/lattice-install.log
 say "lattice is installed"
@@ -315,6 +459,8 @@ cat <<EOF
 Take out the stick and reboot. If macOS comes up instead, hold the power button at startup
 and pick lattice. The disk passphrase comes first, then the login.
 
-The flake is in ~/lattice, with hosts/$host staged but not committed: commit it, and from
-then on \`lattice rebuild\` applies changes.
+The flake is in ${flake_dir/#\/home\/$user/\~}, with $(
+    [[ -n "$personal" ]] && echo "hosts/$host, .sops.yaml and secrets/common.yaml" || echo "hosts/$host"
+) staged but not committed: commit and push them, and from then on \`lattice rebuild\` applies
+changes.
 EOF
