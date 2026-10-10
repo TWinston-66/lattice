@@ -39,6 +39,11 @@
   lattice.backup.passwordFile = config.sops.secrets.restic-password.path;
 
   services.tailscale.enable = true;
+  # OPNsense advertises the home LAN; without this tailscaled's health check flags the
+  # unaccepted routes and the bar pill shows a warning. Prefs live in /var/lib/tailscale,
+  # so a hand-run `tailscale set` was lost with the 2026-10-10 reinstall. The LAN still
+  # goes direct when on-link (lattice-lan-before-tailnet, nixos/base.nix).
+  services.tailscale.extraSetFlags = [ "--accept-routes" ];
 
   time.timeZone = "America/Denver";
 

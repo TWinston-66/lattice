@@ -90,7 +90,7 @@ in
     # ordinary laptop has it.
     lattice.display.sunsetTemperature = 2800;
 
-    # Firefox's 80% default zoom (below), for the pages lattice opens in Chromium.
+    # Firefox's 80% default zoom (below), and the same for the pages lattice opens in Chromium.
     lattice.display.webZoom = 0.8;
 
     # Gecko sizes both its chrome and its content in nominal pixels, and devPixelsPerPx pins
@@ -104,9 +104,9 @@ in
     #
     # The 80% the pin used to buy back is recovered instead from levers that are proportional
     # rather than absolute, so they hold docked, undocked, and on either screen:
-    #   - content: default zoom 80%. Gecko keeps this per profile in content-prefs.sqlite as
-    #     browser.content.full-zoom and exposes no pref for it, so it cannot be set from
-    #     here -- it is Settings > General > Zoom if the profile is ever rebuilt.
+    #   - content: default zoom 80% (webZoom, above). Gecko keeps this per profile in
+    #     content-prefs.sqlite as browser.content.full-zoom and exposes no pref for it, so
+    #     desktop/mozilla.nix seeds it into any profile that has none, at login.
     #   - chrome: compact uidensity, plus the stylesheet in desktop/mozilla.nix for what
     #     compact leaves alone.
     #

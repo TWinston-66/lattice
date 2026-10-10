@@ -1,9 +1,12 @@
 {
+  config,
   lib,
   pkgs,
   ...
 }:
 let
+  inherit (config.lattice.display) webZoom;
+
   # The chrome stylesheets that finish what compact uidensity leaves alone on the Mac's
   # panel (see the FIREFOX block in hardware/apple-silicon.nix for the scaling they go with).
   firefoxUserChrome = pkgs.writeText "lattice-firefox-userChrome.css" ''
@@ -62,17 +65,23 @@ let
     runtimeInputs = [
       pkgs.coreutils
       pkgs.gawk
+      pkgs.sqlite
     ];
     text = ''
-      link() {
-        local root=$1 css=$2 profile target
+      profiles() {
+        local root=$1
         [[ -f $root/profiles.ini ]] || return 0
         awk -F= -v root="$root" '
           /^\[/ { sec = $0; next }
           sec ~ /^\[Profile/ && $1 == "Path"       { p[sec] = substr($0, 6) }
           sec ~ /^\[Profile/ && $1 == "IsRelative" { r[sec] = $2 }
           END { for (s in p) print (r[s] == "0" ? "" : root "/") p[s] }
-        ' "$root/profiles.ini" | while IFS= read -r profile; do
+        ' "$root/profiles.ini"
+      }
+
+      link() {
+        local root=$1 css=$2 profile target
+        profiles "$root" | while IFS= read -r profile; do
           [[ -d $profile ]] || continue
           target=$profile/chrome/userChrome.css
           if [[ -e $target || -L $target ]] && [[ $(readlink "$target") != /nix/store/* ]]; then
@@ -84,9 +93,38 @@ let
         done
       }
 
+      # Firefox's default zoom has no pref: it is a global (groupID NULL) row in each
+      # profile's content-prefs.sqlite, what Settings > General > Zoom writes. Seeded only
+      # where the profile has none, so a zoom chosen in Settings stays. The file appears on
+      # a profile's first launch, and Firefox holds it open while running (the `lock`
+      # symlink), so a fresh profile gets its zoom at the next login with Firefox closed.
+      zoom() {
+        local root=$1 profile db
+        profiles "$root" | while IFS= read -r profile; do
+          db=$profile/content-prefs.sqlite
+          [[ -f $db ]] || continue
+          if [[ -L $profile/lock ]]; then
+            echo "$profile is in use; its default zoom waits for the next login"
+            continue
+          fi
+          sqlite3 "$db" "
+            INSERT INTO settings (name)
+              SELECT 'browser.content.full-zoom'
+              WHERE NOT EXISTS (SELECT 1 FROM settings WHERE name = 'browser.content.full-zoom');
+            INSERT INTO prefs (groupID, settingID, value, timestamp)
+              SELECT NULL, id, ${toString webZoom}, strftime('%s', 'now')
+              FROM settings WHERE name = 'browser.content.full-zoom'
+              AND NOT EXISTS (SELECT 1 FROM prefs WHERE groupID IS NULL AND settingID = settings.id);
+          "
+        done
+      }
+
       config=''${XDG_CONFIG_HOME:-$HOME/.config}
       link "$config/mozilla/firefox" ${firefoxUserChrome}
       link "$config/thunderbird" ${thunderbirdUserChrome}
+    ''
+    + lib.optionalString (webZoom != 1.0) ''
+      zoom "$config/mozilla/firefox"
     '';
   };
 in
@@ -105,7 +143,7 @@ in
   # profiles.ini, which is how a first launch or a new profile shows up. The apps read
   # userChrome.css at startup, so a new profile takes it from its second launch.
   systemd.user.services.lattice-mozilla-chrome = {
-    description = "Link lattice's userChrome.css into every Firefox and Thunderbird profile";
+    description = "Link lattice's userChrome.css into every Firefox and Thunderbird profile, and seed Firefox's default zoom";
     wantedBy = [ "graphical-session.target" ];
     after = [ "graphical-session.target" ];
     onFailure = [ "lattice-notify-failure@%n.service" ];
