@@ -178,7 +178,7 @@ let
   # this monitor was too big, physical parity's 0.13" too small.
   #
   # The check is any connected output that is not an internal panel, rather than this Mac's
-  # HDMI-A-1 by name, so the Dell's DP outputs pick the same branch. It reads the same sysfs
+  # HDMI-A-1 by name, so a USB-C DisplayPort monitor picks the same branch. It reads the same sysfs
   # the greeter's compositor is about to read; nothing is cached between the two.
   greeterSession = pkgs.writeShellApplication {
     name = "lattice-greeter";

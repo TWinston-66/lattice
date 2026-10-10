@@ -46,9 +46,9 @@ let
     text = ''
       interval=30
 
-      # The battery that powers the machine is BAT0 on the Dell but macsmc-battery on the
-      # Mac, so it is picked by role rather than name. That also skips the mouse and
-      # headphones, which upower lists as batteries too.
+      # The battery that powers the machine is picked by role rather than by its name
+      # (macsmc-battery), which skips the mouse and headphones that upower lists as
+      # batteries too.
       device=""
       for candidate in $(upower -e | grep /battery_); do
         # Not grep -q: exiting at the first match can SIGPIPE upower, and with pipefail
@@ -334,9 +334,8 @@ let
       pkgs.swayosd
     ];
     text = ''
-      # kbd_backlight on the Mac, vendor-prefixed elsewhere (dell::kbd_backlight and so
-      # on), and absent entirely on a machine without one -- where the bind should be a
-      # no-op rather than an error. The glob stays literal when it matches nothing, which
+      # kbd_backlight on a MacBook, and absent entirely on a Mac without one (a mini, a
+      # Studio) -- where the bind should be a no-op rather than an error. The glob stays literal when it matches nothing, which
       # the -e test below turns into that no-op.
       led=""
       for candidate in /sys/class/leds/*kbd_backlight*; do
@@ -605,7 +604,7 @@ let
       state=/run/lattice-sleep-drain
 
       # Whichever supply calls itself a battery and counts in energy rather than charge:
-      # macsmc-battery on the Mac, BAT0 on the Dell.
+      # macsmc-battery.
       bat=""
       for d in /sys/class/power_supply/*; do
         [ -r "$d/type" ] || continue
@@ -710,10 +709,6 @@ in
     settings.General.Experimental = true;
   };
 
-  ### THUNDERBOLT ###
-  # The controller runs at security level "user", so PCIe tunnels (dock Ethernet, NVMe, eGPU) need bolt to authorize devices.
-  services.hardware.bolt.enable = true;
-
   ### MEMORY ###
   zramSwap.enable = true;
   boot.kernel.sysctl = {
@@ -725,14 +720,9 @@ in
 
   ### POWER ###
   services = {
-    # mkDefault so a host whose hardware PPD cannot actually drive can swap in another
-    # daemon on the same D-Bus name. hosts/mac does; see the tuned block there.
-    power-profiles-daemon.enable = lib.mkDefault true;
-
     upower = {
       enable = true;
-      # upower's own default, HybridSleep, needs hibernation, which not every host has.
-      # Hosts that can hibernate raise this.
+      # upower's own default, HybridSleep, needs hibernation, which Asahi does not have.
       criticalPowerAction = lib.mkDefault "PowerOff";
 
       # lattice-battery-notify's 5% alert promises the critical action at 3%; this is what
@@ -871,7 +861,7 @@ in
     };
   };
 
-  # Idling out sleeps the same way closing the lid does, so a host that hibernates does both.
+  # Idling out sleeps the same way closing the lid does.
   environment.etc."xdg/hypr/hypridle.conf".text = lib.mkIf config.services.hypridle.enable (
     lib.mkAfter ''
       listener {

@@ -43,9 +43,6 @@ let
   # reload never clears, while discordstatus.com reports everything up. The same UA with
   # "Linux aarch64" loads fine, so this sends the machine's real arch. The Chrome major
   # tracks the Electron Vesktop runs on, like Vesktop's own string does.
-  #
-  # Not seen on the Dell, where the substitution is a no-op: if Discord blocks the x86_64
-  # string there too, --user-agent-os=windows is Vesktop's own escape hatch.
   vesktop = pkgs.symlinkJoin {
     name = "vesktop-${pkgs.vesktop.version}";
     paths = [ pkgs.vesktop ];
@@ -139,11 +136,8 @@ in
     # the page can open the device.
     ungoogled-chromium
 
-    # Everything below was once picked per host, because the obvious client is x86-only
-    # in nixpkgs and the Mac needed a stand-in. Running the stand-in on both is simpler
-    # than keeping two app sets: each is cross-arch, cached for aarch64, and close
-    # enough to what it replaces that having one of them in muscle memory is worth more
-    # than the nicer x86 build.
+    # Everything below stands in for an app whose obvious client is x86-only in nixpkgs.
+    # Each is cached for aarch64 and close enough to what it replaces.
     #
     # Vesktop, for Discord: an Electron shell around the web client, so it is the same
     # app the official build wraps, plus Vencord and working Wayland screen share.
@@ -153,7 +147,7 @@ in
     # x86-only because nixpkgs pins `platforms = [ "x86_64-linux" ]`; that looks like an
     # untested restriction rather than a real one (zulu25 has an aarch64 JDK with
     # JavaFX, and the derivation evaluates fine on aarch64 with the meta relaxed), so an
-    # overlay is the way back to the GUI on both if the CLI ever grates.
+    # overlay is the way back to the GUI if the CLI ever grates.
     #
     # caligula, for Impression: Impression is not merely unbuilt on ARM, it depends on
     # syslinux, which is genuinely x86-only, so this one has no way back. Popsicle sat

@@ -48,9 +48,8 @@ let
     }
     # Papirus does have an apple-music mark, so this one needs no stand-in.
     #
-    # Everything here plays through Widevine, which Firefox installs itself on x86_64 and
-    # cannot on aarch64 -- modules/nixos/widevine.nix is what makes this app more than a
-    # window on the Mac. Sign-in is an overlay served from music.apple.com rather than a
+    # Everything here plays through Widevine, which Firefox cannot install itself on
+    # aarch64 -- modules/nixos/widevine.nix is what makes this app more than a window. Sign-in is an overlay served from music.apple.com rather than a
     # navigation to an Apple ID domain, so it stays inside the scope below.
     {
       id = "7112a47e-a16c-4a6a-a025-02a8366d7c3d";

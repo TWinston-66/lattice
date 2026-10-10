@@ -523,9 +523,9 @@ let
       busy=$((u + n + s + irq + sirq + steal))
       total=$((busy + idle + iow))
 
-      # cpufreq, grouped by the ceiling each policy reports: one group on a machine whose cores
-      # are all alike, two where the clusters differ -- this Mac's E- and P-cores, or a hybrid
-      # x86 part. A third ceiling, if one ever turns up, folds into the fastest and the slowest.
+      # cpufreq, grouped by the ceiling each policy reports: two groups, for the E- and P-core
+      # clusters every Apple Silicon chip has. A third ceiling, if one ever turns up, folds into
+      # the fastest and the slowest.
       # `cap` is scaling_max_freq, the ceiling a power profile has set below the hardware's -- on
       # this Mac the whole difference between the three levels.
       p_max=0 p_min=0 p_sum=0 p_n=0 p_gov="" p_cap=0
@@ -562,12 +562,11 @@ let
       if [ "$p_n" -gt 0 ]; then p_cur=$((p_sum / p_n)); else p_cur=0; fi
       if [ "$e_n" -gt 0 ]; then e_cur=$((e_sum / e_n)); else e_cur=0; fi
 
-      # Draw, in milliwatts, from whichever of three sources this machine has. macsmc's "Total
-      # System Power" is the whole-package figure and the reason this row is worth graphing at
-      # all: it is the number a power profile is actually chosen for. The other two are
-      # fallbacks for other hardware, and are untested.
+      # Draw, in milliwatts. macsmc's "Total System Power" is the whole-package figure and the
+      # reason this row is worth graphing at all: it is the number a power profile is actually
+      # chosen for. The battery below is a fallback for a model whose SMC has no such sensor,
+      # and is untested.
       power_mw=-1
-      energy_uj=-1
       power_src=""
       for hwmon in /sys/class/hwmon/hwmon*; do
         for lbl in "$hwmon"/power*_label; do
@@ -580,15 +579,6 @@ let
           power_src=smc
         done
       done
-      if [ -z "$power_src" ]; then
-        # Intel's RAPL package counter is microjoules since boot, so it needs the previous reading
-        # and the interval between the two -- the same delta the jiffies take above.
-        rd /sys/class/powercap/intel-rapl:0/energy_uj
-        if uint "$val"; then
-          energy_uj=$val
-          power_src=rapl
-        fi
-      fi
       if [ -z "$power_src" ]; then
         # Last resort: what the battery is passing. Only true while discharging -- on AC most
         # laptops report the charge rate here, or zero -- so the row it draws is the honest one
@@ -626,11 +616,10 @@ let
         read -r -a watts <<<"''${hist[4]}"
       fi
 
-      prev_ts=0 prev_busy=0 prev_total=0 prev_energy=-1
+      prev_ts=0 prev_busy=0 prev_total=0
       uint "''${prev[0]-}" && prev_ts=''${prev[0]}
       uint "''${prev[1]-}" && prev_busy=''${prev[1]}
       uint "''${prev[2]-}" && prev_total=''${prev[2]}
-      uint "''${prev[3]-}" && prev_energy=''${prev[3]}
 
       # Docked, there is a bar on each screen and each runs this on every tick, against the one
       # history file -- so the samples interleaved, one bar's two-second delta beside the other's
@@ -653,14 +642,6 @@ let
         fi
         [ "$cpu" -gt 100 ] && cpu=100
 
-        if [ "$power_src" = rapl ] && [ "$prev_energy" -ge 0 ] && [ "$prev_ts" -gt 0 ]; then
-          d_us=$((now - prev_ts))
-          d_uj=$((energy_uj - prev_energy))
-          # The counter wraps at max_energy_range_uj, which shows up as a negative delta. Dropping
-          # that one sample is cheaper than carrying the range around to correct it.
-          if [ "$d_us" -gt 0 ] && [ "$d_uj" -ge 0 ]; then power_mw=$((d_uj * 1000 / d_us)); fi
-        fi
-
         cpus+=("$cpu")
         pfreqs+=("$p_cur")
         efreqs+=("$e_cur")
@@ -671,7 +652,7 @@ let
         [ "''${#watts[@]}" -gt "$width" ] && watts=("''${watts[@]: -$width}")
 
         printf '%s\n' \
-          "$now $busy $total $energy_uj" \
+          "$now $busy $total" \
           "''${cpus[*]}" \
           "''${pfreqs[*]}" \
           "''${efreqs[*]}" \
