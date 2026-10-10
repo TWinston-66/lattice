@@ -1,6 +1,6 @@
 # The smallest lattice host, and the one an install starts from: the distro, this machine's
-# disks and firmware, and a user. Everything else is a default in modules/nixos. Copy the
-# folder to hosts/<name> for a machine of your own, and add it to flake.nix.
+# disks and firmware, and a user. Everything else is a default in modules/nixos.
+# lattice-install copies it to hosts/<name>; every folder in hosts/ is a host of the flake.
 _: {
   imports = [
     ./hardware-configuration.nix
