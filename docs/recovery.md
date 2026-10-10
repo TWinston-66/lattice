@@ -5,8 +5,8 @@ secrets locks you out entirely. The fix is to make the secrets readable again, o
 a new password, and reinstall over the top from a USB stick.
 
 > [!TIP]
-> Keep a NixOS USB stick around. On the Mac, the Asahi installer stick from
-> [installing](install.md#installing) is the one.
+> Keep the lattice installer stick from [installing](install.md#installing) around: it is
+> this machine's recovery stick.
 
 ## Locked out
 
@@ -18,11 +18,13 @@ a new password, and reinstall over the top from a USB stick.
    - Set a new password with `scripts/set-password.sh`.
 
    Commit and push either way.
-3. Back on the stick, reinstall from a checkout with the fix:
+3. Back on the stick, reinstall from a checkout with the fix. The flake reads the firmware
+   from `/var/lib/lattice/vendorfw` on the system doing the install, so copy it there first:
 
    ```sh
-   sudo nixos-install --root /mnt --flake .#<host> --no-root-passwd \
-     --option experimental-features 'nix-command flakes'
+   sudo mkdir -p /var/lib/lattice
+   sudo cp -rT /mnt/var/lib/lattice/vendorfw /var/lib/lattice/vendorfw
+   sudo nixos-install --root /mnt --flake .#<host> --no-root-passwd
    ```
 
 4. Reboot and log in.

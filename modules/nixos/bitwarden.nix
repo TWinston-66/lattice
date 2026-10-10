@@ -139,7 +139,7 @@ in
   # and not in ~/.ssh. Code running as the user can still ask an unlocked agent to sign, and
   # Bitwarden prompts for each use, but there is no key file left to copy. This is one of
   # the mitigations for the Mac's Firefox running its media decoder unsandboxed
-  # (hosts/mac). The app autostarts from its own XDG entry, so the socket is there from
+  # (hosts/mac). The app autostarts from an XDG entry (below), so the socket is there from
   # login, and only while the app runs.
   #
   # Two app-side steps go with this: Settings > SSH agent on, and the key imported as an
@@ -150,8 +150,20 @@ in
   programs.ssh.startAgent = false;
   environment.sessionVariables.SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
 
-  # The app's own XDG entry stays the launcher (the doctor's persistence check expects it);
-  # this is a drop-in on the unit systemd generates from it. It comes back if it exits,
+  # The XDG autostart entry the unit below is generated from. The app writes its own to
+  # ~/.config/autostart once "start automatically" is ticked, which wins over this one by
+  # name (the doctor's persistence check expects it); until then, a fresh user has no unit
+  # at all, and a click on the pill had nothing to start. PATH rather than a store path,
+  # so it never goes stale.
+  environment.etc."xdg/autostart/bitwarden.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Bitwarden
+    Icon=bitwarden
+    Exec=bitwarden --autostart
+  '';
+
+  # This is a drop-in on the unit systemd generates from that entry. It comes back if it exits,
   # because the SSH agent and the browser unlock both die with it -- and with the tray icon
   # off, closing the window is an exit. The restart reopens the window on the scratchpad,
   # out of the way. (It used to wait for waybar's StatusNotifierWatcher, which Electron

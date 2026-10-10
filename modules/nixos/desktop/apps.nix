@@ -312,7 +312,7 @@ in
       description = "Install lattice's Flatpak apps";
       wantedBy = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
-      # Fails when the session starts offline before the first install; say so rather than
+      # Fails when the network never comes up before the first install; say so rather than
       # leave Collabora quietly missing from rofi.
       onFailure = [ "lattice-notify-failure@%n.service" ];
       serviceConfig = {
@@ -323,9 +323,16 @@ in
             runtimeInputs = [
               config.services.flatpak.package
               pkgs.gnugrep
+              pkgs.networkmanager
             ];
             text = ''
               app=com.collaboraoffice.Office
+              # A fresh install's first login can come before any Wi-Fi is joined, so wait for
+              # one, up to an hour, but only when there is something to download.
+              if ! flatpak remotes --user --columns=name | grep -qx flathub \
+                || ! flatpak info --user "$app" >/dev/null 2>&1; then
+                nm-online -q -t 3600 || true
+              fi
               # --if-not-exists still fetches the .flatpakrepo before checking, so an
               # offline login failed even with everything already installed.
               flatpak remotes --user --columns=name | grep -qx flathub \

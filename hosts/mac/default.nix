@@ -10,7 +10,7 @@ _: {
 
   ### ASAHI ###
   # `nix hash path /var/lib/lattice/vendorfw`; see lattice.asahi.firmwareHash.
-  lattice.asahi.firmwareHash = "sha256-wETBAOJSRK5XrfeTa+vqluv3M1RxIQdGpB+6zW+2mYw=";
+  lattice.asahi.firmwareHash = "sha256-nUf0Cg+24Z0dQjhQ9lQYICFCL+DgVq2O5mo/BKkmKhQ=";
 
   ### DISPLAY ###
   # The panel is 3024x1890 across 302x189mm, so 254ppi. Hyprland's "auto" picks scale 2,

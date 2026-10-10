@@ -41,20 +41,16 @@
         ] (system: f nixpkgs.legacyPackages.${system});
     in
     {
-      nixosConfigurations.mac = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs; };
-        modules = [
-          ./hosts/mac
-        ];
-      };
-
-      # A clean install with nothing personal in it; see hosts/macbook.
-      nixosConfigurations.macbook = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs; };
-        modules = [
-          ./hosts/macbook
-        ];
-      };
+      # Every folder in hosts/ is a machine: hosts/mac is the author's, and hosts/macbook a
+      # clean install with nothing personal in it, which lattice-install copies for each new
+      # one. Read from the directory so that copy is all a new host takes.
+      nixosConfigurations = nixpkgs.lib.mapAttrs (
+        name: _:
+        nixpkgs.lib.nixosSystem {
+          specialArgs = { inherit inputs; };
+          modules = [ ./hosts/${name} ];
+        }
+      ) (nixpkgs.lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./hosts));
 
       # Both hosts as CI sees them. The Apple firmware only exists on a Mac that ran the
       # Asahi installer, so it is left out; everything else is the host as it ships.
@@ -64,6 +60,16 @@
           modules = [ ({ lib, ... }: { lattice.asahi.firmwareHash = lib.mkForce null; }) ];
         }
       ) inputs.self.nixosConfigurations;
+
+      # The installer ISO; see installer/ and docs/install.md. Built on the Mac rather than in
+      # CI, since it boots the patched Asahi kernel, which CI never builds.
+      packages.aarch64-linux.installer = inputs.apple-silicon.lib.mkInstallerBootstrapCustom {
+        system = "aarch64-linux";
+        extraModules = [
+          ./installer
+          { _module.args.inputs = inputs; }
+        ];
+      };
 
       # Tools for scripts/, pinned by flake.lock. The scripts enter it themselves.
       devShells = forAllSystems (pkgs: {

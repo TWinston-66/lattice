@@ -21,7 +21,10 @@ let
   };
 in
 {
-  imports = [ inputs.apple-silicon.nixosModules.apple-silicon-support ];
+  imports = [
+    inputs.apple-silicon.nixosModules.apple-silicon-support
+    ./asahi-kernel.nix
+  ];
 
   options.lattice.asahi.firmwareHash = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
@@ -81,58 +84,13 @@ in
     # software decode for both. `vainfo` lists the profiles.
     hardware.graphics.extraPackages = [ (pkgs.callPackage ./libva-v4l2-request.nix { }) ];
 
-    # The built-in HDMI port lights that Samsung exactly once per boot. Every replug after
-    # the first leaves it dark *and* stalls the whole desktop, ~10s per frame, for as long as
-    # the cable is in -- badly enough that Hyprland stops answering hyprctl on its IPC
-    # socket, so nothing in userspace can drive a recovery. Unplugging is the only way out.
-    #
-    # The cause is a missing modeset, not a missing signal. EDID reads fine over DDC the
-    # whole time (39 modes, right make/model/serial), so from userspace the output looks
-    # live. In the driver, set_digital_out_mode() -- the only thing that sets dcp->valid_mode
-    # -- is called from dcp_crtc_atomic_modeset(), and *that* is reached only from
-    # apple_crtc_atomic_enable() (apple_drv.c), which the atomic helpers call only when a
-    # CRTC goes off->on in a modeset commit. Plain page-flips never reach it. On a replug
-    # there is no such transition, so the modeset is never even attempted: the logs carry no
-    # set_digital_out_mode line at all, failing or otherwise, where the working first plug
-    # has `set_digital_out_mode finished:2064`. With valid_mode still 0 the firmware accepts
-    # each swap and throws it away ("swallowed swap ... as fControllerPowerState is 0" /
-    # "... as timinsg are not enabled"), the swap_complete callback never comes, and every
-    # commit burns the full 10s in wait_for_flip_done -- which is the stall, and which is
-    # also what keeps userspace from ever getting round to the modeset that would fix it.
-    #
-    # This patch breaks that loop at the one place it can be broken from inside the kernel:
-    # while valid_mode is 0, dcp_flush() completes the frame through the delayed vblank work
-    # instead of waiting on a swap the firmware has already discarded -- the same fallback
-    # the busy-command-channel branch immediately above it already uses. The stalls go away,
-    # so the compositor stays responsive and its own disable/enable of the output can land.
-    #
-    # Carried locally, from AsahiLinux/linux PR #622 (commit 8890ede, "drm/apple: Complete
-    # swaps the DCP discards before a modeset"). Upstream closed it under the project's
-    # generative-AI policy rather than on anything technical, so it will not arrive in this
-    # form and this file is where it lives for now. It applies to asahi-7.1.13-3, where
-    # dcp_flush() sits at drivers/gpu/drm/apple/iomfb.c:461; re-check it on every kernel
-    # bump, because a bump will not bring it along. hardware.asahi wires boot.kernelPatches
-    # into the linux-asahi override itself (modules/kernel/default.nix), so the stock NixOS
-    # option is all this needs. Unbinding 289c00000.dcp -- the dcpext that drives HDMI, and a
-    # separate device from the internal panel's 389c00000.dcp -- looks like it should reset
-    # this port on its own, but dcp.c tears the device down with component_del(), which takes
-    # the apple-drm component master and all of card1 (eDP included) with it, so it is not a
-    # recovery path. Related upstream reports: AsahiLinux/linux#625 (same dcpext, same
-    # swallowed-swap signature on a j416s) and #634.
-    boot.kernelPatches = [
-      {
-        name = "drm-apple-complete-swallowed-swaps";
-        patch = ./patches/drm-apple-complete-swallowed-swaps.patch;
-      }
-    ];
-
     # The night-light default of 4000K, which is plainly warm on an sRGB panel, barely
     # registers on these -- they are wide-gamut and far brighter, so the same transform is a
     # much smaller share of what the panel can show. 2800K puts the shift back where an
     # ordinary laptop has it.
     lattice.display.sunsetTemperature = 2800;
 
-    # Firefox's 80% default zoom (below), for the pages lattice opens in Chromium.
+    # Firefox's 80% default zoom (below), and the same for the pages lattice opens in Chromium.
     lattice.display.webZoom = 0.8;
 
     # Gecko sizes both its chrome and its content in nominal pixels, and devPixelsPerPx pins
@@ -146,9 +104,9 @@ in
     #
     # The 80% the pin used to buy back is recovered instead from levers that are proportional
     # rather than absolute, so they hold docked, undocked, and on either screen:
-    #   - content: default zoom 80%. Gecko keeps this per profile in content-prefs.sqlite as
-    #     browser.content.full-zoom and exposes no pref for it, so it cannot be set from
-    #     here -- it is Settings > General > Zoom if the profile is ever rebuilt.
+    #   - content: default zoom 80% (webZoom, above). Gecko keeps this per profile in
+    #     content-prefs.sqlite as browser.content.full-zoom and exposes no pref for it, so
+    #     desktop/mozilla.nix seeds it into any profile that has none, at login.
     #   - chrome: compact uidensity, plus the stylesheet in desktop/mozilla.nix for what
     #     compact leaves alone.
     #

@@ -360,6 +360,10 @@ let
 
         started=$(now)
         export started host
+        # A fresh install has the drive's repository but not its password, and restic's own
+        # words for that ("Resolving password failed") don't say what to do.
+        [[ -s ${passwordFile} ]] ||
+          fail "No backup password on this machine. Put the drive's (it's in your password manager) in ${passwordFile}, readable by root only."
         phase starting
         notify normal document-save "Backing up" "$host to the backup drive"
 

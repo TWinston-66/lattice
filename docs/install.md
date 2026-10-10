@@ -3,78 +3,73 @@
 lattice runs on Apple Silicon MacBooks (the M1 and M2 generations that
 [Asahi Linux](https://asahilinux.org) supports), next to macOS. Every lattice machine is a
 host in the flake: a folder under `hosts/`, built from the distro in `modules/nixos`.
-`hosts/macbook` is the smallest one, and the one to start from.
 
 > [!NOTE]
-> These steps are written against the layout `hosts/macbook` expects, LUKS-encrypted btrfs,
-> and have not yet been run end to end on hardware.
+> The installer has not yet been run end to end on hardware.
 
 ## Installing
 
-lattice is installed from a minimal NixOS first, because the installer ISO can only copy its
-own kernel. The [nixos-apple-silicon install guide](https://github.com/nix-community/nixos-apple-silicon/blob/main/docs/uefi-standalone.md)
-has the details. In short:
-
-1. In macOS, run the Asahi installer. Resize (`r`) to leave the space you want for lattice,
-   then install (`f`) **UEFI environment only**, named `lattice`, and finish the
-   permissive-security steps it prints in recovery.
+1. In macOS, run the Asahi installer. Resize (`r`) to leave the space you want for lattice
+   (40 GiB at the very least), then install (`f`) **UEFI environment only**, named `lattice`,
+   and finish the permissive-security steps it prints in recovery.
 
    ```sh
    curl https://alx.sh | sh
    ```
 
-2. `dd` the latest [release ISO](https://github.com/nix-community/nixos-apple-silicon/releases)
-   to a USB stick and boot it. Keep the stick: it is this machine's recovery stick.
-3. Create a partition in the free space, and only there. Damaging the GPT, the first or
-   last partition, or the APFS containers can leave the Mac unbootable.
+2. Get the lattice installer, `lattice-<version>-apple-silicon.iso`, from the
+   [releases](https://github.com/TWinston-66/lattice/releases), or
+   [build it](#building-the-installer). Write it to a USB stick (this erases the stick) and
+   boot the Mac from it. Keep the stick: it is this machine's [recovery](recovery.md) stick.
 
    ```sh
-   sgdisk /dev/nvme0n1 -n 0:0 -c 0:lattice -s    # then sgdisk -p for its number
-   cryptsetup luksFormat /dev/disk/by-partlabel/lattice
-   cryptsetup open /dev/disk/by-partlabel/lattice system
-   mkfs.btrfs -L lattice /dev/mapper/system
-   mount /dev/mapper/system /mnt
-   btrfs subvolume create /mnt/home && btrfs subvolume create /mnt/nix
-   mount -o subvol=home /dev/mapper/system /mnt/home
-   mount -o subvol=nix /dev/mapper/system /mnt/nix
-   mkdir /mnt/boot
-   mount /dev/disk/by-partuuid/$(cat /proc/device-tree/chosen/asahi,efi-system-partition) /mnt/boot
-   nixos-generate-config --root /mnt
+   sudo dd if=lattice-<version>-apple-silicon.iso of=/dev/<stick> bs=4M status=progress oflag=sync
    ```
 
-4. Edit `/mnt/etc/nixos/configuration.nix` as the guide says, plus NetworkManager, git, and
-   a user with an `initialPassword`. Add lattice's binary cache too, so the first lattice
-   build downloads what CI has already built instead of compiling it:
-
-   ```nix
-   nix.settings.substituters = [ "https://lattice.cachix.org" ];
-   nix.settings.trusted-public-keys = [
-     "lattice.cachix.org-1:A37f+od4LYzAZVpYIpWKJBNFT9wG1N0HRubFlgbm8SY="
-   ];
-   ```
-
-   Then run `nixos-install` and reboot into it.
-5. On NixOS, clone lattice to `~/lattice` and make a host for this machine:
+3. Run:
 
    ```sh
-   cp -r hosts/macbook hosts/<name>
-   cp /etc/nixos/hardware-configuration.nix hosts/<name>/
+   sudo lattice-install
    ```
 
-   In `hosts/<name>/default.nix`, set the hostname, time zone and `lattice.user.name` (the
-   user from step 4), and add the host to `flake.nix` next to `macbook`.
-6. Copy the firmware where the flake can read it and pin its hash in
-   `lattice.asahi.firmwareHash`:
+   With no network yet, it opens `nmtui` to join Wi-Fi, and the network it joins is kept on
+   the installed system. It asks whether to install the personal setup in
+   `modules/personal` (see [Secrets](#secrets-optional) below), a machine name, your user
+   name and password, a disk passphrase, a time zone and a git URL for your dotfiles
+   (cloned to `~/.dotfiles`, with its `dotfiles.sh` run if it has one), then where to put lattice: the free space the Asahi installer left, or a Linux
+   partition from an earlier install, which it erases. Apple's partitions, the ESP and the
+   partition table are never touched. Nothing is written until you type `yes` at the summary.
 
-   ```sh
-   sudo install -d -m 0755 /var/lib/lattice
-   sudo cp -rT /boot/vendorfw /var/lib/lattice/vendorfw
-   sudo chmod -R a+rX /var/lib/lattice/vendorfw
-   nix hash path /var/lib/lattice/vendorfw
-   ```
+   From there it runs on its own: it encrypts the partition (LUKS2) with btrfs inside, copies
+   Apple's firmware off the ESP and pins its hash, writes `hosts/<name>` from `hosts/macbook`,
+   and installs. Most of the system comes from lattice's binary cache. If the Asahi kernel
+   isn't in it, the kernel is compiled during the install, which takes a while.
 
-7. `git add` the new host, then run `scripts/rebuild.sh <name>`. The first switch builds the
-   Asahi kernel, which is the one thing the cache doesn't hold, so give it a while. After that, `lattice rebuild` does the same.
+4. Take out the stick and reboot. If macOS comes up, hold the power button at startup and
+   pick lattice. The disk passphrase comes first, then the login.
+
+The flake is in `~/lattice` (or where `modules/personal` keeps it), with the new host
+staged but not committed. Commit it, and from
+then on `lattice rebuild` applies changes. A log of the install is in
+`/var/log/lattice-install.log`.
+
+## Building the installer
+
+On an aarch64 Linux machine with Nix, from a checkout of lattice:
+
+```sh
+nix build .#installer
+```
+
+The ISO is in `result/iso/`. It boots the same kernel a lattice host runs, so on a lattice
+machine this builds in a minute or two; anywhere else, the kernel is compiled first. An ISO
+built from a tree with uncommitted changes installs that tree; one built from a commit clones
+lattice at that commit.
+
+`scripts/installer-vm.sh` boots it in a virtual machine on a lattice Mac, against a disk laid
+out the way the Asahi installer leaves one, and `sudo lattice-install --esp /dev/vda1` there
+runs the whole install. `scripts/installer-vm.sh --boot` then starts what it installed. The
+VM has no 3D acceleration, so the wallpaper fails to start in it; nothing else differs.
 
 ## Secrets (optional)
 
@@ -83,6 +78,14 @@ the service tokens in [sops](https://github.com/getsops/sops), via `modules/pers
 `lattice.user.hashedPasswordFile` set, users are immutable and the password lives only in the
 flake; `scripts/rebuild.sh` then refuses to switch until the host's age key is a recipient of
 `secrets/common.yaml`, since otherwise it would boot with every account locked.
+
+Answering yes to the personal setup does that at install time: the account, its password and
+the time zone come from `modules/personal` instead of being asked for, and so do the
+dotfiles (`lattice.user.dotfiles`). The installer looks
+for the admin age key, `sops-age-keys.txt`, at the top of any USB drive and checks that it
+opens the secrets, makes the new host's SSH key, adds it to `.sops.yaml` and re-encrypts
+`secrets/common.yaml`. The admin key stays in RAM and is never written to the new disk;
+`.sops.yaml` and `secrets/common.yaml` are left staged next to the host, to commit and push.
 
 ## Next
 
