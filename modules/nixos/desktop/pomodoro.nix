@@ -230,5 +230,17 @@ in
     args = "[toggle|next|stop|menu|status]";
     summary = "Pomodoro: start or pause, skip the phase, stop";
     group = "session";
+    launch = [
+      {
+        label = "Pomodoro: start or pause";
+        args = "toggle";
+        icon = "gnome-pomodoro";
+      }
+      {
+        label = "Pomodoro…";
+        args = "menu";
+        icon = "gnome-pomodoro";
+      }
+    ];
   };
 }
