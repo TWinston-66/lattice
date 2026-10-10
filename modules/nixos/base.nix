@@ -79,6 +79,10 @@
     networkConfig.DHCP = "yes";
   };
   services.resolved.enable = true;
+  # LLMNR broadcasts every unqualified name the host looks up to whoever shares the network,
+  # which on public wifi is anyone. Nothing here uses it: the tailnet has MagicDNS, and the
+  # .local names (AirPlay) are avahi's mDNS, not resolved's.
+  services.resolved.settings.Resolve.LLMNR = false;
 
   # tailscaled puts accepted subnet routes in table 52 and looks it up at pref 5270, ahead of
   # main. OPNsense advertises the home LAN, so at home 10.0.10.0/24 went out tailscale0 from
