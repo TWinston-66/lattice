@@ -14,7 +14,7 @@
 <p align="center">
   <b>A complete, themed Wayland desktop, declared in one NixOS flake.</b><br>
   From the boot splash to the lock screen, every surface is built from the same palette and the same mark,
-  on Intel laptops and Apple Silicon Macs alike.
+  built for Apple Silicon Macs running Asahi Linux.
 </p>
 
 <p align="center">

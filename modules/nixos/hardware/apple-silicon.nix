@@ -333,15 +333,9 @@ in
     # and `Powered: no` against `PowerState: on` -- so restarting the service does nothing.
     # Reloading the module is the only thing that clears it.
     #
-    # This is not the Dell's hibernate bug wearing another driver. There btintel_pcie fails
-    # going *into* hibernate and the fix is to unload it beforehand; here the chip fails
-    # coming *out* of ordinary suspend. That service could not fire on this host in any
-    # case: /sys/power/disk is [disabled] and the only swap is zram, so none of the
-    # hibernate targets it binds to ever run.
-    #
     # The fault is intermittent -- one resume in ten on 2026-09-20, and the cycle that broke
     # was an unusually short 11s one -- which is why the module is not simply unloaded before
-    # every sleep the way the Dell's is. That would drop the mouse and the headphones on nine
+    # every sleep. That would drop the mouse and the headphones on nine
     # healthy resumes to rescue the tenth. Instead the controller is asked for its local
     # version on the way back. That is a round trip to the chip, which is the point:
     # `btmgmt info` is answered by the kernel's mgmt socket from cached state and calls a
@@ -383,7 +377,7 @@ in
     #
     # s2idle is not the problem and there is no alternative to it in any case: it is the only
     # state Asahi has, /sys/power/disk is [disabled] and the only swap is zram, so
-    # suspend-then-hibernate cannot exist here the way it does on the Dell. What the suspend
+    # suspend-then-hibernate cannot exist here. What the suspend
     # could not survive was the state the kernel was already in. Three Oopses that morning,
     # all identical:
     #
@@ -464,7 +458,7 @@ in
     };
 
     ### POWER ###
-    # tuned rather than power-profiles-daemon, which the laptop profile enables by default.
+    # tuned rather than power-profiles-daemon, the usual choice on a NixOS laptop.
     # PPD has no generic cpufreq driver: it drives intel_pstate, amd-pstate or an ACPI
     # platform_profile, and Apple Silicon offers none of the three. So it fell back to its
     # `placeholder` driver, which advertises exactly power-saver and balanced -- no

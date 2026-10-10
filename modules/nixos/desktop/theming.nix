@@ -447,8 +447,7 @@ let
 
       # An internal panel is a small screen a forearm away and gets the drawing sized for
       # one; anything else is taken for a monitor across a desk. Matching on the connector
-      # name is what hyprland and the kernel both call these, and it covers the Dell's
-      # eDP-1 as well as this Mac's.
+      # name works because hyprland and the kernel both call the Mac's panel eDP-1.
       apply() {
         local output file
         for output in $(hyprctl monitors -j | jq -r '.[].name'); do

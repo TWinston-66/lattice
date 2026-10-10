@@ -19,11 +19,10 @@ let
   # annotation. It replaces the grim+slurp pair that used to be inlined here; grim is still
   # what actually takes the pixels, but HyprQuickFrame builds the geometry and the pipeline.
   #
-  # Reachable two ways, because neither one covers both hosts on its own. Print is bound in
-  # configs/hyprland.lua, and the key comes from the external keyboard
-  # (NuPhy Halo65 V2), which is remapped in firmware and so emits a real KEY_SYSRQ wherever
-  # it is plugged in. The Dell's built-in keyboard has a Print key too, but the Mac's
-  # (hid-apple) lands on the magic_keyboard_2021_and_2024 fn table, which has no
+  # Reachable two ways, because the key alone does not cover every setup. Print is bound
+  # in configs/hyprland.lua, and the key comes from the external keyboard (NuPhy Halo65
+  # V2), which is remapped in firmware and so emits a real KEY_SYSRQ wherever it is
+  # plugged in. The Mac's built-in keyboard (hid-apple) lands on the magic_keyboard_2021_and_2024 fn table, which has no
   # KEY_SYSRQ on either fn layer -- so on the Mac with nothing plugged in, the launcher
   # entry below is the only way in. (evtest-style dumps do show KEY_SYSRQ on the internal
   # keyboard; that comes from the generic HID boot-keyboard descriptor, not from a key that
