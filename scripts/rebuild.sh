@@ -37,7 +37,9 @@ summarize() {
     [[ "$new" != "$old" ]] || return 0
     diff_lines="$(nix store diff-closures "$old" "$new" 2>/dev/null || true)"
     if [[ -z "$diff_lines" ]]; then
-        echo "no package changes; configuration only"
+        # diff-closures lists version and size changes only, so a package rebuilt at the same
+        # version -- a patch, an override -- does not show up here.
+        echo "no version changes"
     else
         echo
         head -n 25 <<<"$diff_lines"
@@ -116,11 +118,16 @@ session_generation() {
 # then inactive by the time the loop below looks at it. Asking "is it running now" would skip
 # exactly the units the switch just took down. The Stream Deck stayed dark through a whole
 # rebuild that way.
-declare -A before=() was_running=()
+#
+# Newer switches do start them again, though, and a second restart on top of that flashed the
+# bar twice. The invocation ID is what tells the two apart: a unit that came back under a new
+# one has already been restarted on the new definition.
+declare -A before=() was_running=() invocation=()
 if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     for unit in "${!session_units[@]}"; do
         before[$unit]="$(session_generation "$unit" "${session_units[$unit]}")"
         was_running[$unit]="$(systemctl --user is-active "$unit.service" || true)"
+        invocation[$unit]="$(systemctl --user show -P InvocationID "$unit.service" || true)"
     done
 fi
 
@@ -155,6 +162,10 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
         # starting it here would pre-empt that. `restart` rather than `start`, because this
         # has to cover both the unit the switch stopped and the one it left running.
         if [[ "${was_running[$unit]}" == "active" ]]; then
+            if [[ "$(systemctl --user is-active "$unit.service" || true)" == "active" &&
+                "$(systemctl --user show -P InvocationID "$unit.service" || true)" != "${invocation[$unit]}" ]]; then
+                continue
+            fi
             echo "restarting $unit, which this generation changed"
             systemctl --user restart "$unit.service"
         fi

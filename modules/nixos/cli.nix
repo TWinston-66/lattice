@@ -502,7 +502,7 @@ in
             host "$(hostname)" \
             nixos "$(nixos-version)" \
             kernel "$(uname -r)" \
-            generation "''${generation%-link}" \
+            generation "''${generation%-link}''${trial:+ (boot default; not what is running)}" \
             built "''${built:-unknown}" \
             checkout "''${head:-unknown}''${dirty:+ (dirty)}"
           echo
