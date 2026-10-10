@@ -201,6 +201,11 @@ in
     gcr-ssh-agent.enable = false;
   };
   security.pam.services.greetd.enableGnomeKeyring = true;
+  # The gnome-keyring module also adds itself to the `login` PAM service. Nothing logs in
+  # through that here except `systemd-run --machine=user@.host` (the backup and failure
+  # notifications), which has no password, so each one logged "gkr-pam: couldn't unlock
+  # the login keyring". greetd above is the login that unlocks it.
+  security.pam.services.login.enableGnomeKeyring = lib.mkForce false;
 
   # Run Electron apps natively on Wayland so they aren't blurry under fractional scaling.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
