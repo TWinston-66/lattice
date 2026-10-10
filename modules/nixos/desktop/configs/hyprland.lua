@@ -406,18 +406,19 @@ hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("cliphist list | rofi -dmenu 
 hl.bind(mainMod .. " + slash", hl.dsp.exec_cmd("lattice-keys"), { description = "Keybinding cheatsheet" })
 hl.bind(mainMod .. " + SHIFT + slash", hl.dsp.exec_cmd("lattice-keys sheet"), { description = "Keybinding cheatsheet (browser)" })
 
--- Notifications, all four through makoctl, mako's CLI. Hyprland execs these with the
--- session PATH rather than any wrapper's, which is why lattice puts mako itself in
--- systemPackages (modules/nixos/desktop/session.nix) -- the systemd unit alone installs
--- the daemon and not the tool that drives it.
+-- Notifications, through makoctl, mako's CLI. Hyprland execs these with the session PATH
+-- rather than any wrapper's, which is why lattice puts mako itself in systemPackages
+-- (modules/nixos/desktop/session.nix) -- the systemd unit alone installs the daemon and not
+-- the tool that drives it. The two dismisses go through lattice-notifications, which notes
+-- what was dismissed by hand so the bar's unread count leaves it out.
 --
 -- N takes down the banner in front of you and SHIFT the whole stack. CTRL brings the last
 -- one back, which is mostly for having cleared a critical banner before reading it: mako's
 -- `restore` pops the newest off the history ring, so it is the undo for the two above.
 -- ALT opens the browser over everything that has already expired -- lattice's
 -- lattice-notifications, shaped like the clipboard bind above, Enter copying the body.
-hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd("makoctl dismiss"), { description = "Dismiss notification" })
-hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("makoctl dismiss --all"), { description = "Dismiss all notifications" })
+hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd("lattice-notifications dismiss"), { description = "Dismiss notification" })
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("lattice-notifications dismiss --all"), { description = "Dismiss all notifications" })
 hl.bind(mainMod .. " + CTRL + N",  hl.dsp.exec_cmd("makoctl restore"), { description = "Restore last notification" })
 hl.bind(mainMod .. " + ALT + N",   hl.dsp.exec_cmd("lattice-notifications"), { description = "Notification history" })
 

@@ -7,6 +7,8 @@
 let
   # SIGRTMIN+4, the signal the bar pill below listens for (waybar.nix checks that no two pills share one).
   barSignal = 4;
+  # And the unread pill's.
+  unreadSignal = 13;
 
   user = config.lattice.user.name;
 
@@ -84,6 +86,14 @@ let
   # nixpkgs carries, so -j and a filter is the version-proof way to read it. The JSON is a
   # plain array of objects, newest first, with the fields below spelled exactly as mako
   # spells them (app_name, not app-name -- these are not the DBus hint names).
+  #
+  # It also keeps the count behind the unread pill: a notification is unread when it
+  # reached the history without being seen to -- it timed out, or arrived under do not
+  # disturb. mako keeps no such flag and no timestamps, so this keeps two small files beside
+  # it: the ids dismissed by hand (every dismiss path goes through `click` and `dismiss`
+  # below: the mako buttons in ./configs/mako and the SUPER+N binds), and the newest id the
+  # history held when it was last opened. Both are keyed by mako's pid, because its ids
+  # start again from 1 when it restarts, and the history is gone with it anyway.
   notifyHistory = pkgs.writeShellApplication {
     name = "lattice-notifications";
     runtimeInputs = [
@@ -92,9 +102,77 @@ let
       rofiWithCalc
       pkgs.wl-clipboard
       pkgs.libnotify
-      pkgs.coreutils # cut
+      pkgs.coreutils # cut, tail
+      pkgs.procps
+      pkgs.systemd
     ];
     text = ''
+      dir="''${XDG_RUNTIME_DIR:?}/lattice"
+      mkdir -p "$dir"
+      pid=$(systemctl --user show -P MainPID mako.service)
+      seen="$dir/notify-seen-$pid"
+      read_mark="$dir/notify-read-$pid"
+
+      ids() { makoctl list -j | jq -r '.[].id'; }
+      bar() { pkill -RTMIN+${toString unreadSignal} waybar || true; }
+
+      # Everything in the history so far counts as read; the dismissed-by-hand ids are all
+      # below the mark now, so that file starts over.
+      mark_read() {
+        makoctl history -j | jq '[.[].id] | max // 0' >"$read_mark"
+        : >"$seen"
+        bar
+      }
+
+      case "''${1:-browse}" in
+      browse) ;;
+      read)
+        mark_read
+        exit 0
+        ;;
+      # A left click: what mako's default invoke-default-action does, which is invoke and
+      # then close. `makoctl invoke` alone leaves the banner up.
+      click)
+        echo "$2" >>"$seen"
+        makoctl invoke -n "$2" || true
+        makoctl dismiss -n "$2" || true
+        exit 0
+        ;;
+      # By id, --all, or with neither the one makoctl picks. Which ones went is read off
+      # the list before and after rather than guessed from makoctl's choice.
+      dismiss)
+        before=$(ids)
+        if [ -n "''${2:-}" ] && [ "$2" != --all ]; then
+          makoctl dismiss -n "$2" || true
+        else
+          makoctl dismiss ''${2:+"$2"} || true
+        fi
+        after=$(ids)
+        comm -23 <(sort <<<"$before") <(sort <<<"$after") >>"$seen"
+        tail -n 200 "$seen" >"$seen.tmp" && mv "$seen.tmp" "$seen"
+        exit 0
+        ;;
+      # The bar pill: nothing at all while there is nothing unread, so it takes no room.
+      unread)
+        makoctl history -j 2>/dev/null | jq -c \
+          --argjson mark "$(cat "$read_mark" 2>/dev/null || echo 0)" \
+          --slurpfile seen <(cat "$seen" 2>/dev/null || true) '
+            [.[] | select(.id > $mark and (.id | IN($seen[]) | not))] as $u
+            | if ($u | length) == 0 then {text: ""}
+              else {
+                text: "󰂞 \($u | length)",
+                class: "unread",
+                tooltip: ([$u[:8][] | (.app_name // "?") + ": " + (.summary // "")]
+                  + ["", "Click for the history, right-click to mark read"] | join("\n"))
+              } end' || echo '{"text":""}'
+        exit 0
+        ;;
+      *)
+        echo "usage: lattice notifications [browse|read|unread|click ID|dismiss [ID|--all]]" >&2
+        exit 2
+        ;;
+      esac
+
       # Captured once, and both passes read this copy. Reading it twice would race a
       # notification arriving mid-prompt, and the id picked from the first list would then
       # mean a different entry in the second.
@@ -120,7 +198,8 @@ let
                 + " | " + ((.body // "") | split("\n") | join(" ")))
             ] | @tsv' \
           | rofi -dmenu -i -p notifications -display-columns 2
-      ) || exit 0
+      ) || { mark_read; exit 0; }
+      mark_read
       [ -n "$selection" ] || exit 0
       # That `|| exit 0` is for rofi answering 1 on a dismissed prompt, which is a normal
       # outcome and must not take the script down under pipefail. It cannot tell a cancel
@@ -218,6 +297,22 @@ in
     };
   };
 
+  # What timed out or arrived under do not disturb before it was seen, beside the do not
+  # disturb pill and hidden while there is none. Polled rather than pushed: a notification
+  # becomes unread by expiring, and mako has no hook for that.
+  lattice.bar.modules."custom/notify-unread" = {
+    section = "group/toggles";
+    order = 19;
+    settings = {
+      exec = "lattice-notifications unread";
+      return-type = "json";
+      signal = unreadSignal;
+      interval = 5;
+      on-click = "lattice-notifications";
+      on-click-right = "lattice-notifications read";
+    };
+  };
+
   environment.systemPackages = [
     notifyHistory
     dnd
@@ -225,7 +320,12 @@ in
 
   systemd.user.services.waybar.path = [
     dnd
+    notifyHistory
   ];
+
+  # The click and touch bindings in ./configs/mako exec lattice-notifications, and mako's
+  # unit PATH is only systemd's own.
+  systemd.user.services.mako.path = [ notifyHistory ];
 
   systemd.user.services = {
     # The OnFailure= target for the session's own units, so a unit that gives up says so
@@ -316,6 +416,7 @@ in
     };
     notifications = {
       exec = lib.getExe notifyHistory;
+      args = "[browse|read|unread|click ID|dismiss [ID|--all]]";
       summary = "Browse the notification history";
       group = "session";
       launch = [

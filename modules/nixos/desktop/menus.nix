@@ -168,13 +168,14 @@ let
       # default-timeout is 15s -- more than twice the scan -- so a fire-and-forget banner
       # outlives the thing it was explaining and sits on top of the menu that replaced it.
       # `notify-send -p` hands back the id it was given, which makoctl closes the moment
-      # the scan returns, so the banner lasts exactly as long as the wait does.
+      # the scan returns, so the banner lasts exactly as long as the wait does. Kept out of
+      # the history, where it would only count as an unread notification on the bar.
       scanning() {
         local id
         id=$(notify-send -p -a lattice-wifi -i network-wireless-acquiring-symbolic \
           -h string:x-canonical-private-synchronous:lattice-wifi "Scanning for networks")
         lines=$(scan yes)
-        [ -n "$id" ] && makoctl dismiss -n "$id" >/dev/null 2>&1 || true
+        [ -n "$id" ] && makoctl dismiss --no-history -n "$id" >/dev/null 2>&1 || true
       }
 
       rescan=no
