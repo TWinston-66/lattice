@@ -758,7 +758,7 @@ let
         local tip
         tip="<b>Backups</b>"$'\n'$(lines | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         if ((attached)); then
-          tip+=$'\n\n'"Click to back up now, right-click for more"
+          tip+=$'\n\n'"Click to back up now, right-click to eject or browse"
         fi
         jq -nc --arg text "$text" --arg tip "$tip" --arg class "$class" \
           '{text: $text, tooltip: $tip, class: ($class | split(" "))}'
