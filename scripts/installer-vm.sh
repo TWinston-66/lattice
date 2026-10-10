@@ -12,6 +12,9 @@ cd "$(dirname "$0")/.."
 #   scripts/installer-vm.sh --boot   the disk alone, to see whether what it installed boots
 #   scripts/installer-vm.sh --clean  delete the disk
 #
+# Anything after -- goes to QEMU as it is: a monitor or serial socket to drive the VM from a
+# script, or another drive.
+#
 # The ISO is built from this checkout. Committed and pushed, it installs that commit; with
 # uncommitted changes, it installs the tree as it is.
 
@@ -23,7 +26,7 @@ firmware=/var/lib/lattice/vendorfw
 
 mode=install
 case "${1:-}" in
-"") ;;
+"" | --) ;;
 --boot) mode=boot ;;
 --clean)
     rm -rf "$dir"
@@ -31,10 +34,13 @@ case "${1:-}" in
     exit 0
     ;;
 *)
-    echo "usage: $0 [--boot | --clean]" >&2
+    echo "usage: $0 [--boot | --clean] [-- qemu args]" >&2
     exit 2
     ;;
 esac
+[[ "${1:-}" == --boot ]] && shift
+[[ "${1:-}" == -- ]] && shift
+extra=("$@")
 
 if [[ -z "${LATTICE_VM_SHELL:-}" ]]; then
     LATTICE_VM_SHELL=1 exec nix shell --inputs-from . \
@@ -98,4 +104,4 @@ if [[ "$mode" == install ]]; then
     args+=(-drive "if=virtio,format=raw,readonly=on,file=$iso")
 fi
 
-exec qemu-system-aarch64 "${args[@]}"
+exec qemu-system-aarch64 "${args[@]}" "${extra[@]}"
