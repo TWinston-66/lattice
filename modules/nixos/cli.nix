@@ -395,6 +395,11 @@ let
     else
       drift="the running system is the checkout's HEAD"
     fi
+    # A `lattice rebuild --test` is running but is not what the machine boots.
+    trial=""
+    if [[ $(readlink -f /run/current-system) != $(readlink -f /nix/var/nix/profiles/system) ]]; then
+      trial="running a trial build (lattice rebuild --test); a reboot goes back to the boot default"
+    fi
   '';
 in
 {
@@ -434,8 +439,12 @@ in
     lattice.cli.commands = lib.mkIf (flake != null) {
       rebuild = {
         exec = "${flake}/scripts/rebuild.sh";
-        args = "[host]";
+        args = "[--build|--test] [host]";
         summary = "Build this machine from the checkout and switch to it";
+        details = ''
+          --build  build only, and list what a switch would change; no sudo, nothing activated
+          --test   switch until the next reboot, which goes back to the boot default
+        '';
         group = "system";
         launch = [
           {
@@ -493,11 +502,12 @@ in
             host "$(hostname)" \
             nixos "$(nixos-version)" \
             kernel "$(uname -r)" \
-            generation "''${generation%-link}" \
+            generation "''${generation%-link}''${trial:+ (boot default; not what is running)}" \
             built "''${built:-unknown}" \
             checkout "''${head:-unknown}''${dirty:+ (dirty)}"
           echo
           echo "$drift"
+          [[ -z $trial ]] || echo "$trial"
         '';
         summary = "What is running, and whether the checkout has moved since";
         group = "system";
@@ -600,6 +610,7 @@ in
               section "Configuration"
               ${revisionCheck}
               echo "  $drift"
+              [[ -z $trial ]] || echo "  $trial"
               # A switch can change the kernel, initrd or modules without them taking effect, and
               # the system then runs one generation's userland on another's kernel.
               stale=()

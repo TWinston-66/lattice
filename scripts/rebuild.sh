@@ -5,8 +5,66 @@ source scripts/lib.sh
 export NIX_CONFIG="experimental-features = nix-command flakes"
 enter_dev_shell scripts/rebuild.sh "$@"
 
+# --build stops short of the switch: the system is built and what a switch would change is
+# listed, with no sudo and nothing activated. --test activates without making the build the
+# boot default, so a reboot goes back to the generation that was there before -- the way to
+# try something that might break the session, with the revert already in place.
+mode=switch
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+    --build) mode=build ;;
+    --test) mode=test ;;
+    *)
+        echo "lattice rebuild: unknown flag $1 (--build or --test)" >&2
+        exit 2
+        ;;
+    esac
+    shift
+done
+
 host="${1:-$(hostname)}"
 host="${host#lattice-}"
+
+# What moved between two systems, read from the store rather than from the flake: every
+# package whose version changed, and the size it cost. `nix store diff-closures` is already
+# here, where nvd would be another input for the same answer.
+#
+# Capped, because the honest answer to a nixpkgs bump is hundreds of lines and this is meant
+# to be the last thing read before the terminal is closed. The full command is printed in
+# place of the tail so it is one paste away.
+summarize() {
+    local old="$1" new="$2" diff_lines
+    [[ "$new" != "$old" ]] || return 0
+    diff_lines="$(nix store diff-closures "$old" "$new" 2>/dev/null || true)"
+    if [[ -z "$diff_lines" ]]; then
+        # diff-closures lists version and size changes only, so a package rebuilt at the same
+        # version -- a patch, an override -- does not show up here.
+        echo "no version changes"
+    else
+        echo
+        head -n 25 <<<"$diff_lines"
+        if (($(wc -l <<<"$diff_lines") > 25)); then
+            printf '... %s more:\n    nix store diff-closures %s %s\n' \
+                "$(($(wc -l <<<"$diff_lines") - 25))" "$old" "$new"
+        fi
+    fi
+}
+
+old_system="$(readlink -f /run/current-system)"
+
+if [[ "$mode" == build ]]; then
+    new_system="$(nix build ".#nixosConfigurations.$host.config.system.build.toplevel" \
+        --no-link --print-out-paths)"
+    echo "built $new_system"
+    if [[ "$new_system" == "$old_system" ]]; then
+        echo "identical to the running system; a switch would change nothing"
+    else
+        summarize "$old_system" "$new_system"
+        echo
+        echo "lattice rebuild to switch to it, or lattice rebuild --test to try it until a reboot"
+    fi
+    exit 0
+fi
 
 # Only a host that reads its password from sops can be locked out by it; a plain install
 # sets its password with passwd and has no secrets to decrypt.
@@ -60,18 +118,20 @@ session_generation() {
 # then inactive by the time the loop below looks at it. Asking "is it running now" would skip
 # exactly the units the switch just took down. The Stream Deck stayed dark through a whole
 # rebuild that way.
-declare -A before=() was_running=()
+#
+# Newer switches do start them again, though, and a second restart on top of that flashed the
+# bar twice. The invocation ID is what tells the two apart: a unit that came back under a new
+# one has already been restarted on the new definition.
+declare -A before=() was_running=() invocation=()
 if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     for unit in "${!session_units[@]}"; do
         before[$unit]="$(session_generation "$unit" "${session_units[$unit]}")"
         was_running[$unit]="$(systemctl --user is-active "$unit.service" || true)"
+        invocation[$unit]="$(systemctl --user show -P InvocationID "$unit.service" || true)"
     done
 fi
 
-# What the switch changed in the store, for the summary below.
-old_system="$(readlink -f /run/current-system)"
-
-nixos-rebuild switch --flake ".#$host" --sudo
+nixos-rebuild "$mode" --flake ".#$host" --sudo
 
 # The hypr configs this flake generates -- /etc/xdg/hypr/lattice.lua and the hyprpaper,
 # hypridle and hyprlock confs beside it -- are /etc symlinks whose target moves on every
@@ -102,6 +162,10 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
         # starting it here would pre-empt that. `restart` rather than `start`, because this
         # has to cover both the unit the switch stopped and the one it left running.
         if [[ "${was_running[$unit]}" == "active" ]]; then
+            if [[ "$(systemctl --user is-active "$unit.service" || true)" == "active" &&
+                "$(systemctl --user show -P InvocationID "$unit.service" || true)" != "${invocation[$unit]}" ]]; then
+                continue
+            fi
             echo "restarting $unit, which this generation changed"
             systemctl --user restart "$unit.service"
         fi
@@ -118,24 +182,10 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     fi
 fi
 
-# What actually moved, read from the store rather than from the flake: every package whose
-# version changed, and the size it cost. `nix store diff-closures` is already here, where nvd
-# would be another input for the same answer.
-#
-# Capped, because the honest answer to a nixpkgs bump is hundreds of lines and this is meant
-# to be the last thing read before the terminal is closed. The full command is printed in
-# place of the tail so it is one paste away.
-new_system="$(readlink -f /run/current-system)"
-if [[ "$new_system" != "$old_system" ]]; then
-    diff_lines="$(nix store diff-closures "$old_system" "$new_system" 2>/dev/null || true)"
-    if [[ -z "$diff_lines" ]]; then
-        echo "no package changes; the switch was configuration only"
-    else
-        echo
-        head -n 25 <<<"$diff_lines"
-        if (($(wc -l <<<"$diff_lines") > 25)); then
-            printf '... %s more:\n    nix store diff-closures %s %s\n' \
-                "$(($(wc -l <<<"$diff_lines") - 25))" "$old_system" "$new_system"
-        fi
-    fi
+summarize "$old_system" "$(readlink -f /run/current-system)"
+
+if [[ "$mode" == test ]]; then
+    echo
+    echo "running until the next reboot, which goes back to the boot default;"
+    echo "lattice rebuild to keep it"
 fi
