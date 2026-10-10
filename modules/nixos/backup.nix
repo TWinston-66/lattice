@@ -351,7 +351,9 @@ let
       backup() {
         if [[ $mode == auto ]]; then
           local last
-          last=$(state_json | jq -r '.last_success // 0')
+          # An interrupted run is owed one, as the drive-removed notification promises, so
+          # it doesn't count as backed up however recent the last success.
+          last=$(state_json | jq -r 'if .last_result == "interrupted" then 0 else .last_success // 0 end')
           if (($(now) - last < 50 * 60)); then
             echo "backed up $(ago $(($(now) - last))); skipping"
             exit 0
@@ -549,6 +551,8 @@ let
           last=$(state_json | jq -r '.last_success // 0')
           if ((last == 0)); then
             body="This machine has not been backed up yet; starting now"
+          elif [[ $(state_json | jq -r '.last_result // ""') == interrupted ]]; then
+            body="The last backup was interrupted; starting it again"
           elif (($(date +%s) - last < 50 * 60)); then
             body="Last backup $(ago $(($(date +%s) - last))); the next is within the hour"
           else
