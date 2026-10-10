@@ -160,9 +160,16 @@ in
     sunset
   ];
 
-  systemd.user.services.waybar.path = [
-    sunset
-  ];
+  # PartOf pipewire for the same reason as swayosd below: waybar's wireplumber module never
+  # reconnects after pipewire goes away, so both level pills froze at their last value while
+  # the keys kept changing the volume (2026-10-09, after a restart to recover the HomePod).
+  systemd.user.services.waybar = {
+    path = [
+      sunset
+    ];
+    partOf = [ "pipewire.service" ];
+    after = [ "pipewire.service" ];
+  };
 
   ### AUDIO ###
   security.rtkit.enable = true;
