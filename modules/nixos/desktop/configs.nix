@@ -7,6 +7,7 @@
 let
   user = config.lattice.user.name;
   home = config.users.users.${user}.home;
+  group = config.users.users.${user}.group;
 
   # catppuccin/tmux 2.3.0, against nixpkgs' 2.1.3: the status modules tmux.conf builds its bar
   # from, and the @thm_* names theme.tmux sets, are the ones from 2.3.0.
@@ -86,9 +87,10 @@ in
     # once: a copy only where there is none, naming the theme /etc/zshrc's btop alias
     # serves from ~/.cache/lattice. btop fills in every other key with its defaults. No
     # `d` for the directory: `C` makes missing parents itself, and a `d` errors at every
-    # login when ~/.config/btop is a symlink into a dotfiles repo.
+    # login when ~/.config/btop is a symlink into a dotfiles repo. Owner and group are
+    # named for the reason given at theming.nix's theme seeds.
     ++ [
-      "C ${home}/.config/btop/btop.conf - - - - ${pkgs.writeText "btop.conf" ''
+      "C ${home}/.config/btop/btop.conf 0644 ${user} ${group} - ${pkgs.writeText "btop.conf" ''
         color_theme = "catppuccin_mocha"
       ''}"
     ];
