@@ -53,7 +53,12 @@ entry with the phone's name holds the camera roll (photos and videos are under `
 **Documents on** *phone* holds each app's shared files. Click one to open it.
 
 For anything else, use Taildrop: share to Tailscale on the phone and pick this machine, and
-the files land in `~/Downloads` with a notification.
+the files land in `~/Downloads` with a notification. To go the other way, run
+`lattice send` (or **Send a file to a device…** in the launcher's actions). It asks for the
+files and then the device.
+
+To read a QR code off the screen, such as a Wi-Fi code or a 2FA setup key, run `lattice qr`
+and select it. What it says ends up on the clipboard.
 
 ## Themes and wallpapers
 

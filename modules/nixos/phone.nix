@@ -7,6 +7,8 @@
 let
   tailnet = config.services.tailscale;
 
+  inherit (import ./desktop/lib.nix { inherit config lib pkgs; }) rofiWithCalc;
+
   downloads = "%h/Downloads";
 
   # `tailscale file get` moves whatever is sitting in the inbox and exits; nothing on the
@@ -45,6 +47,67 @@ let
       done
     '';
   };
+
+  # The other direction: files out to a device on the tailnet, the phone mostly. Arguments
+  # are the files, and --to names the device; whichever is missing is asked for, the files
+  # in a GTK picker (multiple selection, which a rofi file browser cannot do) and the device
+  # in rofi from `tailscale file cp --targets`. Only this user's own devices are targets,
+  # which is Taildrop's rule, not ours.
+  send = pkgs.writeShellApplication {
+    name = "lattice-send";
+    runtimeInputs = [
+      pkgs.tailscale
+      pkgs.libnotify
+      pkgs.zenity
+      rofiWithCalc
+      pkgs.coreutils
+      pkgs.gawk
+    ];
+    text = ''
+      files=()
+      device=""
+      while (($#)); do
+        case "$1" in
+        --to)
+          device="''${2:?--to needs a device}"
+          shift 2
+          ;;
+        *)
+          files+=("$1")
+          shift
+          ;;
+        esac
+      done
+
+      if ((''${#files[@]} == 0)); then
+        mapfile -t files < <(zenity --file-selection --multiple --separator=$'\n' \
+          --title "Send with Taildrop" 2>/dev/null) || exit 0
+        ((''${#files[@]})) || exit 0
+      fi
+
+      if [[ -z $device ]]; then
+        if ! targets=$(tailscale file cp --targets 2>&1); then
+          notify-send -a Taildrop -u critical -i dialog-error "Can't list devices" "$targets"
+          exit 1
+        fi
+        # The name in a hidden first column and the name plus tailscale's own note
+        # ("offline; last seen ...") in the second, so an offline device still shows why.
+        device=$(awk -F'\t' '{ print $2 "\t" $2 ($3 != "" ? "   " $3 : "") }' <<<"$targets" \
+          | rofi -dmenu -i -p send -display-columns 2 | cut -f1) || exit 0
+        [[ -n $device ]] || exit 0
+      fi
+
+      what="''${files[0]##*/}"
+      ((''${#files[@]} == 1)) || what="''${#files[@]} files"
+      id=$(notify-send -p -a Taildrop -i phone "Sending to $device" "$what")
+      if out=$(tailscale file cp "''${files[@]}" "$device:" 2>&1); then
+        notify-send -r "$id" -a Taildrop -i phone "Sent to $device" "$what"
+      else
+        notify-send -r "$id" -a Taildrop -u critical -i dialog-error "Sending to $device failed" "$out"
+        exit 1
+      fi
+    '';
+  };
 in
 {
   ### IPHONE OVER USB ###
@@ -73,6 +136,19 @@ in
   ];
 
   ### TAILDROP ###
+  lattice.cli.commands.send = lib.mkIf tailnet.enable {
+    exec = lib.getExe send;
+    args = "[file...] [--to device]";
+    summary = "Send files to a device on the tailnet with Taildrop";
+    group = "session";
+    launch = [
+      {
+        label = "Send a file to a device…";
+        icon = "gnome-user-share";
+      }
+    ];
+  };
+
   # File transfer to and from the phone, over the tailnet rather than the LAN. This is the
   # one channel iOS does not get in the way of -- the share sheet hands a file to the
   # Tailscale app, which is a foreground action, so none of the background-execution limits
