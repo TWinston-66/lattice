@@ -122,7 +122,8 @@ fourteen accents, and generated kits for GTK, Qt, icons, rofi, foot, tmux, Neovi
 Thunderbird and a dozen CLI tools. A silent Plymouth boot leads straight into a themed greeter.
 
 **Hardware.** Stream Deck pages with generated key art and Home Assistant controls, Logitech
-MX Master through Solaar, NuPhy keyboards over WebHID, and iPhone transfers over Taildrop.
+MX Master through Solaar, NuPhy keyboards over WebHID, and an iPhone's photos and files
+over USB or sent over Taildrop.
 
 **Laptops.** Charge limits, battery-aware refresh rates, measured suspend drain, captive-portal
 sign-in, and an ambient light sensor driving the panel and keyboard on the Mac.
@@ -156,7 +157,7 @@ lattice guide        # these guides, as a page
 
 | | |
 | --- | --- |
-| [Everyday use](docs/using.md) | The `lattice` command, rebuilding, secrets, themes |
+| [Everyday use](docs/using.md) | The `lattice` command, rebuilding, secrets, themes, your iPhone |
 | [Installing lattice](docs/install.md) | Apple Silicon Macs, and adding a host to the flake |
 | [Backups](docs/backups.md) | Setting up the drive, getting files back, restoring a machine |
 | [Recovery](docs/recovery.md) | When a host can't decrypt its secrets |

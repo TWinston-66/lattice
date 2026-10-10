@@ -5,8 +5,11 @@ it's plugged in, then hourly. Every host goes into one encrypted, deduplicated r
 repository, read from btrfs snapshots so each copy is consistent. Backups cover the whole
 machine except what the flake rebuilds, so a reinstall plus a restore puts it back as it was.
 
-A bar pill shows progress and failures. A week without a backup turns it orange and sends
-a daily reminder.
+A bar pill shows progress and failures; right-click it to eject the drive or browse the
+backups. A week without a backup turns it orange and sends a daily reminder.
+
+Pulling the drive out mid-backup is safe. The run stops, the backups already on the drive
+are untouched, and the next time it's plugged in the interrupted backup starts again.
 
 > [!IMPORTANT]
 > The repository password is `restic-password` in sops, and a copy is in Bitwarden. The
