@@ -24,6 +24,7 @@ disk="$dir/disk.img"
 vars="$dir/efi-vars.fd"
 firmware=/var/lib/lattice/vendorfw
 
+argv=("$@")
 mode=install
 case "${1:-}" in
 "" | --) ;;
@@ -45,7 +46,7 @@ extra=("$@")
 if [[ -z "${LATTICE_VM_SHELL:-}" ]]; then
     LATTICE_VM_SHELL=1 exec nix shell --inputs-from . \
         nixpkgs#qemu nixpkgs#gptfdisk nixpkgs#dosfstools nixpkgs#mtools \
-        -c "$0" "$@"
+        -c "$0" "${argv[@]}"
 fi
 
 # QEMU locks the disk it runs on, but a fresh disk is a new file, and the lock stays on the
