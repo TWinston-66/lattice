@@ -123,6 +123,18 @@ let
       # rebuild stalled behind it. Parenting it to the app keeps it alive.
       substituteInPlace streamdeck_ui/gui.py \
         --replace-fail "timer = QTimer()" "timer = QTimer(app)"
+
+      # The single-instance lock is a fixed /tmp path and the socket follows TMPDIR, which is
+      # /tmp too, so both are shared by every user on the machine: whoever starts the deck
+      # first owns them, and a second user's instance dies on the lock with EACCES. Both go
+      # to XDG_RUNTIME_DIR instead, the session's own directory, where server and client
+      # agree on the socket without either needing TMPDIR set.
+      substituteInPlace streamdeck_ui/gui.py \
+        --replace-fail 'Semaphore("/tmp/streamdeck_ui.lock")' \
+          'Semaphore(os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "streamdeck_ui.lock"))'
+      substituteInPlace streamdeck_ui/cli/server.py \
+        --replace-fail "tmpdir = tempfile.gettempdir()" \
+          'tmpdir = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()'
     '';
   });
 
@@ -871,10 +883,11 @@ let
       arm_seconds=10
       page_file="''${XDG_RUNTIME_DIR:-/tmp}/lattice-deck.page"
 
-      # streamdeckc talks to the running streamdeck-ui over a unix socket in TMPDIR. Every
-      # call through here repaints something that is already true elsewhere, so a deck that
-      # is unplugged, or a session whose service is not up, is not an error worth reporting:
-      # the face simply goes uncorrected until the next sync.
+      # streamdeckc talks to the running streamdeck-ui over a unix socket in XDG_RUNTIME_DIR
+      # (see the patch on streamdeckUi). Every call through here repaints something that is
+      # already true elsewhere, so a deck that is unplugged, or a session whose service is not
+      # up, is not an error worth reporting: the face simply goes uncorrected until the next
+      # sync.
       deck() { streamdeckc "$@" >/dev/null 2>&1 || true; }
 
       # page button state. SET_TEXT is the other half of this and has no caller now that no
@@ -1023,7 +1036,7 @@ let
       wait_for_deck() {
         local i
         for i in $(seq 40); do
-          [ -S "''${TMPDIR:-/tmp}/streamdeck_ui.sock" ] && return 0
+          [ -S "''${XDG_RUNTIME_DIR:-/tmp}/streamdeck_ui.sock" ] && return 0
           sleep 0.5
         done
         return 1
