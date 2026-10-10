@@ -1,0 +1,28 @@
+name: release
+
+# A release is a PR that bumps VERSION; its merge tags v<VERSION> and drafts the notes from
+# the PRs since the last one, as the dotfiles do. A version with a suffix (0.1.0-pre) is
+# the next release still in the making, so it is left alone.
+on:
+  push:
+    branches: [main]
+    paths: ["VERSION"]
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v$(cat VERSION)"
+          if [[ $v == *-* ]]; then
+            echo "$v is not a release"
+          elif gh release view "$v" >/dev/null 2>&1; then
+            echo "$v already released"
+          else
+            gh release create "$v" --generate-notes
+          fi

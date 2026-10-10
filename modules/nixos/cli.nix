@@ -506,6 +506,7 @@ in
           generation=''${generation#system-}
           printf '%-10s %s\n' \
             host "$(hostname)" \
+            lattice ${config.lattice.version} \
             nixos "$(nixos-version)" \
             kernel "$(uname -r)" \
             generation "''${generation%-link}''${trial:+ (boot default; not what is running)}" \
