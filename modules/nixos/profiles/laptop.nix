@@ -663,13 +663,20 @@ let
               used  = (e0 - e1) / 1e6
               full  = ef / 1e6
 
-              # Reading higher on resume than going in is gauge noise, not free charge.
-              if (used <= 0 || full <= 0) exit
+              # The Mac'"'"'s gauge is still settling at the moment of resume: it read
+              # 0.1 Wh higher than going in after a ten-minute sleep, then jumped by
+              # 0.2-0.4 Wh either way over the next minute. Said out loud rather than
+              # dropped, so a short sleep reads as unmeasurable and not as a missing log.
+              if (used <= 0 || full <= 0) {
+                printf "slept %.2fh: the gauge showed no drop, too short to measure\n", hours
+                exit
+              }
 
               watts = used / hours
 
-              printf "slept %.2fh: %.2f Wh of %.1f Wh (%.2f W, %.2f %%/hr, %.0fh from full to empty)\n",
-                     hours, used, full, watts, used / full * 100 / hours, full / watts
+              printf "slept %.2fh: %.2f Wh of %.1f Wh (%.2f W, %.2f %%/hr, %.0fh from full to empty)%s\n",
+                     hours, used, full, watts, used / full * 100 / hours, full / watts,
+                     hours < 1 ? "; under an hour, rough to +/-0.4 Wh" : ""
             }'
           ;;
 
