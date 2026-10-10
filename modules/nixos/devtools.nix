@@ -11,6 +11,12 @@
 let
   user = config.lattice.user.name;
 
+  # nixpkgs builds sesh and the mockery it runs in preBuild with Go 1.27, but mockery
+  # 3.8.0's vendored x/tools can't read Go 1.27 export data ("export data version 5 is
+  # greater than maximum supported version 4"). sesh's go.mod asks for 1.26, so use that
+  # until nixpkgs moves mockery forward.
+  sesh = pkgs.sesh.override { buildGo127Module = pkgs.buildGo126Module; };
+
   # A bubblewrap sandbox with a populated /usr/lib, /bin and a working ldconfig, entered
   # with `fhs`. nix-ld below already covers prebuilt binaries that only need a dynamic
   # linker; it does nothing for anything that expects to *compile* against a normal
