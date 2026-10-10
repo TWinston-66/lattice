@@ -77,7 +77,7 @@ in
     # does on arrival is raise a notification, which needs a session to raise it into.
     #
     # Reaching the inbox at all needs LocalAPI access, which is root or the operator. The
-    # tailscale-operator unit in the host config hands winston that; without it every
+    # tailscale-operator unit in the host config hands the user that; without it every
     # iteration fails on permissions and this sits in the 30s backoff.
     #
     # Which is also why it reports: a unit whose entire output is notifications reads,

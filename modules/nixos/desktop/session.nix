@@ -267,7 +267,7 @@ in
       };
     };
 
-    # Mounts USB drives as they arrive, under /run/media/winston, with a notification through
+    # Mounts USB drives as they arrive, under /run/media/<user>, with a notification through
     # mako. udiskie ignores anything udisks reports as internal, so the macOS APFS partitions
     # on the Mac are never touched. --smart-tray puts an icon in the bar's tray only while a
     # drive is mounted, and its menu unmounts and ejects; so do Thunar's sidebar and

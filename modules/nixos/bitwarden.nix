@@ -136,7 +136,7 @@ in
   programs.firefox.nativeMessagingHosts.packages = [ firefoxManifest ];
 
   # SSH keys are served by the desktop app's agent, so the private key lives in the vault
-  # and not in ~/.ssh. Code running as winston can still ask an unlocked agent to sign, and
+  # and not in ~/.ssh. Code running as the user can still ask an unlocked agent to sign, and
   # Bitwarden prompts for each use, but there is no key file left to copy. This is one of
   # the mitigations for the Mac's Firefox running its media decoder unsandboxed
   # (hosts/mac). The app autostarts from its own XDG entry, so the socket is there from

@@ -177,7 +177,7 @@ in
         # route is patching Firefox and building it here on every update.
         #
         # This is the trade, made deliberately on 2026-10-04: a bug in a media parser now runs
-        # as winston instead of in an empty sandbox. Content processes keep their sandbox. The
+        # as the user instead of in an empty sandbox. Content processes keep their sandbox. The
         # mitigations are elsewhere: SSH keys live in Bitwarden's agent, not on disk (bitwarden.nix),
         # and `lattice doctor` reports unexpected persistence and how old the Firefox in the
         # flake is (cli.nix). Set on this wrapper alone, so Thunderbird keeps its sandbox.

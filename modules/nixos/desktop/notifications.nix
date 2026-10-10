@@ -155,7 +155,7 @@ let
       # Which manager owns the failing unit, because one reporter serves both. A session
       # unit's OnFailure= reaches this directly; a system unit's goes through the root
       # bridge in systemd.services below and arrives here as `system`. Only the flag
-      # differs -- winston is in wheel, so the system manager and its journal are readable
+      # differs -- the user is in wheel, so the system manager and its journal are readable
       # from the session without privilege, and nothing has to be handed across.
       case "''${2:-user}" in
         user) manager=(--user) ;;
