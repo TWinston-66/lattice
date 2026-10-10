@@ -460,6 +460,12 @@ in
           }
         ];
       };
+      cache = {
+        exec = "${flake}/scripts/cache.sh";
+        args = "[old-system new-system]";
+        summary = "Where the last switch's new store paths came from: which cache, or built here";
+        group = "system";
+      };
       update = {
         exec = "${flake}/scripts/update.sh";
         args = "[input...]";

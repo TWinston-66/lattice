@@ -48,6 +48,10 @@ summarize() {
                 "$(($(wc -l <<<"$diff_lines") - 25))" "$old" "$new"
         fi
     fi
+    # And where the new paths came from, which is the question when a rebuild took an hour:
+    # what the caches did not have. `lattice cache` asks it again later.
+    echo
+    scripts/cache.sh "$old" "$new" || true
 }
 
 old_system="$(readlink -f /run/current-system)"
