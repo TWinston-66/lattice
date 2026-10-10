@@ -388,6 +388,12 @@ let
     dirty=$(git -C ${lib.escapeShellArg flake} status --porcelain 2>/dev/null | head -n1 || true)
     if [[ -z $built || -z $head ]]; then
       drift="unknown"
+    elif [[ $built != "$head" && $built != *-dirty && -z $dirty ]] &&
+      git -C ${lib.escapeShellArg flake} diff --quiet "''${built%-dirty}" "$head" -- 2>/dev/null; then
+      # A PR merged on GitHub lands as a new merge commit over the exact tree that was built
+      # from its branch, so commit IDs differ while nothing a rebuild reads has moved. Only
+      # with both sides clean: a dirty build or checkout holds files no commit records.
+      drift="the checkout is at ''${head:0:7}, a different commit with the same files as the running system"
     elif [[ ''${built%-dirty} != "$head" ]]; then
       drift="the checkout is at ''${head:0:7}, ahead of or apart from the running system"
     elif [[ $built == *-dirty || -n $dirty ]]; then
