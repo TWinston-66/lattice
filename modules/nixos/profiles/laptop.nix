@@ -599,6 +599,7 @@ let
     runtimeInputs = [
       pkgs.coreutils
       pkgs.gawk
+      pkgs.systemd
     ];
     text = ''
       state=/run/lattice-sleep-drain
@@ -666,8 +667,17 @@ let
             }'
           ;;
 
+        # What `lattice sleep-drain` shows. `report` is the unit's ExecStop and only means
+        # anything mid-sleep, when the state file exists; awake, it printed nothing at all.
+        # The figures it logs live in the unit's journal, so read them back from there.
+        history)
+          journalctl -q -u lattice-sleep-drain -o short --no-pager -n "''${2:-20}" \
+              --grep '^(slept|no drain)' 2>/dev/null \
+            || echo "No sleeps on battery recorded yet"
+          ;;
+
         *)
-          echo "usage: lattice-sleep-drain [record|report]" >&2
+          echo "usage: lattice-sleep-drain [record|report|history [N]]" >&2
           exit 2
           ;;
       esac
@@ -879,7 +889,8 @@ in
       group = "devices";
     };
     sleep-drain = {
-      exec = "${lib.getExe sleepDrain} report";
+      exec = "${lib.getExe sleepDrain} history";
+      args = "[count]";
       summary = "Battery spent in each recent sleep";
       group = "devices";
       launch = [
