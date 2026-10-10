@@ -18,10 +18,22 @@ die() {
 }
 
 ((EUID == 0)) || die "run it as root: sudo lattice-install"
-esp_id_file=/proc/device-tree/chosen/asahi,efi-system-partition
-[[ -r "$esp_id_file" ]] || die "no Asahi ESP in the device tree; run the Asahi installer from macOS first (docs/install.md)"
 
-# A rerun after a failure finds the last attempt's mounts and LUKS mapping still up.
+# The Asahi ESP is the one the device tree names. --esp names it instead, for a machine
+# without one: the VM scripts/installer-vm.sh runs this in.
+esp=""
+if [[ "${1:-}" == --esp ]]; then
+    esp="${2:?--esp needs a partition}"
+else
+    esp_id_file=/proc/device-tree/chosen/asahi,efi-system-partition
+    [[ -r "$esp_id_file" ]] || die "no Asahi ESP in the device tree; run the Asahi installer from macOS first (docs/install.md)"
+    esp="/dev/disk/by-partuuid/$(tr -d '\0' <"$esp_id_file")"
+fi
+[[ -e "$esp" ]] || die "can't find the ESP ($esp)"
+esp="$(readlink -f "$esp")"
+
+# A rerun after a failure finds the last attempt's swapfile, mounts and LUKS mapping still up.
+swapoff /mnt/var/tmp/install.swap 2>/dev/null || true
 umount -R /mnt 2>/dev/null || true
 cryptsetup close "$mapper" 2>/dev/null || true
 
@@ -115,9 +127,6 @@ done
 # The disk is the one holding the ESP the Asahi installer made. lattice goes into the free
 # space it left, or replaces a Linux partition from an earlier install. Apple's partitions,
 # the ESP and the GPT itself are never touched: damaging those can leave the Mac unbootable.
-esp="/dev/disk/by-partuuid/$(tr -d '\0' <"$esp_id_file")"
-[[ -e "$esp" ]] || die "can't find the ESP ($esp)"
-esp="$(readlink -f "$esp")"
 disk="/dev/$(lsblk -no PKNAME "$esp")"
 sector="$(blockdev --getss "$disk")"
 
@@ -258,7 +267,32 @@ git -C "$repo" add "hosts/$host"
 # Kernel builds and the like go to the new disk, not to the live system's RAM-backed /tmp.
 say "Installing. Most of it downloads; anything not in the caches is built here, which can take a while."
 mkdir -p /mnt/var/tmp
+# The live system has no swap, and the kernel build below can want more than a small Mac
+# has. A swapfile on the new disk for the length of the install; the installed system does
+# without one, as hosts/macbook says.
+swapfile=/mnt/var/tmp/install.swap
+btrfs -q filesystem mkswapfile --size 8g "$swapfile"
+swapon "$swapfile"
+
+# Downloaded in batches first, each by a nix that exits after it. Substituting into another
+# root's store (--store /mnt, which is what nixos-install does) costs nix 2.34 about 2 MiB
+# that it never gives back for every path: the ~8000 of a lattice system came to over 15
+# GiB, and the OOM killer ended the install in an 8 GiB VM even with the swap above. Measured
+# the same on the Mac with http2 off, so it is the chroot store, not the network.
+system="$repo#nixosConfigurations.$host.config.system.build.toplevel"
+mapfile -t fetch < <(
+    nix build --store /mnt --dry-run "$system" 2>&1 |
+        awk '/will be fetched/ { f = 1; next } /will be built/ { f = 0 } f && $1 ~ /^\/nix\/store\// { print $1 }'
+)
+batch=300
+for ((i = 0; i < ${#fetch[@]}; i += batch)); do
+    echo "downloading $((i + 1))-$((i + batch < ${#fetch[@]} ? i + batch : ${#fetch[@]})) of ${#fetch[@]}"
+    nix build --store /mnt --no-link "${fetch[@]:i:batch}"
+done
+
 TMPDIR=/mnt/var/tmp nixos-install --root /mnt --flake "$repo#$host" --no-root-passwd --no-channel-copy
+swapoff "$swapfile"
+rm "$swapfile"
 
 say "Setting up $user"
 printf '%s:%s\n' "$user" "$password_hash" | nixos-enter --root /mnt -c "chpasswd -e"

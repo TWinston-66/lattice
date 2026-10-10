@@ -62,6 +62,11 @@ machine this builds in a minute or two; anywhere else, the kernel is compiled fi
 built from a tree with uncommitted changes installs that tree; one built from a commit clones
 lattice at that commit.
 
+`scripts/installer-vm.sh` boots it in a virtual machine on a lattice Mac, against a disk laid
+out the way the Asahi installer leaves one, and `sudo lattice-install --esp /dev/vda1` there
+runs the whole install. `scripts/installer-vm.sh --boot` then starts what it installed. The
+VM has no 3D acceleration, so the wallpaper fails to start in it; nothing else differs.
+
 ## Secrets (optional)
 
 `hosts/mac` is the author's machine, and shows the other way to run a host: the password and
