@@ -37,10 +37,23 @@ host's SSH host key.
 ```sh
 lattice doctor                      # failed units, crashes, drift, persistence, boot errors, backups, disk
 lattice backup status               # when this machine last backed up
+lattice sleep-drain [count]         # on a laptop, the battery each recent sleep cost
 ```
 
 `lattice doctor` is the first thing to run when something feels off. It leaves known boot
 noise out, so anything it lists is worth reading.
+
+`lattice sleep-drain` needs sleeps of an hour or more to mean much: the Mac's battery gauge
+is off by up to 0.4 Wh just after waking, so it marks shorter sleeps as rough.
+
+## Your iPhone
+
+Plug it in, unlock it and tap **Trust**. It shows up in Thunar's sidebar twice: the
+entry with the phone's name holds the camera roll (photos and videos are under `DCIM`), and
+**Documents on** *phone* holds each app's shared files. Click one to open it.
+
+For anything else, use Taildrop: share to Tailscale on the phone and pick this machine, and
+the files land in `~/Downloads` with a notification.
 
 ## Themes and wallpapers
 
