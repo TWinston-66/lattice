@@ -61,6 +61,16 @@
         }
       ) inputs.self.nixosConfigurations;
 
+      # The installer ISO; see installer/ and docs/install.md. Built on the Mac rather than in
+      # CI, since it boots the patched Asahi kernel, which CI never builds.
+      packages.aarch64-linux.installer = inputs.apple-silicon.lib.mkInstallerBootstrapCustom {
+        system = "aarch64-linux";
+        extraModules = [
+          ./installer
+          { _module.args.inputs = inputs; }
+        ];
+      };
+
       # Tools for scripts/, pinned by flake.lock. The scripts enter it themselves.
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShellNoCC {
