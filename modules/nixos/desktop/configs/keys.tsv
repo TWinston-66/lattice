@@ -41,9 +41,10 @@ tmux	C-a :	Command prompt
 tmux	C-a ?	List every key
 tmux	C-a /	Describe a key
 
-# Copy mode is emacs-style here (mode-keys emacs). Mouse drag and double-click copy too.
+# Copy mode is emacs-style here (mode-keys emacs). The mouse only selects: drag, double-
+# click a word, triple-click a line; then copy with y, Enter or a right click.
 tmux	copy: C-Space	Start selection
-tmux	copy: M-w	Copy selection and leave
+tmux	copy: y / Enter / M-w	Copy selection and leave
 tmux	copy: C-s / C-r	Search down / up
 tmux	copy: n / N	Next / previous match
 tmux	copy: M-v / C-v	Page up / down

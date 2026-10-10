@@ -213,7 +213,7 @@ let
       type = "separator";
       string = "─";
     }
-    ((info "os" "os") // { format = "{name} {version-id} {arch}"; })
+    ((info "os" "os") // { format = "{name} ${config.lattice.version} ({version-id}) {arch}"; })
     (info "kernel" "kernel")
     (info "uptime" "uptime")
     (info "packages" "pkgs")
@@ -260,7 +260,21 @@ let
   infoLines = lib.length modules + 1;
 in
 {
-  imports = [ ./theme.nix ];
+  imports = [
+    ./theme.nix
+    # lattice's own release, apart from the NixOS one under it. VERSION at the top of the
+    # repo is bumped in the PR that cuts a release, and its merge is tagged and released
+    # (.github/workflows/release.yml). Between releases it names the next one with a -pre
+    # suffix, and the commit beside it wherever that is shown says which build this is.
+    {
+      options.lattice.version = lib.mkOption {
+        type = lib.types.str;
+        default = lib.fileContents ../../VERSION;
+        readOnly = true;
+        description = "The lattice release this system was built from.";
+      };
+    }
+  ];
 
   ### OS IDENTITY ###
   # What `nixos-version --configuration-revision` reports, and what the fetch's `gen` line
@@ -275,7 +289,7 @@ in
     vendorId = "lattice";
     vendorName = "lattice";
     extraOSReleaseArgs = {
-      PRETTY_NAME = "lattice ${config.system.nixos.release}";
+      PRETTY_NAME = "lattice ${config.lattice.version}";
       HOME_URL = "https://github.com/TWinston-66/lattice";
       LOGO = "lattice";
       ANSI_COLOR = "38;2;${theme.accentRgb}";
