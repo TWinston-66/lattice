@@ -47,16 +47,30 @@ let
   };
 in
 {
-  # There is deliberately no iPhone-over-USB support here. usbmuxd, libimobiledevice and
-  # ifuse were tried in 697544d and taken out again: the phone will not hold a USB link to
-  # this machine long enough to pair. It re-enumerates every few seconds and the "Trust
-  # This Computer" prompt dies with each cycle, so the trust handshake never completes.
+  ### IPHONE OVER USB ###
+  # usbmuxd is the multiplexer every libimobiledevice tool speaks through -- the iPhone
+  # exposes its services over USB as a single muxed channel, not as anything the kernel can
+  # mount on its own, so without this daemon the phone is an unreadable device.
   #
-  # usbmuxd was never at fault -- it connected and read the serial cleanly on every one of
-  # those cycles, and was torn out from under by the link dropping. ipheth, three cables
-  # and both free USB-C ports were ruled out too (the churn followed the phone across
-  # ports, and the dock's port has never misbehaved), so there is nothing to configure on
-  # this side until the link itself works. Taildrop below covers what the USB path was for.
+  # gvfs is already on (desktop/apps.nix) and nixpkgs builds it against libimobiledevice,
+  # so its afc:// backend comes for free: with usbmuxd running, a trusted iPhone appears in
+  # Thunar's sidebar and the camera roll is browsable with no mount step.
+  #
+  # This was here once (697544d) and came out because the phone re-enumerated every few
+  # seconds and the "Trust This Computer" prompt died with each cycle. That was the Apple
+  # Silicon USB-C phy dropping the link, not usbmuxd; the atcphy patch in
+  # hardware/asahi-kernel.nix fixes it, and the phone now holds the link.
+  services.usbmuxd.enable = true;
+
+  environment.systemPackages = [
+    # The CLI path, for when Thunar's isn't enough: `idevicepair pair` to re-run the trust
+    # handshake when the phone stops recognising this machine, `ideviceinfo` to see whether
+    # it is talking at all, and `ifuse ~/mnt` to mount the same filesystem somewhere a
+    # script can reach. Pairing is per-host and the phone must be unlocked for it: the
+    # "Trust This Computer" prompt only appears on an unlocked screen.
+    pkgs.libimobiledevice
+    pkgs.ifuse
+  ];
 
   ### TAILDROP ###
   # File transfer to and from the phone, over the tailnet rather than the LAN. This is the

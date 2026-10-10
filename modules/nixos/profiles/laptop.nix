@@ -599,6 +599,7 @@ let
     runtimeInputs = [
       pkgs.coreutils
       pkgs.gawk
+      pkgs.systemd
     ];
     text = ''
       state=/run/lattice-sleep-drain
@@ -619,8 +620,14 @@ let
       # charging for part of the sleep -- so the AC state is recorded going in and checked
       # again coming out, and any sample that saw a charger is dropped rather than logged
       # as a suspiciously good result.
+      #
+      # Only the Mains supply says that. Other things carry an `online` of 1 without
+      # charging anything: a Bluetooth trackpad's own battery, and the Mac's USB-C port
+      # controllers (tps6598x) whenever a port has a partner -- either one made every
+      # sleep read as "on mains" and logged no figure at all.
       ac=0
       for d in /sys/class/power_supply/*; do
+        [ "$(cat "$d/type" 2>/dev/null)" = "Mains" ] || continue
         if [ -r "$d/online" ] && [ "$(cat "$d/online")" = "1" ]; then
           ac=1
         fi
@@ -656,18 +663,34 @@ let
               used  = (e0 - e1) / 1e6
               full  = ef / 1e6
 
-              # Reading higher on resume than going in is gauge noise, not free charge.
-              if (used <= 0 || full <= 0) exit
+              # The Mac'"'"'s gauge is still settling at the moment of resume: it read
+              # 0.1 Wh higher than going in after a ten-minute sleep, then jumped by
+              # 0.2-0.4 Wh either way over the next minute. Said out loud rather than
+              # dropped, so a short sleep reads as unmeasurable and not as a missing log.
+              if (used <= 0 || full <= 0) {
+                printf "slept %.2fh: the gauge showed no drop, too short to measure\n", hours
+                exit
+              }
 
               watts = used / hours
 
-              printf "slept %.2fh: %.2f Wh of %.1f Wh (%.2f W, %.2f %%/hr, %.0fh from full to empty)\n",
-                     hours, used, full, watts, used / full * 100 / hours, full / watts
+              printf "slept %.2fh: %.2f Wh of %.1f Wh (%.2f W, %.2f %%/hr, %.0fh from full to empty)%s\n",
+                     hours, used, full, watts, used / full * 100 / hours, full / watts,
+                     hours < 1 ? "; under an hour, rough to +/-0.4 Wh" : ""
             }'
           ;;
 
+        # What `lattice sleep-drain` shows. `report` is the unit's ExecStop and only means
+        # anything mid-sleep, when the state file exists; awake, it printed nothing at all.
+        # The figures it logs live in the unit's journal, so read them back from there.
+        history)
+          journalctl -q -u lattice-sleep-drain -o short --no-pager -n "''${2:-20}" \
+              --grep '^(slept|no drain)' 2>/dev/null \
+            || echo "No sleeps on battery recorded yet"
+          ;;
+
         *)
-          echo "usage: lattice-sleep-drain [record|report]" >&2
+          echo "usage: lattice-sleep-drain [record|report|history [N]]" >&2
           exit 2
           ;;
       esac
@@ -879,7 +902,8 @@ in
       group = "devices";
     };
     sleep-drain = {
-      exec = "${lib.getExe sleepDrain} report";
+      exec = "${lib.getExe sleepDrain} history";
+      args = "[count]";
       summary = "Battery spent in each recent sleep";
       group = "devices";
       launch = [
