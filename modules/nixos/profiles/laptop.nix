@@ -620,8 +620,14 @@ let
       # charging for part of the sleep -- so the AC state is recorded going in and checked
       # again coming out, and any sample that saw a charger is dropped rather than logged
       # as a suspiciously good result.
+      #
+      # Only the Mains supply says that. Other things carry an `online` of 1 without
+      # charging anything: a Bluetooth trackpad's own battery, and the Mac's USB-C port
+      # controllers (tps6598x) whenever a port has a partner -- either one made every
+      # sleep read as "on mains" and logged no figure at all.
       ac=0
       for d in /sys/class/power_supply/*; do
+        [ "$(cat "$d/type" 2>/dev/null)" = "Mains" ] || continue
         if [ -r "$d/online" ] && [ "$(cat "$d/online")" = "1" ]; then
           ac=1
         fi
