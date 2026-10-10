@@ -180,8 +180,19 @@ EOF
 read -rp "Type yes to install: " answer
 [[ "$answer" == yes ]] || die "stopped; nothing was changed"
 
+# /tmp is gone after a reboot, so a failed run also leaves its log on the ESP: FAT, so
+# another machine or macOS can read it off the disk too.
+save_log() {
+    local dir=/mnt/boot
+    mountpoint -q "$dir" || {
+        dir="$(mktemp -d)"
+        mount "$esp" "$dir" || return
+    }
+    cp "$log" "$dir/lattice-install.log" && sync && echo "A copy is on the ESP ($esp) as lattice-install.log." >&2
+    [[ "$dir" == /mnt/boot ]] || { umount "$dir" && rmdir "$dir"; }
+}
 exec > >(tee -a "$log") 2>&1
-trap 'echo; echo "lattice-install failed; the log is $log. Running it again starts over." >&2' ERR
+trap 'echo; echo "lattice-install failed; the log is $log. Running it again starts over." >&2; save_log' ERR
 
 ### PARTITION ###
 if [[ "$target" == free ]]; then

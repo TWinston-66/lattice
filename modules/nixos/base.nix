@@ -146,6 +146,7 @@
     pciutils
     usbutils
     exfatprogs
+    rsync
     python3
   ];
 
