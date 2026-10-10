@@ -7,9 +7,15 @@ Everything goes through one command. `lattice` alone lists it all,
 
 ```sh
 lattice rebuild [host]              # build this machine from the checkout and switch
+lattice rebuild --build             # build only, and list what a switch would change
+lattice rebuild --test              # switch until the next reboot
 lattice update [input...]           # move flake.lock forward, then offer a rebuild
 lattice version                     # what is running, and whether the checkout has moved
 ```
+
+`--test` is for a change that might break the session: it runs like a normal switch, but
+the machine still boots the generation from before, so a reboot undoes it. `lattice
+version` says when a trial is running, and a plain `lattice rebuild` keeps it.
 
 > [!NOTE]
 > On a host that keeps its password in sops, `lattice rebuild` refuses to switch until the
