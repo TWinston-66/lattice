@@ -154,10 +154,15 @@ let
   # text into the size it reads reliably; a large one is left alone, since at 4K it costs
   # seconds and the text in it is already big. English only -- the full language set is
   # several hundred MB.
+  #
+  # A QR code or barcode in the capture wins over the text around it: zbarimg reads it
+  # first, and what it decodes is what gets copied -- a Wi-Fi password, a URL, a 2FA setup
+  # key, which tesseract would read as noise. That is the whole of `lattice qr`.
   hqfOcr = pkgs.writeShellApplication {
     name = "hqf-ocr";
     runtimeInputs = [
       (pkgs.tesseract.override { enableLanguages = [ "eng" ]; })
+      pkgs.zbar
       pkgs.imagemagick
       pkgs.wl-clipboard
       pkgs.libnotify
@@ -179,6 +184,15 @@ let
         icon=(-i "$image" -h "string:image-path:$image")
       fi
       id=$(notify-send -p -a HyprQuickFrame "''${icon[@]}" "Reading text…" "$where")
+
+      # Exit 4 is "no symbol found", which is the common case and not an error.
+      if code=$(zbarimg --quiet --raw "$image" 2>/dev/null) && [ -n "$code" ]; then
+        printf '%s' "$code" | wl-copy
+        preview=$(head -n 4 <<<"$code" | cut -c 1-80 \
+          | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+        notify-send -r "$id" -a HyprQuickFrame "''${icon[@]}" "QR code copied" "$preview"
+        exit 0
+      fi
 
       read -r dark w h < <(magick "$image" -colorspace gray -format '%[fx:mean<0.5] %w %h\n' info:)
       prep=(-colorspace gray)
@@ -245,6 +259,16 @@ let
       "hyprquickframe"
     ];
   };
+
+  # The overlay with the Text toggle already on, which reads a QR code before it reads
+  # text (hqf-ocr above): select the code and its contents are on the clipboard.
+  qr = pkgs.writeShellApplication {
+    name = "lattice-qr";
+    runtimeInputs = [ screenshot ];
+    text = ''
+      HQF_OCR=1 exec lattice-screenshot "$@"
+    '';
+  };
 in
 {
   environment.systemPackages = [
@@ -261,6 +285,18 @@ in
       config.users.users.${user}.home
     }/.config/hyprquickframe/theme.toml - - - - ${currentDir}/theme.hqf.toml"
   ];
+
+  lattice.cli.commands.qr = {
+    exec = lib.getExe qr;
+    summary = "Select a QR code (or text) on screen and copy what it says";
+    group = "session";
+    launch = [
+      {
+        label = "Read a QR code";
+        icon = "qreator";
+      }
+    ];
+  };
 
   lattice.cli.commands.screenshot = {
     exec = lib.getExe screenshot;

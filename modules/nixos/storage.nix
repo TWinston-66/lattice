@@ -14,6 +14,8 @@ in
   systemd.tmpfiles.rules = [ "v /home/.snapshots 0750 root users -" ];
 
   services = {
+    # Monthly, on every btrfs mount (btrfs-scrub@-.timer for /). It runs with -B, so a scrub
+    # that finds errors it could not correct exits non-zero and the unit fails.
     btrfs.autoScrub.enable = true;
 
     snapper.configs.home = {
@@ -29,4 +31,9 @@ in
     };
 
   };
+
+  # A scrub that finds damage says so on screen, through the same bridge as every other
+  # failing unit, instead of only in the journal the doctor reads.
+  systemd.services."btrfs-scrub@".onFailure =
+    lib.optional config.services.graphical-desktop.enable "lattice-notify-failure@%n.service";
 }

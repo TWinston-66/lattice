@@ -48,6 +48,10 @@ summarize() {
                 "$(($(wc -l <<<"$diff_lines") - 25))" "$old" "$new"
         fi
     fi
+    # And where the new paths came from, which is the question when a rebuild took an hour:
+    # what the caches did not have. `lattice cache` asks it again later.
+    echo
+    scripts/cache.sh "$old" "$new" || true
 }
 
 old_system="$(readlink -f /run/current-system)"
@@ -154,7 +158,12 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     systemctl --user daemon-reload
 
     for unit in "${!session_units[@]}"; do
-        if [[ "$(session_generation "$unit" "${session_units[$unit]}")" == "${before[$unit]}" ]]; then
+        # An unchanged unit can still have been taken down: swayosd and waybar are PartOf
+        # pipewire, so a switch that restarts pipewire stops them too, and starts nothing it
+        # did not stop itself. The volume keys died that way on the 2026-10-10 update.
+        if [[ "$(session_generation "$unit" "${session_units[$unit]}")" == "${before[$unit]}" &&
+            ("${was_running[$unit]}" != "active" ||
+            "$(systemctl --user is-active "$unit.service" || true)" == "active") ]]; then
             continue
         fi
         # Only what was up before the switch: a unit that was down is down on purpose, or is
@@ -166,7 +175,7 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
                 "$(systemctl --user show -P InvocationID "$unit.service" || true)" != "${invocation[$unit]}" ]]; then
                 continue
             fi
-            echo "restarting $unit, which this generation changed"
+            echo "restarting $unit, which the switch changed or stopped"
             systemctl --user restart "$unit.service"
         fi
     done

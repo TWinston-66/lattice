@@ -456,6 +456,12 @@ tooltip label {
   color: @overlay1;
 }
 
+/* Unread notifications: only on the bar while there are some, so it is always the state
+   worth noticing and always coloured. */
+#custom-notify-unread {
+  color: @accent;
+}
+
 /* Wallpaper. The only pill in the left group that is an action rather than a state, so
    it takes one flat colour and no second class -- there is no "off" for it to be in.
    accentAlt, the other colour every wallpaper in the pool is drawn with, so the control

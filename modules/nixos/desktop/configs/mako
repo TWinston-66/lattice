@@ -16,6 +16,13 @@ max-history=50
 # matter how small the font was. 140 lets the smaller font actually buy more preview.
 height=140
 
+# mako's own click and touch defaults, routed through lattice-notifications so a banner
+# dismissed by hand is not counted as unread on the bar. Left invokes the default action and
+# closes, right closes them all, a touch closes the one touched.
+on-button-left=exec lattice-notifications click "$id"
+on-button-right=exec lattice-notifications dismiss --all
+on-touch=exec lattice-notifications dismiss "$id"
+
 # Colours, including the per-urgency borders, come from lattice (lattice.theme).
 include=/etc/xdg/mako/lattice
 

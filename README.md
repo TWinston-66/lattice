@@ -113,9 +113,9 @@
 ## What's inside
 
 **Desktop.** Hyprland under UWSM, a waybar of clickable pills (Wi-Fi, audio, Tailscale,
-weather, backups, power profiles with live graphs), mako notifications with do-not-disturb
-and alerts for any failed unit, HyprQuickFrame screenshots with OCR, and chromeless web apps
-that share your Firefox logins.
+weather, backups, power profiles with live graphs), mako notifications with do-not-disturb,
+an unread count and alerts for any failed unit, HyprQuickFrame screenshots with OCR and QR
+reading, and chromeless web apps that share your Firefox logins.
 
 **Theming.** Seven flavours across Catppuccin, Tokyo Night, Rosé Pine and Gruvbox Material,
 fourteen accents, and generated kits for GTK, Qt, icons, rofi, foot, tmux, Neovim,
