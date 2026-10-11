@@ -3,13 +3,11 @@
 </p>
 
 <p align="center">
-  <a href="https://nixos.org"><img src="https://img.shields.io/badge/NixOS-unstable-7DAEA3?style=flat-square&labelColor=32302F&logo=nixos&logoColor=D4BE98" alt="NixOS unstable"></a>
-  <a href="https://hyprland.org"><img src="https://img.shields.io/badge/Hyprland-Wayland-89B482?style=flat-square&labelColor=32302F" alt="Hyprland"></a>
-  <a href="https://asahilinux.org"><img src="https://img.shields.io/badge/runs%20on-Apple%20Silicon-DF787F?style=flat-square&labelColor=32302F" alt="Apple Silicon"></a>
-  <a href="https://github.com/TWinston-66/lattice/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/TWinston-66/lattice/ci.yml?event=pull_request&style=flat-square&label=CI&labelColor=32302F" alt="CI"></a>
-  <a href="https://github.com/TWinston-66/lattice/commits/main"><img src="https://img.shields.io/github/last-commit/TWinston-66/lattice?style=flat-square&color=A9B665&labelColor=32302F" alt="Last commit"></a>
-  <a href="https://github.com/TWinston-66/.dotfiles"><img src="https://img.shields.io/badge/dotfiles-.dotfiles-E78A4E?style=flat-square&labelColor=32302F&logo=github&logoColor=D4BE98" alt="The dotfiles"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-D3869B?style=flat-square&labelColor=32302F" alt="MIT license"></a>
+  <a href="https://nixos.org"><img src=".github/assets/badges/nixos.svg" alt="NixOS unstable"></a>
+  <a href="https://hyprland.org"><img src=".github/assets/badges/hyprland.svg" alt="Hyprland"></a>
+  <a href="https://asahilinux.org"><img src=".github/assets/badges/apple-silicon.svg" alt="Apple Silicon"></a>
+  <a href="https://github.com/TWinston-66/.dotfiles"><img src=".github/assets/badges/dotfiles.svg" alt="The dotfiles"></a>
+  <a href="LICENSE"><img src=".github/assets/badges/license.svg" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -109,7 +107,7 @@
 ### Eight flavours, switched live
 
 <p align="center">
-  <img src=".github/assets/screenshots/themes.png" alt="The same desktop in each of the eight flavours" width="100%">
+  <img src=".github/assets/screenshots/themes.webp" alt="The same desktop in each of the eight flavours" width="100%">
   <br><sub>One desktop in every flavour, each switch made from the bar without a rebuild. The wallpapers aren't downloaded: <code>lattice art</code> draws them at build time, one per accent in each flavour, sized for each screen.</sub>
 </p>
 

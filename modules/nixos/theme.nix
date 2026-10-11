@@ -448,8 +448,9 @@ let
     "lavender"
   ];
 
-  # The assets under .github/assets are drawn in stock Mocha with the blue accent, so
-  # recolouring one is a straight substitution of those literals onto the live palette.
+  # The logo under .github/assets is drawn in stock Mocha with the blue accent, so
+  # recolouring it is a straight substitution of those literals onto the live palette. (The
+  # README's banner is not a source for anything, and is drawn in Gruvbox Material.)
   assetColours = [
     {
       from = "#89b4fa";
