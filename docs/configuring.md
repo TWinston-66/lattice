@@ -8,14 +8,14 @@ in the modules it imports.
 | Path | What it holds |
 | --- | --- |
 | `hosts/<host>/` | Per-host config and its generated `hardware-configuration.nix` |
-| `modules/nixos/` | The distro: the core, branding, theme, artwork, Plymouth, display, Stream Deck, Home Assistant, web apps, the shell and dev tools. `default.nix` imports all of it |
-| `modules/nixos/hardware/` | Apple Silicon: Asahi, video decode, the carried DRM patch, trackpad, suspend, power, charge limit |
-| `modules/personal/` | The author's own setup on top: account, sops secrets, house and homelab. Only `hosts/mac` imports it |
-| `modules/nixos/desktop/` | The desktop by surface: session, apps, theming, bar, menus, notifications, lock, screenshot, greeter, plus the patches they carry |
+| `modules/nixos/` | The distro: the core, branding, theme, artwork, Plymouth, display, storage and backups, the firewall, Bitwarden, the iPhone, Stream Deck, Home Assistant, weather, web apps, the shell and dev tools. `default.nix` imports all of it |
+| `modules/nixos/hardware/` | Apple Silicon: Asahi and its kernel, video decode, trackpad, suspend, power, charge limit, and the carried display and USB-C patches |
+| `modules/personal/` | The author's own setup on top: account, sops secrets, AirPlay, the mouse, Thunderbird, books, house and homelab. Only `hosts/mac` imports it |
+| `modules/nixos/desktop/` | The desktop by surface: session, apps, the launcher, theming, bar, menus, notifications, lock, screenshot, greeter, radio, pomodoro, the guides and the cheatsheet, plus the patches they carry |
 | `modules/nixos/profiles/` | `laptop` and `graphical`; `graphical` is the desktop modules and the hardware ones they need |
 | `modules/nixos/cli.nix` | The `lattice` command; each module registers its scripts in `lattice.cli.commands` |
 | `secrets/` | [sops](https://github.com/getsops/sops)-encrypted secrets |
-| `scripts/` | What `lattice rebuild`, `update` and `secrets password` run |
+| `scripts/` | What `lattice rebuild`, `update`, `cache` and `secrets password` run, the backup password, the CI build and the installer VM |
 | `assets/lattice-art.py` | Draws the wallpapers, the splash, its widgets and the Stream Deck keys |
 | `docs/` | These guides |
 
@@ -34,12 +34,15 @@ panel geometry, and names its user. Optional features are switched on per host:
 ## The theme
 
 ```nix
+lattice.theme.flavor = "mocha";   # what boot, the greeter and the console are drawn in
 lattice.theme.accent = "mauve";   # the default accent: any palette entry
 ```
 
 `lattice.theme` holds the palette, the flavours and the accent, and generated theme kits
 feed every app that can take one. Each generated file defines `accent` and `accentAlt`
-aliases.
+aliases. A theme switch rewrites the kit files in `~/.cache/lattice`, so a module with a
+program of its own to theme adds a file to every kit with `lattice.theme.extraKitFiles`,
+and that program follows the switch too.
 
 > [!TIP]
 > Use `accent` and `accentAlt` rather than literal hex. An undefined colour makes GTK
