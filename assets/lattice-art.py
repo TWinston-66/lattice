@@ -23,8 +23,8 @@ lattice back on itself, if a variant ever wants to be obviously turned rather th
 little askew.
 
 Colours come from `--palette FILE`, a JSON object of the names in DEFAULT_PALETTE.
-Without one this draws in stock Catppuccin Mocha, which is how the assets under
-.github/assets are checked in.
+Without one this draws in stock Catppuccin Mocha, which is how logo.svg under
+.github/assets is checked in (the README's banner is drawn in Gruvbox Material instead).
 """
 
 import argparse
