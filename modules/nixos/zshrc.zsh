@@ -21,6 +21,9 @@ fi
 # btop.conf names catppuccin_mocha, and --themes-dir is searched ahead of
 # ~/.config/btop/themes, so the generated file of that name there wins.
 [[ -r $_lattice/catppuccin_mocha.theme ]] && alias btop="btop --themes-dir $_lattice"
+# fastfetch in the live theme, unless you have a config of your own: that keeps winning.
+[[ -r $_lattice/fastfetch.jsonc && ! -e ${XDG_CONFIG_HOME:-$HOME/.config}/fastfetch/config.jsonc ]] &&
+  alias fastfetch="fastfetch --config $_lattice/fastfetch.jsonc"
 
 eval "$(fzf --zsh)"
 eval "$(starship init zsh)"

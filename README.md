@@ -49,8 +49,9 @@
   <tr>
     <td><b>Terminal-first.</b> foot, tmux, Neovim with DAP debugging, starship, fzf,
     bat, delta, lazygit and btop, all following the live theme.</td>
-    <td><b>One launcher for everything.</b> rofi for apps, web apps, clipboard
-    history, a libqalculate calculator, Wi-Fi, audio devices and more.</td>
+    <td><b>One launcher for everything.</b> Tabs for apps and web apps; actions,
+    open windows, Home Assistant, tailnet devices and services; SomaFM radio; a quick
+    answer or a chat with Claude; and web search.</td>
   </tr>
   <tr>
     <td><img src=".github/assets/screenshots/theme-menu.png" alt="The theme picker"></td>
@@ -73,8 +74,8 @@
   </tr>
   <tr>
     <td><b>Performance at a glance.</b> Hover the power-profile pill for two minutes of
-    CPU load, P- and E-core clocks and package power, plus battery, fans and heat.
-    Click it to cycle profiles.</td>
+    CPU load, P- and E-core clocks and system power, plus what the profile sets, battery
+    health, the charger, fans and temperatures. Click it to cycle profiles.</td>
     <td><b>Wi-Fi without a tray applet.</b> Join, rescan, disconnect or switch the
     radio off from a rofi menu, and get a notification when the link changes.</td>
   </tr>
@@ -85,8 +86,9 @@
   <tr>
     <td><b>Audio devices in one click.</b> Switching outputs or inputs moves whatever
     is already playing along with them.</td>
-    <td><b>A real calculator in the launcher.</b> libqalculate handles units, conversions
-    and algebra, and copies the result to the clipboard.</td>
+    <td><b>A real calculator, one keypress away.</b> <kbd>ALT</kbd> + <kbd>SHIFT</kbd> +
+    <kbd>SPACE</kbd> opens libqalculate, which handles units, conversions and algebra, and
+    copies the result to the clipboard.</td>
   </tr>
 </table>
 
@@ -100,8 +102,8 @@
   <tr>
     <td><b>hyprlock</b>, laid out around the wallpaper's mark. Its colours follow the
     live theme, and it shares the password box with the boot splash.</td>
-    <td><b>The power menu</b>: lock, suspend, log out, reboot or shut down, sized to fit
-    every attached screen.</td>
+    <td><b>The power menu</b>: lock, suspend, log out, reboot or shut down, each on a
+    number key, and sized to fit every attached screen.</td>
   </tr>
 </table>
 
@@ -113,7 +115,7 @@
 ## What's inside
 
 **Desktop.** Hyprland under UWSM, a waybar of clickable pills (Wi-Fi, audio, Tailscale,
-weather, backups, power profiles with live graphs), mako notifications with do-not-disturb,
+weather, backups, SomaFM radio, a pomodoro timer, power profiles with live graphs), mako notifications with do-not-disturb,
 an unread count and alerts for any failed unit, HyprQuickFrame screenshots with OCR and QR
 reading, and chromeless web apps that share your Firefox logins.
 

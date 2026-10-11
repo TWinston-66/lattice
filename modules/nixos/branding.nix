@@ -7,15 +7,17 @@
 }:
 let
   theme = config.lattice.theme;
-  inherit (theme) palette;
 
-  json = pkgs.formats.json { };
-
-  # Nix has no escape for ESC and nixfmt rewrites an indented-string \u001b into a raw
-  # control byte, so the one form that survives a format is a double-quoted JSON escape.
-  esc = builtins.fromJSON "\"\\u001b\"";
-  fg = colour: "${esc}[38;2;${theme.rgbOf colour}m";
-  reset = "${esc}[0m";
+  # The art's colours, as fastfetch logo.color slots: the art names one with `$n` and the
+  # config says what colour it is. That keeps the drawing itself colourless, so one file
+  # serves every flavour and accent, and a theme switch only has to rewrite the config.
+  slot = {
+    outer = 1;
+    inner = 2;
+    centre = 3;
+    outerEdge = 4;
+    innerEdge = 5;
+  };
 
   # The same hexagonal lattice as .github/assets/logo.svg, drawn for a terminal. The SVG's
   # five node rows carry 3/4/5/4/3 nodes, and its edges come in two opacities -- 0.75 for the
@@ -70,7 +72,7 @@ let
 
       # An edge is part of the inner hexagon only if neither end is on the outer ring, which
       # is exactly the 0.75-opacity set in the SVG.
-      edgeColour = a: b: if a == "outer" || b == "outer" then palette.surface1 else palette.overlay1;
+      edgeColour = a: b: if a == "outer" || b == "outer" then slot.outerEdge else slot.innerEdge;
 
       cell =
         y: x: ch: colour:
@@ -128,16 +130,7 @@ let
         let
           cols = colsOf (lib.elemAt rows r);
         in
-        lib.genList (
-          c:
-          cell (r * gap) (lib.elemAt cols c) "●"
-            {
-              outer = theme.accentHex;
-              inner = theme.accentAltHex;
-              centre = palette.text;
-            }
-            .${kindOf r c}
-        ) (lib.length cols)
+        lib.genList (c: cell (r * gap) (lib.elemAt cols c) "●" slot.${kindOf r c}) (lib.length cols)
       ) (indices rows);
 
       # Nodes merge last, so a node wins the cell the edges meeting it also want.
@@ -145,8 +138,8 @@ let
 
       # A glyph carries its colour only when it differs from the one before it on the row, and
       # a gap does not end the run: nothing here paints a background, so the colour survives
-      # the spaces between two edges of the same tier. Each row closes with a reset, so it is
-      # legible on its own and nothing bleeds into the module output beside it.
+      # the spaces between two edges of the same tier. fastfetch resets the colour at the end
+      # of each row, so nothing bleeds into the module output beside it.
       row =
         y:
         (lib.foldl'
@@ -160,7 +153,7 @@ let
             else
               acc
               // {
-                out = acc.out + (if acc.colour == at.colour then "" else fg at.colour) + at.ch;
+                out = acc.out + (if acc.colour == at.colour then "" else "$" + toString at.colour) + at.ch;
                 colour = at.colour;
               }
           )
@@ -169,8 +162,7 @@ let
             colour = null;
           }
           (lib.genList (x: x) width)
-        ).out
-        + reset;
+        ).out;
     in
     {
       inherit width height;
@@ -188,76 +180,164 @@ let
       " · ${lib.substring 0 7 rev}${lib.optionalString (lib.hasSuffix "-dirty" rev) "+"}"
     );
 
-  key = "38;2;${theme.accentRgb}";
-
-  info = type: name: {
-    inherit type;
-    key = name;
-    keyColor = key;
-  };
-
-  # A module that leads with a percentage bar and then says the same thing in numbers. The
-  # bar's format variable is named after the module's own quantity rather than being common
-  # across them, so it is passed in.
-  gauge =
-    type: name: format:
-    (info type name) // { inherit format; };
-
-  modules = [
-    "break"
+  # The fetch's config for one theme, as JSON text: for /etc/xdg in the build-time theme, and
+  # for each runtime kit with the accents still as tokens. fastfetch takes #rrggbb anywhere
+  # it takes a colour, so the tokens go in as they are.
+  fetchConfig =
     {
-      type = "title";
-      keyColor = key;
-    }
-    {
-      type = "separator";
-      string = "─";
-    }
-    ((info "os" "os") // { format = "{name} ${config.lattice.version} ({version-id}) {arch}"; })
-    (info "kernel" "kernel")
-    (info "uptime" "uptime")
-    (info "packages" "pkgs")
-    (
-      (info "command" "gen")
-      // {
-        # The generation the running system is, which is the number `nixos-rebuild` prints that
-        # is worth keeping in sight. Read with shell parameter expansion rather than sed, so the
-        # line does not depend on anything being on fastfetch's PATH.
-        text = "p=$(readlink /nix/var/nix/profiles/system); p=\${p#system-}; echo \${p%-link}";
-        format = "{result}${revision}";
-      }
-    )
-    (info "shell" "shell")
-    (info "terminal" "term")
-    ((info "wm" "wm") // { format = "{pretty-name} ({protocol-name})"; })
-    # Stated from the theme options rather than read back at runtime: the `theme` module
-    # reports the GTK theme with a "[GTK2/3/4]" suffix baked into its one format variable,
-    # and this is the setting that produced that name in the first place.
-    {
-      type = "custom";
-      key = "theme";
-      keyColor = key;
-      format = "${theme.flavor} · ${theme.accent}";
-    }
-    (info "cpu" "cpu")
-    ((info "gpu" "gpu") // { format = "{name}"; })
-    (gauge "memory" "memory" "{percentage-bar} {percentage} {used} / {total}")
-    # btrfs rather than disk: it is the filesystem on both hosts, and it is the only one of
-    # the two that can report allocated space, which is the number that actually runs out.
-    (gauge "btrfs" "disk" "{used-percentage-bar} {used-percentage} {used} / {total}")
-    (gauge "battery" "battery" "{capacity-bar} {capacity} {status}")
-    # One line per output, so this is two lines while docked.
-    ((info "display" "screen") // { format = "{scaled-width}x{scaled-height} @ {refresh-rate} Hz"; })
-    "break"
-    {
-      type = "colors";
-      symbol = "block";
-    }
-  ];
+      flavor,
+      palette,
+      accents,
+      accent,
+      accentAlt,
+      ...
+    }:
+    let
+      info = type: name: {
+        inherit type;
+        key = name;
+        keyColor = accent;
+      };
 
-  # What the logo is centred against. One line per module, plus one for the second row the
-  # colours block prints.
-  infoLines = lib.length modules + 1;
+      # A module that leads with a percentage bar and then says the same thing in numbers. The
+      # bar's format variable is named after the module's own quantity rather than being common
+      # across them, so it is passed in.
+      gauge =
+        type: name: format:
+        (info type name) // { inherit format; };
+
+      modules = [
+        "break"
+        {
+          type = "title";
+          color = {
+            user = accent;
+            at = palette.text;
+            host = accent;
+          };
+        }
+        {
+          type = "separator";
+          string = "─";
+          outputColor = accent;
+        }
+        ((info "os" "os") // { format = "{name} ${config.lattice.version} ({version-id}) {arch}"; })
+        (info "kernel" "kernel")
+        (info "uptime" "uptime")
+        (info "packages" "pkgs")
+        (
+          (info "command" "gen")
+          // {
+            # The generation the running system is, which is the number `nixos-rebuild` prints that
+            # is worth keeping in sight. Read with shell parameter expansion rather than sed, so the
+            # line does not depend on anything being on fastfetch's PATH.
+            text = "p=$(readlink /nix/var/nix/profiles/system); p=\${p#system-}; echo \${p%-link}";
+            format = "{result}${revision}";
+          }
+        )
+        (info "shell" "shell")
+        (info "terminal" "term")
+        ((info "wm" "wm") // { format = "{pretty-name} ({protocol-name})"; })
+        # Stated from the theme rather than read back from GTK: the `theme` module reports the
+        # GTK theme with a "[GTK2/3/4]" suffix baked into its one format variable. The accent
+        # reaches a kit only as a colour, so its name is found by matching that colour against
+        # the flavour's own -- a case in the shell, since the colour is filled in after Nix.
+        (
+          (info "command" "theme")
+          // {
+            text =
+              "case '${accent}' in "
+              + lib.concatStrings (
+                lib.mapAttrsToList (s: name: "'${palette.${s}}') echo '${flavor} · ${name}' ;; ") accents
+              )
+              + "*) echo '${flavor}' ;; esac";
+          }
+        )
+        (info "cpu" "cpu")
+        ((info "gpu" "gpu") // { format = "{name}"; })
+        (gauge "memory" "memory" "{percentage-bar} {percentage} {used} / {total}")
+        # btrfs rather than disk: it is the filesystem on both hosts, and it is the only one of
+        # the two that can report allocated space, which is the number that actually runs out.
+        (gauge "btrfs" "disk" "{used-percentage-bar} {used-percentage} {used} / {total}")
+        (gauge "battery" "battery" "{capacity-bar} {capacity} {status}")
+        # One line per output, so this is two lines while docked.
+        ((info "display" "screen") // { format = "{scaled-width}x{scaled-height} @ {refresh-rate} Hz"; })
+        "break"
+        {
+          type = "colors";
+          symbol = "block";
+        }
+      ];
+
+      # What the logo is centred against. One line per module, plus one for the second row the
+      # colours block prints.
+      infoLines = lib.length modules + 1;
+    in
+    builtins.toJSON {
+      "$schema" = "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json";
+
+      # `file` rather than `file-raw`, so the art's `$n` slots take these colours. The size is
+      # still given, so the centring below does not wait on fastfetch measuring the file.
+      logo = {
+        type = "file";
+        source = "/etc/xdg/fastfetch/lattice.txt";
+        inherit (lattice) width height;
+        color = {
+          ${toString slot.outer} = accent;
+          ${toString slot.inner} = accentAlt;
+          ${toString slot.centre} = palette.text;
+          ${toString slot.outerEdge} = palette.surface1;
+          ${toString slot.innerEdge} = palette.overlay1;
+        };
+        padding = {
+          # The one thing that moves the art relative to the modules: padding.top pushes the
+          # logo down while the modules stay at the top of the output, so this is what centres
+          # the hexagon against the taller info column instead of leaving it top-aligned. A
+          # second monitor adds a display line and puts it half a row out, which is not worth
+          # making dynamic.
+          top = (infoLines - lattice.height) / 2;
+          left = 2;
+          right = 3;
+        };
+      };
+
+      display = {
+        separator = "  ";
+        # Pads the key column so the values line up; "battery" is the longest key.
+        key.width = 8;
+
+        # A monochrome accent bar, because bar.color.elapsed overrides the green/yellow/red
+        # the bar would otherwise take from the thresholds below -- those stay on the number
+        # beside it, where a colour change reads as a warning rather than as decoration.
+        bar = {
+          char = {
+            elapsed = "━";
+            total = "━";
+          };
+          width = 10;
+          border = {
+            left = "";
+            right = "";
+          };
+          color = {
+            elapsed = accent;
+            total = palette.surface1;
+          };
+        };
+
+        # 11 is number-and-bar with the number coloured. Every lower value silently drops one
+        # half of that: 1 and 9 render no bar, 6 and 10 render no number.
+        percent = {
+          type = 11;
+          ndigits = 0;
+          color = {
+            inherit (palette) green yellow red;
+          };
+        };
+      };
+
+      inherit modules;
+    };
 in
 {
   imports = [
@@ -311,70 +391,20 @@ in
 
   ### FASTFETCH ###
   # /etc/xdg is on fastfetch's search path, so this is the system-wide default and a
-  # ~/.config/fastfetch still wins. The art arrives pre-coloured, hence file-raw and an
-  # explicit width/height: fastfetch would otherwise count the escape bytes as columns.
+  # ~/.config/fastfetch still wins. It is drawn in the build-time theme; the run-time one is
+  # the same config written per flavour into the theme kit (below), which /etc/zshrc points
+  # fastfetch at. The art is colourless, so all of them share it.
   environment.etc = {
     "xdg/fastfetch/lattice.txt".text = lattice.art;
 
-    "xdg/fastfetch/config.jsonc".source = json.generate "fastfetch-config.jsonc" {
-      "$schema" = "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json";
-
-      logo = {
-        type = "file-raw";
-        source = "/etc/xdg/fastfetch/lattice.txt";
-        inherit (lattice) width height;
-        padding = {
-          # The one thing that moves the art relative to the modules: padding.top pushes the
-          # logo down while the modules stay at the top of the output, so this is what centres
-          # the hexagon against the taller info column instead of leaving it top-aligned. A
-          # second monitor adds a display line and puts it half a row out, which is not worth
-          # making dynamic.
-          top = (infoLines - lattice.height) / 2;
-          left = 2;
-          right = 3;
-        };
-      };
-
-      display = {
-        separator = "  ";
-        # Pads the key column so the values line up; "battery" is the longest key.
-        key.width = 8;
-
-        # A monochrome accent bar, because bar.color.elapsed overrides the green/yellow/red
-        # the bar would otherwise take from the thresholds below -- those stay on the number
-        # beside it, where a colour change reads as a warning rather than as decoration.
-        bar = {
-          char = {
-            elapsed = "━";
-            total = "━";
-          };
-          width = 10;
-          border = {
-            left = "";
-            right = "";
-          };
-          color = {
-            elapsed = key;
-            total = "38;2;${theme.rgbOf palette.surface1}";
-          };
-        };
-
-        # 11 is number-and-bar with the number coloured. Every lower value silently drops one
-        # half of that: 1 and 9 render no bar, 6 and 10 render no number.
-        percent = {
-          type = 11;
-          ndigits = 0;
-          color = {
-            green = "38;2;${theme.rgbOf palette.green}";
-            yellow = "38;2;${theme.rgbOf palette.yellow}";
-            red = "38;2;${theme.rgbOf palette.red}";
-          };
-        };
-      };
-
-      inherit modules;
+    "xdg/fastfetch/config.jsonc".text = fetchConfig {
+      inherit (theme) flavor palette;
+      inherit (theme.flavors.${theme.flavor}) accents;
+      accent = theme.accentHex;
+      accentAlt = theme.accentAltHex;
     };
   };
+  lattice.theme.extraKitFiles."fastfetch.jsonc" = fetchConfig;
 
   # console.colors comes from ./theme.nix.
 }

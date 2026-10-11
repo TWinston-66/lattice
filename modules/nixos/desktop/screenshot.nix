@@ -83,6 +83,7 @@ let
       palette,
       accent,
       accentAlt,
+      ...
     }:
     ''
       accent = "${accent}"

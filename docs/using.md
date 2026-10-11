@@ -37,6 +37,7 @@ host's SSH host key.
 ```sh
 lattice doctor                      # failed units, crashes, drift, persistence, boot errors, backups, disk
 lattice backup status               # when this machine last backed up
+lattice cache                       # where the last switch's new paths came from: a cache, or built here
 lattice sleep-drain [count]         # on a laptop, the battery each recent sleep cost
 ```
 
@@ -64,13 +65,13 @@ and select it. What it says ends up on the clipboard.
 
 ```sh
 lattice theme [next|prev|<flavour>]           # or `lattice theme menu`
-lattice wallpaper [next|prev|random|<slot>]   # or `lattice wallpaper menu`
+lattice wallpaper [next|prev|random|<index>]  # or `lattice wallpaper menu`
 lattice art wallpaper --density 1.4 > wallpaper.svg
 ```
 
 Changes apply live: GTK apps restyle in place, open terminals and Neovim recolour, and the
-wallpaper and Stream Deck follow. Clicking the bar does the same, and right-clicking it
-picks a wallpaper.
+wallpaper and Stream Deck follow. The bar has a pill for each: click it for the next one,
+or right-click it for a menu. `lattice wallpaper list` numbers the wallpapers.
 
 ## Finding your way around
 
