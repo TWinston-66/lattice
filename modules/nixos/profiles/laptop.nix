@@ -380,9 +380,11 @@ let
   # manual choice no longer fits: 20 lux, or 40% of the reading at the time, whichever is
   # more.
   #
-  # Two departures. Levels snap to the 10% steps of lattice-kbd-backlight, and a change is
-  # only made when that step differs, so the light does not creep every few seconds as a
-  # cloud passes. (It raises no OSD, unlike the manual step.) And
+  # The curve is a lux:percent table like the panel's below, not Omarchy's straight line,
+  # which sat at 60-70% in ordinary lamp light; 65 lux -> 20% is the level picked by hand
+  # there. Levels snap to the 10% steps of lattice-kbd-backlight, and a change is only made
+  # once the curve is a whole step from where the keys are, so sensor jitter near a step's
+  # edge does not flip it every five seconds. (It raises no OSD, unlike the manual step.) And
   # nothing is written with the lid shut: the sensor sits in the bezel and reads near 0
   # there, which would light the keys up under a closed, docked lid.
   #
@@ -396,9 +398,9 @@ let
       pkgs.systemd
     ];
     text = ''
-      # Full brightness at or below darkLux, off at or above brightLux, linear between.
-      darkLux=8
-      brightLux=180
+      # lux:percent, ascending. Below the first point the first level holds, above the last
+      # the last.
+      curve="0:80 10:60 30:40 65:20 120:10 180:0"
       step=10
       poll=5
 
@@ -425,14 +427,41 @@ let
           org.freedesktop.login1.Manager LidClosed 2>/dev/null)" = "b true" ]
       }
 
+      percentFor() {
+        local lux=$1 prevLux="" prevPct="" point l p
+        for point in $curve; do
+          l=''${point%%:*}
+          p=''${point##*:}
+          if [ "$lux" -le "$l" ]; then
+            if [ -z "$prevLux" ]; then echo "$p"; else
+              echo $(( prevPct + (p - prevPct) * (lux - prevLux) / (l - prevLux) ))
+            fi
+            return
+          fi
+          prevLux=$l
+          prevPct=$p
+        done
+        echo "$prevPct"
+      }
+
       lastSet=""
       paused=0
       pauseLux=0
+      lux1=""
+      lux2=""
       while :; do
         read -r lux < "$als" || lux=""
         lux=''${lux%%.*}
         read -r current < "$led/brightness" || current=""
         case "$lux$current" in "" | *[!0-9]*) sleep "$poll"; continue ;; esac
+        # The median of the last three readings, so a hand or a shadow over the sensor for one
+        # poll neither moves the light nor ends a pause. A real change lands one poll later.
+        a=$lux b=''${lux1:-$lux} c=''${lux2:-$lux}
+        lux2=$b
+        lux1=$a
+        lo=$(( a < b ? a : b ))
+        hi=$(( a < b ? b : a ))
+        lux=$(( c < lo ? lo : (c > hi ? hi : c) ))
 
         if [ -n "$lastSet" ] && [ "$current" != "$lastSet" ]; then
           paused=1
@@ -451,19 +480,15 @@ let
         fi
 
         if [ "$paused" = 0 ]; then
-          if [ "$lux" -le "$darkLux" ]; then
-            percent=100
-          elif [ "$lux" -ge "$brightLux" ]; then
-            percent=0
-          else
-            percent=$(( 100 * (brightLux - lux) / (brightLux - darkLux) ))
-          fi
-          percent=$(( (percent + step / 2) / step * step ))
+          raw=$(percentFor "$lux")
+          percent=$(( (raw + step / 2) / step * step ))
           target=$(( max * percent / 100 ))
-          # Against the value itself, not its step: 70% of 255 is 178, which reads back as 69%,
-          # so comparing steps found the odd levels one short on every pass and rewrote (and
-          # logged) them every five seconds forever.
-          if [ "$current" != "$target" ] && ! lidClosed; then
+          # Rounded, so 70% of 255 (178) reads back as 70 and not 69.
+          have=$(( (current * 100 + max / 2) / max ))
+          diff=$(( raw > have ? raw - have : have - raw ))
+          # Against the value itself as well as the gap: once the gap allows a move, a level
+          # that already matches is not rewritten (and logged) every five seconds.
+          if [ "$diff" -ge "$step" ] && [ "$current" != "$target" ] && ! lidClosed; then
             printf '%s\n' "$target" > "$led/brightness"
             echo "$lux lux: $percent%"
           fi
@@ -549,11 +574,21 @@ let
       lastSet=""
       paused=0
       pauseLux=0
+      lux1=""
+      lux2=""
       while :; do
         read -r lux < "$als" || lux=""
         lux=''${lux%%.*}
         read -r current < "$panel/brightness" || current=""
         case "$lux$current" in "" | *[!0-9]*) sleep "$poll"; continue ;; esac
+        # The median of the last three readings, so a hand or a shadow over the sensor for one
+        # poll neither moves the light nor ends a pause. A real change lands one poll later.
+        a=$lux b=''${lux1:-$lux} c=''${lux2:-$lux}
+        lux2=$b
+        lux1=$a
+        lo=$(( a < b ? a : b ))
+        hi=$(( a < b ? b : a ))
+        lux=$(( c < lo ? lo : (c > hi ? hi : c) ))
 
         if [ -n "$lastSet" ] && [ "$current" != "$lastSet" ]; then
           paused=1
