@@ -27,7 +27,7 @@
 - **One design, end to end.** Plymouth, the greeter, the console, the bar, menus,
   notifications, the lock screen, GTK and Qt apps, the terminal, Neovim, even the
   Stream Deck: all drawn from one palette and one geometric mark.
-- **Switch themes live.** Seven dark flavours, fourteen accents and a matching wallpaper
+- **Switch themes live.** Eight dark flavours, fourteen accents and a matching wallpaper
   for each. Change them from the bar, and they apply without a rebuild or a logout.
 - **Built for laptops.** Battery-aware refresh rates, charge limiting, measured
   suspend drain, captive-portal sign-in and a guard against failed suspends.
@@ -106,9 +106,11 @@
   </tr>
 </table>
 
+### Eight flavours, switched live
+
 <p align="center">
-  <img src=".github/assets/screenshots/wallpapers.png" alt="Generated wallpapers in Gruvbox Material's accents" width="100%">
-  <br><sub>The wallpapers aren't downloaded. <code>lattice art</code> draws them at build time, one per accent in each flavour (Gruvbox Material's here), sized for each screen.</sub>
+  <img src=".github/assets/screenshots/themes.png" alt="The same desktop in each of the eight flavours" width="100%">
+  <br><sub>One desktop in every flavour, each switch made from the bar without a rebuild. The wallpapers aren't downloaded: <code>lattice art</code> draws them at build time, one per accent in each flavour, sized for each screen.</sub>
 </p>
 
 ## What's inside
@@ -118,7 +120,7 @@ weather, backups, SomaFM radio, a pomodoro timer, power profiles with live graph
 an unread count and alerts for any failed unit, HyprQuickFrame screenshots with OCR and QR
 reading, and chromeless web apps that share your Firefox logins.
 
-**Theming.** Seven flavours across Catppuccin, Tokyo Night, Rosé Pine and Gruvbox Material,
+**Theming.** Eight flavours across Catppuccin, Tokyo Night, Rosé Pine and Gruvbox Material,
 fourteen accents, and generated kits for GTK, Qt, icons, rofi, foot, tmux, Neovim,
 Thunderbird and a dozen CLI tools. A silent Plymouth boot leads straight into a themed greeter.
 
