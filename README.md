@@ -3,14 +3,13 @@
 </p>
 
 <p align="center">
-  <a href="https://nixos.org"><img src="https://img.shields.io/badge/NixOS-unstable-89B4FA?style=flat-square&labelColor=313244&logo=nixos&logoColor=CDD6F4" alt="NixOS unstable"></a>
-  <a href="https://hyprland.org"><img src="https://img.shields.io/badge/Hyprland-Wayland-94E2D5?style=flat-square&labelColor=313244" alt="Hyprland"></a>
-  <a href="https://asahilinux.org"><img src="https://img.shields.io/badge/runs%20on-Apple%20Silicon-F5C2E7?style=flat-square&labelColor=313244" alt="Apple Silicon"></a>
-  <a href="https://github.com/TWinston-66/lattice/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/TWinston-66/lattice/ci.yml?event=pull_request&style=flat-square&label=CI&labelColor=313244" alt="CI"></a>
-  <a href="https://github.com/Mic92/sops-nix"><img src="https://img.shields.io/badge/secrets-sops--nix-B4BEFE?style=flat-square&labelColor=313244" alt="sops-nix"></a>
-  <a href="https://github.com/TWinston-66/lattice/commits/main"><img src="https://img.shields.io/github/last-commit/TWinston-66/lattice?style=flat-square&color=A6E3A1&labelColor=313244" alt="Last commit"></a>
-  <a href="https://github.com/TWinston-66/.dotfiles"><img src="https://img.shields.io/badge/dotfiles-.dotfiles-FAB387?style=flat-square&labelColor=313244&logo=github&logoColor=CDD6F4" alt="The dotfiles"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-CBA6F7?style=flat-square&labelColor=313244" alt="MIT license"></a>
+  <a href="https://nixos.org"><img src="https://img.shields.io/badge/NixOS-unstable-7DAEA3?style=flat-square&labelColor=32302F&logo=nixos&logoColor=D4BE98" alt="NixOS unstable"></a>
+  <a href="https://hyprland.org"><img src="https://img.shields.io/badge/Hyprland-Wayland-89B482?style=flat-square&labelColor=32302F" alt="Hyprland"></a>
+  <a href="https://asahilinux.org"><img src="https://img.shields.io/badge/runs%20on-Apple%20Silicon-DF787F?style=flat-square&labelColor=32302F" alt="Apple Silicon"></a>
+  <a href="https://github.com/TWinston-66/lattice/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/TWinston-66/lattice/ci.yml?event=pull_request&style=flat-square&label=CI&labelColor=32302F" alt="CI"></a>
+  <a href="https://github.com/TWinston-66/lattice/commits/main"><img src="https://img.shields.io/github/last-commit/TWinston-66/lattice?style=flat-square&color=A9B665&labelColor=32302F" alt="Last commit"></a>
+  <a href="https://github.com/TWinston-66/.dotfiles"><img src="https://img.shields.io/badge/dotfiles-.dotfiles-E78A4E?style=flat-square&labelColor=32302F&logo=github&logoColor=D4BE98" alt="The dotfiles"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-D3869B?style=flat-square&labelColor=32302F" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -108,8 +107,8 @@
 </table>
 
 <p align="center">
-  <img src=".github/assets/screenshots/wallpapers.png" alt="Generated wallpapers across flavours and accents" width="100%">
-  <br><sub>The wallpapers aren't downloaded. <code>lattice art</code> draws them at build time, one per accent in each flavour, sized for each screen.</sub>
+  <img src=".github/assets/screenshots/wallpapers.png" alt="Generated wallpapers in Gruvbox Material's accents" width="100%">
+  <br><sub>The wallpapers aren't downloaded. <code>lattice art</code> draws them at build time, one per accent in each flavour (Gruvbox Material's here), sized for each screen.</sub>
 </p>
 
 ## What's inside

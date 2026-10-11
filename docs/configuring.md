@@ -34,8 +34,8 @@ panel geometry, and names its user. Optional features are switched on per host:
 ## The theme
 
 ```nix
-lattice.theme.flavor = "mocha";   # what boot, the greeter and the console are drawn in
-lattice.theme.accent = "mauve";   # the default accent: any palette entry
+lattice.theme.flavor = "gruvbox-material";   # what boot, the greeter and the console are drawn in
+lattice.theme.accent = "blue";               # the default accent: any palette entry
 ```
 
 `lattice.theme` holds the palette, the flavours and the accent, and generated theme kits
