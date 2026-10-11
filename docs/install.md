@@ -4,9 +4,6 @@ lattice runs on Apple Silicon MacBooks (the M1 and M2 generations that
 [Asahi Linux](https://asahilinux.org) supports), next to macOS. Every lattice machine is a
 host in the flake: a folder under `hosts/`, built from the distro in `modules/nixos`.
 
-> [!NOTE]
-> The installer has not yet been run end to end on hardware.
-
 ## Installing
 
 1. In macOS, run the Asahi installer. Resize (`r`) to leave the space you want for lattice
