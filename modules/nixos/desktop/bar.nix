@@ -1104,7 +1104,8 @@ let
         row Heatpipe "$c_text" "" "$dec W"
       fi
 
-      # Three sensors to a line, the label only on the first.
+      # Two sensors to a line, the label only on the first. Three ran wider than the Mac's
+      # panel, and the tooltip wrapped in the middle of a sensor's name.
       if [ -n "$temps_line" ]; then
         IFS=';' read -r -a temps <<<"$temps_line"
         acc="" n=0 label=Temps
@@ -1112,7 +1113,7 @@ let
           [ -n "$t" ] || continue
           add "''${t%%|*}°C ''${t#*|}"
           n=$((n + 1))
-          if [ $((n % 3)) -eq 0 ]; then
+          if [ $((n % 2)) -eq 0 ]; then
             row "$label" "$c_text" "" "$acc"
             acc="" label=""
           fi

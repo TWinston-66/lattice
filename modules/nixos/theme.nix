@@ -645,6 +645,8 @@ let
       _: render:
       render {
         inherit palette;
+        inherit (flavor) accents;
+        flavor = name;
         accent = "%ACCENT%";
         accentAlt = "%ALT%";
       }
@@ -1395,11 +1397,13 @@ in
     extraKitFiles = lib.mkOption {
       type = lib.types.attrsOf (lib.types.functionTo lib.types.str);
       default = { };
-      example = lib.literalExpression ''{ "theme.foo" = { palette, accent, accentAlt }: "accent=''${accent}\\n"; }'';
+      example = lib.literalExpression ''{ "theme.foo" = { palette, accent, ... }: "accent=''${accent}\\n"; }'';
       description = ''
         More files for every runtime kit, from modules that own a consumer theme.nix does
-        not know about: file name -> `{ palette, accent, accentAlt }` -> its text. The
-        accents arrive as the kit's %ACCENT% and %ALT% tokens, filled in at run time.
+        not know about: file name -> `{ flavor, palette, accents, accent, accentAlt }` -> its
+        text, where `flavor` is the kit's flavour name and `accents` its own colour names. The
+        accents arrive as the kit's %ACCENT% and %ALT% tokens, filled in at run time, so a
+        renderer should take `...` for the arguments it does not use.
       '';
     };
 
