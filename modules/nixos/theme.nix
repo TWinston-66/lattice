@@ -915,7 +915,7 @@ in
   options.lattice.theme = {
     flavor = lib.mkOption {
       type = lib.types.str;
-      default = "mocha";
+      default = "gruvbox-material";
       description = ''
         The flavour the build is drawn in: one of `flavors`. Everything fixed at build time
         -- the GTK theme, cursors, folders, console, boot splash and deck keys --
