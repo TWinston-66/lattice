@@ -200,12 +200,27 @@ in
     # SSH keys stay with programs.ssh.startAgent.
     gcr-ssh-agent.enable = false;
   };
-  security.pam.services.greetd.enableGnomeKeyring = true;
   # The gnome-keyring module also adds itself to the `login` PAM service. Nothing logs in
   # through that here except `systemd-run --machine=user@.host` (the backup and failure
   # notifications), which has no password, so each one logged "gkr-pam: couldn't unlock
-  # the login keyring". greetd above is the login that unlocks it.
+  # the login keyring". greetd is the login that unlocks it.
   security.pam.services.login.enableGnomeKeyring = lib.mkForce false;
+  # nixpkgs' greetd service sets useDefaultRules = false and only substacks `login`, so
+  # enableGnomeKeyring on it is a no-op. Append the keyring module after that substack.
+  security.pam.services.greetd.rules =
+    let
+      gnomeKeyring = args: {
+        order = 20000;
+        control = "optional";
+        modulePath = "${pkgs.gnome-keyring}/lib/security/pam_gnome_keyring.so";
+        inherit args;
+      };
+    in
+    {
+      auth.gnome_keyring = gnomeKeyring [ ];
+      password.gnome_keyring = gnomeKeyring [ "use_authtok" ];
+      session.gnome_keyring = gnomeKeyring [ "auto_start" ];
+    };
 
   # Run Electron apps natively on Wayland so they aren't blurry under fractional scaling.
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
