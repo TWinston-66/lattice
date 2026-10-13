@@ -32,8 +32,9 @@
 - **Built for Apple Silicon.** M1 and M2 MacBooks on the Asahi kernel, with
   Widevine DRM, hardware video decode, tuned trackpad and keyboard, and display fixes
   carried as patches.
-- **Reproducible and recoverable.** Every host is a flake output, built and cached by CI,
-  and a new one starts from `hosts/macbook`. Secrets can live in sops, and then the system refuses to switch
+- **Reproducible and recoverable.** Every host is a flake output, built by CI into the
+  [lattice.cachix.org](https://lattice.cachix.org) binary cache, so installs and rebuilds
+  mostly download rather than compile. A new host starts from `hosts/macbook`. Secrets can live in sops, and then the system refuses to switch
   to a host that couldn't log anyone in.
 
 ## A tour
