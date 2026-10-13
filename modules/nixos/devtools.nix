@@ -295,7 +295,22 @@ in
     nixd
     nixfmt
     statix
-    texliveFull
+    # Small scheme, not Full: 630 MiB against 5.9 GiB, and ~540 store paths against ~5,200,
+    # most of what an install fetched. latexmk, latexindent and chktex are what vimtex,
+    # conform and texlab call; the rest are what the coursework loads. A missing .sty means
+    # one more name here.
+    (texliveSmall.withPackages (
+      ps: with ps; [
+        latexmk
+        latexindent
+        chktex
+        tikzsymbols
+        relsize
+        algorithm2e
+        ifoddpage
+        cm-super
+      ]
+    ))
 
     fhs
 
