@@ -12,6 +12,9 @@ configuration {
      slice in desktop/session.nix. */
   run-command: "uwsm app -- {cmd}";
   run-shell-command: "uwsm app -- {terminal} -e {cmd}";
+  /* Backtick toggles case sensitivity by default, so it could never be typed: searching the
+     cheatsheet for tmux's C-a ` found nothing. */
+  kb-toggle-case-sensitivity: "";
 }
 
 @import "/etc/xdg/rofi/lattice.rasi"
