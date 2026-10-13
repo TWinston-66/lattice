@@ -312,7 +312,13 @@ in
       restartIfChanged = false;
       serviceConfig = {
         Type = "forking";
-        ExecStart = "${pkgs.tmux}/bin/tmux new-session -d";
+        # Named, so a login reuses it. Continuum's restore runs while the config loads,
+        # before this session exists, so an unnamed one took the next free number on
+        # top of the restored ones and resurrect saved it: one more session per login.
+        # A restored `main` makes new-session fail on the duplicate name, which is fine.
+        ExecStart = pkgs.writeShellScript "tmux-start" ''
+          ${pkgs.tmux}/bin/tmux new-session -d -s main || ${pkgs.tmux}/bin/tmux has-session -t main
+        '';
         ExecStop = [
           "${pkgs.tmuxPlugins.resurrect}/share/tmux-plugins/resurrect/scripts/save.sh"
           "${pkgs.tmux}/bin/tmux kill-server"
