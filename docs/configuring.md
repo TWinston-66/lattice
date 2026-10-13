@@ -29,7 +29,9 @@ in the modules it imports.
 Each host imports `modules/nixos`, adds its `hardware-configuration.nix`, firmware hash and
 panel geometry, and names its user. Optional features are switched on per host:
 `lattice.homeassistant.enable`, `lattice.streamdeck.enable`, `lattice.weather.*`,
-`services.tailscale.enable`. To add a host, see [Installing lattice](install.md#installing).
+`services.tailscale.enable`. Web apps only one house has, such as a self-hosted service on
+the LAN, go in `lattice.webapps.extraApps`, in the same shape as the built-in list. To add a
+host, see [Installing lattice](install.md#installing).
 
 ## The theme
 
