@@ -644,6 +644,18 @@ hl.window_rule({
     center = true,
 })
 
+-- The trackpad at full speed in foot. scroll_factor above is 0.2 for rofi's sake, and a
+-- terminal turns scroll distance into whole lines, so at 0.2 nvim and tmux got a step only
+-- every fifth of the travel: slow, and multiplying the steps up to compensate made them
+-- jump. This replaces the factor for these windows only (the launcher's foot windows too),
+-- so each step stays one line and there are just more of them, both directions alike.
+hl.window_rule({
+    name  = "terminal-touchpad-scroll",
+    match = { class = "^(foot|lattice-(launch|ask|flash))$" },
+
+    scroll_touchpad = 1.0,
+})
+
 -- Qalculate! opens floating. Its keypad is a fixed grid with a natural size (766x540
 -- here), and tiling stretches it: given half a workspace the buttons grow to fill the
 -- height and the result area above them becomes a 350px void. The app has no say in it --
