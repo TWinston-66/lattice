@@ -1,4 +1,9 @@
-{ pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
   # Firefox's own "Taskbar Tabs": a chromeless window onto one site, sharing the default
   # profile. That sharing is the point -- a firefoxpwa install would have given each app an
@@ -25,7 +30,10 @@ let
   # its own shortcuts hardcode the absolute profile path of whichever profile did the
   # pinning, and that path is random per machine. Leaving it off takes the default profile,
   # which is both portable and the one already signed in.
-  apps = [
+  #
+  # These are the distro's own; a host's self-hosted ones come in through extraApps below.
+  apps = builtinApps ++ config.lattice.webapps.extraApps;
+  builtinApps = [
     # Neither of these has a usable mark in Papirus -- its gemini.svg is Calligra Gemini,
     # a KDE office app, and there is no claude.svg at all -- so webAppIcons below installs
     # both into hicolor. The files are stand-ins drawn for this, not the vendors' assets;
@@ -261,6 +269,16 @@ let
   };
 in
 {
+  options.lattice.webapps.extraApps = lib.mkOption {
+    type = lib.types.listOf lib.types.attrs;
+    default = [ ];
+    description = ''
+      Web apps beyond the distro's own, in the same shape as the built-in list: id (a fresh
+      `uuidgen`), name, url, hostname, icon, categories. For things only one house has, such
+      as a self-hosted service on the LAN.
+    '';
+  };
+
   options.lattice.webapps.apps = lib.mkOption {
     type = lib.types.listOf (lib.types.attrsOf lib.types.str);
     readOnly = true;
