@@ -28,9 +28,32 @@ let
     whichKey = pkgs.tmuxPlugins.tmux-which-key;
   };
 
-  tmuxConf = lib.replaceStrings (map (n: "@${n}@") (lib.attrNames tmuxPlugins)) (map (p: p.rtp) (
-    lib.attrValues tmuxPlugins
-  )) (builtins.readFile ./configs/tmux.conf);
+  tmuxConf =
+    lib.replaceStrings (map (n: "@${n}@") (lib.attrNames tmuxPlugins) ++ [ "@resurrectDrop@" ])
+      (map (p: p.rtp) (lib.attrValues tmuxPlugins) ++ [ "${resurrectDropWindowSessions}" ])
+      (builtins.readFile ./configs/tmux.conf);
+
+  # What every foot window runs. The first window takes main, the session the tmux user
+  # unit starts with the desktop (desktop/session.nix); a window opened while main is on
+  # screen gets a session of its own, which dies with the window. Starts main if the
+  # server is gone.
+  tmuxAttach = pkgs.writeShellScript "lattice-tmux-attach" ''
+    case $(tmux display -p -t =main: '#{session_attached}' 2>/dev/null) in
+      0) exec tmux attach -t =main ;;
+      "") exec tmux new -A -s main ;;
+      *) exec tmux new \; set destroy-unattached on ;;
+    esac
+  '';
+
+  # Continuum saves every 15 minutes, so a window's session open at the time would come
+  # back at the next login as a plain detached one. resurrect hands this hook the file it
+  # just wrote; the sessions set to die with their window are taken out of it.
+  resurrectDropWindowSessions = pkgs.writeShellScript "lattice-resurrect-drop" ''
+    drop=$(tmux list-sessions -F '#{?#{==:#{destroy-unattached},on},#{session_name},}' | grep . || true)
+    [ -n "$drop" ] || exit 0
+    ${lib.getExe pkgs.gawk} -F '\t' 'NR == FNR { d[$0]; next } !($2 in d)' \
+      <(printf '%s\n' "$drop") "$1" >"$1.tmp" && mv "$1.tmp" "$1"
+  '';
 
   # GTK CSS has no ~, so the path to the picked theme's CSS is spelled out per user.
   gtk4Css = ''
@@ -67,7 +90,9 @@ in
   # their own. A file of the same name in ~/.config takes over -- for foot and rofi
   # entirely; tmux, zathura, mpv and qt6ct read both, the user's last.
   environment.etc = {
-    "xdg/foot/foot.ini".source = ./configs/foot.ini;
+    "xdg/foot/foot.ini".text = lib.replaceStrings [ "@tmuxAttach@" ] [ "${tmuxAttach}" ] (
+      builtins.readFile ./configs/foot.ini
+    );
     "xdg/rofi.rasi".source = ./configs/rofi.rasi;
     "xdg/swayosd/style.css".source = ./configs/swayosd.css;
     "xdg/qt6ct/qt6ct.conf".source = ./configs/qt6ct.conf;
