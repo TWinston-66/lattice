@@ -1403,7 +1403,12 @@ let
   #
   # The local half is `git status`, run on waybar's interval. GIT_OPTIONAL_LOCKS=0 stops it
   # refreshing the index on the way, which takes index.lock and would make a commit typed
-  # at the same moment fail. The remote half needs a fetch, which is a round trip to
+  # at the same moment fail -- but an index that is never refreshed keeps the stat data of
+  # every file Obsidian has touched since, and status re-hashes each of those on every tick:
+  # 44ms a call on 2026-10-13, 1ms once refreshed. So the detached fetch below refreshes it
+  # too, every five minutes, holding the lock for about a millisecond.
+  #
+  # The remote half needs a fetch, which is a round trip to
   # GitHub through Bitwarden's SSH agent, so `status` never waits on it: once the last
   # attempt is five minutes old it starts `fetch` detached, and that signals the bar when
   # it lands. BatchMode keeps a locked agent from turning into a prompt -- the fetch just
@@ -1448,6 +1453,7 @@ let
         exec 9>"$state/vault-fetch.lock"
         flock -n 9 || return 0
         touch "$attempted"
+        git -C "$repo" update-index -q --refresh >/dev/null 2>&1 || true
         if out=$(GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10" \
           timeout 60 git -C "$repo" fetch --quiet --prune 2>&1); then
           touch "$fetched"

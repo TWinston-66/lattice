@@ -38,7 +38,12 @@ let
   # here shows or hides that workspace.
   #
   # The lock state is read off the SSH agent: an unlocked vault serves its keys, a locked
-  # one lists none.
+  # one lists none. Except before the app's first unlock: its keystore is empty then, so a
+  # list request asks the user for approval and hangs until that times out, and `timeout`
+  # kills ssh-add first -- a pending approval and two error lines per bar per poll, from
+  # login until the first unlock. That first unlock logs "Vault unlocked" from the app's
+  # main process, so until the journal has that line for the running PID the pill says
+  # locked without asking the agent. Later locks answer an empty list at once.
   pill = pkgs.writeShellApplication {
     name = "lattice-bitwarden";
     runtimeInputs = [
@@ -54,6 +59,20 @@ let
     text = ''
       unit=${unit}
 
+      # Whether the running app has been unlocked once; see the note on the pill. Remembered
+      # per PID once seen, so the journal is only read until then.
+      unlocked_once() {
+        local pid marker state=''${XDG_RUNTIME_DIR:-/tmp}/lattice
+        pid=$(systemctl --user show -p MainPID --value "$unit")
+        marker=$state/bitwarden-unlocked-$pid
+        [[ -e $marker ]] && return 0
+        [[ -n $(journalctl --user -b -q -o cat _PID="$pid" --grep '› Vault unlocked' -n 1 2>/dev/null) ]] ||
+          return 1
+        mkdir -p "$state"
+        rm -f "$state"/bitwarden-unlocked-*
+        touch "$marker"
+      }
+
       shown() {
         hyprctl monitors -j | jq -e 'any(.[]; .specialWorkspace.name == "special:bitwarden")' >/dev/null
       }
@@ -65,8 +84,11 @@ let
           class=stopped
           tip="Bitwarden is not running: no SSH agent, no browser unlock"$'\n'"Click to start it"
         else
-          local keys rc=0
-          keys=$(timeout 3 ssh-add -l 2>/dev/null | wc -l) || rc=$?
+          local keys=0 rc=1
+          if unlocked_once; then
+            rc=0
+            keys=$(timeout 3 ssh-add -l 2>/dev/null | wc -l) || rc=$?
+          fi
           if ((rc == 0 && keys > 0)); then
             text=󰿆
             class=unlocked
