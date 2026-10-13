@@ -61,6 +61,19 @@
     tokenFile = config.sops.secrets.ha-token.path;
   };
 
+  ### WEB APPS ###
+  # Papirus has no Vikunja mark, so it wears the generic to-do icon.
+  lattice.webapps.extraApps = [
+    {
+      id = "f10860b8-db4f-420a-9d0f-15ee67ec050c";
+      name = "Vikunja";
+      url = "http://vikunja.home.lan:3456/";
+      hostname = "vikunja.home.lan";
+      icon = "gnome-todo";
+      categories = [ "Office" ];
+    }
+  ];
+
   ### STREAM DECK ###
   lattice.streamdeck = {
     enable = true;
