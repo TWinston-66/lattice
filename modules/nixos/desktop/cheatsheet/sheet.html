@@ -408,7 +408,7 @@ code.raw { font-size: 12.5px; padding: 2px 6px; border-radius: 5px; background: 
   <div class="intro" data-tool="tmux" hidden>
     <div class="card">
       <h2><span class="num">01</span> Sessions, windows, panes</h2>
-      <p class="lead">tmux runs inside foot and keeps your terminals alive, even when the window closes.</p>
+      <p class="lead">tmux runs inside foot and keeps your terminals alive. The first foot window opens the session <b>main</b>, which outlives the window; every window opened alongside it gets a session of its own, which closes with it.</p>
       <div class="tree">
         <div><b>Session</b><span>A project: a set of windows with one name. Survives closing the terminal; resurrect and continuum restore it after a reboot.</span></div>
         <div><b>Window</b><span>A full-screen tab in the session, listed along the bottom bar.</span></div>
@@ -426,12 +426,13 @@ code.raw { font-size: 12.5px; padding: 2px 6px; border-radius: 5px; background: 
         <span><kbd><span class="mod">Ctrl</span>a</kbd> <kbd>?</kbd></span><div class="what">Lists every key tmux knows, defaults included.</div>
       </div>
       <div class="macnote" hidden>On this MacBook's own keyboard, <b>Ctrl is the ⌘ key</b>, so the prefix is ⌘+a.</div>
+      <p>The session pill at the left of the bar shows what the next key will do: <b>red</b> while the prefix is down, <b>yellow</b> in copy mode, <b>mauve</b> with a pane zoomed, green otherwise.</p>
     </div>
 
     <div class="card">
       <h2><span class="num">03</span> Copy mode</h2>
       <p class="lead">Scrollback lives in copy mode. Scroll the wheel up or press <kbd><span class="mod">Ctrl</span>a</kbd> <kbd>[</kbd> to get in, and <kbd>q</kbd> to get out.</p>
-      <p>Your tmux uses <b>emacs-style</b> copy keys: <kbd><span class="mod">Ctrl</span>Space</kbd> starts a selection and <kbd><span class="mod">Alt</span>w</kbd> copies it. Dragging with the mouse selects and copies straight to the clipboard, and double-click copies a word.</p>
+      <p>Your tmux uses <b>emacs-style</b> copy keys: <kbd><span class="mod">Ctrl</span>Space</kbd> starts a selection and <kbd><span class="mod">Alt</span>w</kbd> copies it. The mouse only selects -- drag for a range, double-click for a word, triple-click for a line -- and <kbd>y</kbd>, <kbd>Enter</kbd> or a right click copies it to the clipboard.</p>
     </div>
 
     <div class="card wide">
