@@ -1,7 +1,9 @@
 # Recovery
 
-Root is locked and passwords only come from sops, so a host that can't decrypt its
-secrets locks you out entirely. The fix is to make the secrets readable again, or to set
+On a host that keeps its password in sops (`lattice.user.hashedPasswordFile`), root is
+locked and passwords only come from the secrets, so a host that can't decrypt them locks
+you out entirely. A host without sops keeps its password on the machine, and `passwd`
+changes it as usual. The fix is to make the secrets readable again, or to set
 a new password, and reinstall over the top from a USB stick.
 
 > [!TIP]

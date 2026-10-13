@@ -23,7 +23,7 @@ in the modules it imports.
 
 | Host | Hardware | Notes |
 | --- | --- | --- |
-| `macbook` | Any M1/M2 MacBook | The distro alone, with a password set by `passwd` |
+| `macbook` | Any M1/M2 MacBook | The distro alone, with the password set at install and changed with `passwd` |
 | `mac` | The author's MacBook Pro | `macbook` plus `modules/personal` |
 
 Each host imports `modules/nixos`, adds its `hardware-configuration.nix`, firmware hash and

@@ -34,8 +34,8 @@
   carried as patches.
 - **Reproducible and recoverable.** Every host is a flake output, built by CI into the
   [lattice.cachix.org](https://lattice.cachix.org) binary cache, so installs and rebuilds
-  mostly download rather than compile. A new host starts from `hosts/macbook`. Secrets can live in sops, and then the system refuses to switch
-  to a host that couldn't log anyone in.
+  mostly download rather than compile. A new host starts from `hosts/macbook`. Secrets can
+  live in sops, and then the system refuses to switch to a host that couldn't log anyone in.
 
 ## A tour
 

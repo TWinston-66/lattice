@@ -33,21 +33,23 @@ host in the flake: a folder under `hosts/`, built from the distro in `modules/ni
    the installed system. It asks whether to install the personal setup in
    `modules/personal` (see [Secrets](#secrets-optional) below), a machine name, your user
    name and password, a disk passphrase, a time zone and a git URL for your dotfiles
-   (cloned to `~/.dotfiles`, with its `dotfiles.sh` run if it has one), then where to put lattice: the free space the Asahi installer left, or a Linux
-   partition from an earlier install, which it erases. Apple's partitions, the ESP and the
+   (cloned to `~/.dotfiles`, with its `dotfiles.sh` run if it has one), then where to put
+   lattice: the free space the Asahi installer left, or a Linux partition from an earlier
+   install, which it erases. Apple's partitions, the ESP and the
    partition table are never touched. Nothing is written until you type `yes` at the summary.
 
    From there it runs on its own: it encrypts the partition (LUKS2) with btrfs inside, copies
    Apple's firmware off the ESP and pins its hash, writes `hosts/<name>` from `hosts/macbook`,
-   and installs. Most of the system comes from lattice's binary cache. If the Asahi kernel
-   isn't in it, the kernel is compiled during the install, which takes a while.
+   and installs. Most of the system downloads from lattice's binary cache. The kernel isn't
+   in the cache, but the stick boots the same one, so it is copied from there rather than
+   compiled.
 
 4. Take out the stick and reboot. If macOS comes up, hold the power button at startup and
    pick lattice. The disk passphrase comes first, then the login.
 
 The flake is in `~/lattice` (or where `modules/personal` keeps it), with the new host
-staged but not committed. Commit it, and from
-then on `lattice rebuild` applies changes. A log of the install is in
+staged but not committed. Commit and push it, and from then on `lattice rebuild` applies
+changes. A log of the install is in
 `/var/log/lattice-install.log`.
 
 ## Building the installer
