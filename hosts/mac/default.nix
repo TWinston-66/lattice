@@ -66,6 +66,9 @@ _: {
     position = "0x0";
   };
 
+  # Blur, shadows and animations off on battery, alongside the 60Hz above.
+  lattice.display.effectsOnBattery = false;
+
   # The Samsung on the desk. Its scale is set by eye, and the first attempt at setting it by
   # arithmetic is worth recording as a dead end. Matching the panel above on *logical dpi* -- 3840x2160 across 700x390mm is
   # 139 dpi native, so scale 1.25 lands 3072x1728 at 111 dpi against the panel's 113 -- is
