@@ -1,0 +1,43 @@
+Subject: [PATCH] textbox: let the entry wrap when the theme sets `wrap: true`
+
+The entry box always elides the middle of a line too long for it, so a long
+calculator expression could not be read back. With `entry { wrap: true; }`
+it wraps instead and grows downwards, as the message box already does; the
+cursor is placed from pango's layout, so it follows onto the later lines.
+Without the property nothing changes.
+---
+diff --git a/source/widgets/textbox.c b/source/widgets/textbox.c
+index cb0914b..ab59329 100644
+--- a/source/widgets/textbox.c
++++ b/source/widgets/textbox.c
+@@ -217,6 +217,13 @@ textbox *textbox_create(widget *parent, WidgetType type, const char *name,
+   tb->flags = flags;
+   tb->emode = PANGO_ELLIPSIZE_END;
+ 
++  // An editable box can opt in to wrapping, so a long input grows the box
++  // downwards instead of eliding its middle.
++  if ((tb->flags & TB_EDITABLE) == TB_EDITABLE &&
++      rofi_theme_get_boolean(WIDGET(tb), "wrap", FALSE)) {
++    tb->flags |= TB_WRAP;
++  }
++
+   tb->changed = FALSE;
+ 
+   tb->layout = pango_layout_new(p_context);
+@@ -442,12 +449,12 @@ void textbox_moveresize(textbox *tb, int x, int y, int w, int h) {
+         widget_padding_get_padding_width(WIDGET(tb));
+   } else {
+     // set ellipsize
+-    if ((tb->flags & TB_EDITABLE) == TB_EDITABLE) {
++    if ((tb->flags & TB_WRAP) == TB_WRAP) {
++      pango_layout_set_ellipsize(tb->layout, PANGO_ELLIPSIZE_NONE);
++    } else if ((tb->flags & TB_EDITABLE) == TB_EDITABLE) {
+       pango_layout_set_ellipsize(tb->layout, PANGO_ELLIPSIZE_MIDDLE);
+-    } else if ((tb->flags & TB_WRAP) != TB_WRAP) {
+-      pango_layout_set_ellipsize(tb->layout, tb->emode);
+     } else {
+-      pango_layout_set_ellipsize(tb->layout, PANGO_ELLIPSIZE_NONE);
++      pango_layout_set_ellipsize(tb->layout, tb->emode);
+     }
+   }
+ 

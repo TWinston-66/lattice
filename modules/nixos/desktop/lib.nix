@@ -286,7 +286,27 @@ let
   # nixpkgs patches the plugin's `qalc` lookup to an absolute store path, so nothing needs to
   # be on PATH for the mode itself; libqalculate is in apps.nix's systemPackages only for the
   # `qalc` CLI, and adds no closure of its own because the plugin already pulls it in.
-  rofiWithCalc = pkgs.rofi.override { plugins = [ pkgs.rofi-calc ]; };
+  #
+  # Both halves are patched. rofi-calc as shipped showed stale answers when typing fast,
+  # cut long ones at 4 KiB, treated every qalc warning (including the one every equation
+  # solve prints) as an error, copied "approx. 1.41" with non-ASCII turned to octal, and
+  # kept a history that could only be copied, never edited -- patches/rofi-calc-fixes.patch
+  # has the list. rofi's entry always elides the middle of a long line; the other patch
+  # lets a theme ask for `wrap: true` instead, which only the calculator's bind does, so
+  # every other menu is untouched.
+  rofiWithCalc =
+    let
+      rofi-unwrapped = pkgs.rofi-unwrapped.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ./patches/rofi-entry-wrap.patch ];
+      });
+      rofi-calc = (pkgs.rofi-calc.override { inherit rofi-unwrapped; }).overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ./patches/rofi-calc-fixes.patch ];
+      });
+    in
+    pkgs.rofi.override {
+      inherit rofi-unwrapped;
+      plugins = [ rofi-calc ];
+    };
 
   # `lattice-app-window <file> [fragment]`: one of lattice's own pages (the keybinding
   # cheatsheet, the guides) in an app window -- no tabs, no address bar -- in Chromium,
