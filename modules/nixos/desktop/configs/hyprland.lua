@@ -100,8 +100,10 @@ hl.config({
             inactive_border = "rgba(45475aaa)",
         },
 
-        -- Set to true to enable resizing windows by clicking and dragging on borders and gaps
-        resize_on_border = false,
+        -- Drag a window's border (or the gap around it) to resize it. Without this the only
+        -- mouse resize is SUPER + right-drag, which on the clickpad means holding a
+        -- two-finger press while dragging
+        resize_on_border = true,
 
         -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
         allow_tearing = false,
