@@ -433,8 +433,16 @@ hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd("lattice-dnd toggle"), { desc
 -- solve/diff/matrices work. The plugin is built into the rofi wrapper by lattice; bare
 -- `rofi` from anywhere else won't have it. -modes is needed because
 -- /etc/xdg/rofi.rasi enables only drun,run, and rofi
--- refuses to -show a mode that isn't enabled. Enter copies the result to the clipboard.
-hl.bind("ALT + SHIFT + SPACE", hl.dsp.exec_cmd([[rofi -show calc -modes calc -calc-command "echo -n '{result}' | wl-copy"]]), { description = "Calculator" })
+-- refuses to -show a mode that isn't enabled.
+--
+-- Keys (lattice's patched plugin, desktop/patches/rofi-calc-fixes.patch): Enter copies the
+-- answer -- or a history row's -- and closes; Shift+Enter puts a history row back in the
+-- input to edit, or carries the current answer on; Ctrl+C copies what was typed;
+-- Shift+Delete forgets a history row. Ctrl+C is custom-1, so rofi's own copy key, a stub
+-- on Wayland, is unbound. The plugin shell-quotes {result} itself, so it goes in bare.
+-- `entry { wrap }` grows the input for long expressions instead of eliding its middle,
+-- and `highlight: none` stops the typed tokens being bolded inside answers.
+hl.bind("ALT + SHIFT + SPACE", hl.dsp.exec_cmd([[rofi -show calc -modes calc -kb-secondary-copy "" -kb-custom-1 Control+c -calc-command "wl-copy -- {result}" -theme-str "entry { wrap: true; } element-text { highlight: none; }"]]), { description = "Calculator" })
 
 -- Screenshot: HyprQuickFrame's selection overlay, then satty. The script and its desktop
 -- entry are in modules/nixos/desktop/screenshot.nix.
