@@ -104,13 +104,16 @@ in
     foot.terminfo
     # The same libqalculate engine at its other two surfaces: `qalc` in a terminal, and a
     # real window for the times a calculation is worth keeping on screen and editing --
-    # qalculate-gtk carries the history, stored variables, user functions and the plot
-    # button that a one-line launcher prompt has nowhere to put. It is GTK3, so the
-    # run-time GTK theme (gtkUserTheme) dresses it; it lands in `rofi -show drun` as "Qalculate!".
-    # libqalculate is free here (rofi-calc already put it in the closure) and qalculate-gtk
-    # adds ~8 MiB on top of it.
+    # qalculate-qt carries the history, stored variables, user functions and the plot
+    # button that a one-line launcher prompt has nowhere to put. The Qt frontend rather than
+    # qalculate-gtk: the GTK one's keypad is a fixed grid that stretches into a void when
+    # tiled and renders badly at the Mac's scale, while the Qt one gives the slack to the
+    # history and still fits a half tile, so it needs no float rule. qt6ct dresses it in the
+    # live theme's palette (theme.qt6ct.conf), read at launch, so a theme switch shows on
+    # the next open. It lands in `rofi -show drun` as "Calculator".
+    # libqalculate is free here (rofi-calc already put it in the closure).
     libqalculate
-    qalculate-gtk
+    qalculate-qt
 
     mpv
     imv

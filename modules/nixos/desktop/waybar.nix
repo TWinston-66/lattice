@@ -197,7 +197,7 @@ in
             "class<.*[Tt]elegram.*>" = "";
             "class<.*[Vv]esktop.*>" = "󰙯";
             "class<.*[Bb]itwarden.*>" = "󰌾";
-            "class<qalculate-gtk>" = "󰂽";
+            "class<io.github.Qalculate.qalculate-qt>" = "󰂽";
             "class<xarchiver>" = "󰗄";
             "class<.*[Cc]ode.*>" = "󰨞";
           };

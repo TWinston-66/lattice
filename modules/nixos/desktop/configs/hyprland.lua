@@ -656,24 +656,6 @@ hl.window_rule({
     scroll_touchpad = 1.0,
 })
 
--- Qalculate! opens floating. Its keypad is a fixed grid with a natural size (766x540
--- here), and tiling stretches it: given half a workspace the buttons grow to fill the
--- height and the result area above them becomes a 350px void. The app has no say in it --
--- nothing in its layout sets a maximum -- so the window manager is the only place to fix
--- it. Matched on class, which `hyprctl clients` reports as qalculate-gtk.
---
--- Deliberately no `size` rule: qalculate remembers its own width in
--- ~/.config/qalculate/qalculate-gtk.cfg and rewrites that file every time it quits, so a
--- size pinned here would quietly override whatever the window was last resized to. Float
--- and centre only, and it opens at the size it remembers.
-hl.window_rule({
-    name  = "float-calculator",
-    match = { class = "qalculate-gtk" },
-
-    float  = true,
-    center = true,
-})
-
 
 ---------------------------------
 ---- HOST AND USER ADDITIONS ----
