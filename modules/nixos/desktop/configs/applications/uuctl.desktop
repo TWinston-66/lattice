@@ -7,7 +7,7 @@ Version=1.0
 # one of the backends it detects, so it arrives wearing lattice's theme -- and offers
 # start/stop/restart/reload/enable/disable/kill/freeze/thaw on the one you pick.
 # "uuctl" says none of that, and applications-system is the generic gear every settings
-# app already wears. Same mechanism as qalculate-gtk.desktop and thunar.desktop here.
+# app already wears. Same mechanism as the calculator's entry and thunar.desktop here.
 Name=User Services
 GenericName=User unit manager
 Comment=Start, stop and inspect systemd user units
