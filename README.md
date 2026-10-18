@@ -20,6 +20,10 @@
   <img src=".github/assets/screenshots/desktop.png" alt="The lattice desktop: waybar over the generated lattice wallpaper" width="100%">
 </p>
 
+> [!NOTE]
+> **On the shelf since October 2026.** v0.4.0 is the last state it ran in, on the author's
+> MacBook; it is not being worked on or tested for now.
+
 ## Why lattice
 
 - **One design, end to end.** Plymouth, the greeter, the console, the bar, menus,
