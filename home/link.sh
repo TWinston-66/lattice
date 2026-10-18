@@ -22,6 +22,16 @@ backup="$HOME/.dotfiles-backup/$(date +%Y%m%d%H%M%S)"
 for pkg in "${packages[@]}"; do
     while IFS= read -r file; do
         rel="${file#"$dir/$pkg/"}"
+        # A folder on the way may itself be a link (~/.config/nvim into an old dotfiles
+        # repo), and moving a file through it would move that repo's own file. The link is
+        # what is in the way, so it is what gets moved.
+        prefix=""
+        IFS=/ read -ra parts <<<"$rel"
+        for part in "${parts[@]}"; do
+            prefix="${prefix:+$prefix/}$part"
+            [[ -L $HOME/$prefix ]] && break
+        done
+        rel="$prefix"
         target="$HOME/$rel"
         [[ -e $target || -L $target ]] || continue
         case "$(realpath "$target" 2>/dev/null || true)" in
