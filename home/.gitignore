@@ -1,0 +1,13 @@
+nvim/.config/nvim/spell/*.spl
+
+# private key material and connection history should never live in the repo,
+# even untracked -- see ssh/.ssh/config for the only file meant to be versioned
+ssh/.ssh/id_*
+ssh/.ssh/known_hosts*
+ssh/.ssh/agent/
+
+# pi's credentials and session transcripts are machine-local; only
+# pi/.pi/agent/settings.json is meant to be versioned
+pi/.pi/agent/auth.json
+pi/.pi/agent/sessions/
+pi/.pi/agent/models-store.json

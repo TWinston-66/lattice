@@ -1,0 +1,105 @@
+typeset -U path PATH
+
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+if [ -d /opt/homebrew/bin ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+if [ -z "$TMUX" ] && command -v tmux >/dev/null 2>&1; then
+  tmux attach || tmux new -s main
+  exit
+fi
+
+if [[ "$OSTYPE" == darwin* && -f "$HOME/.ssh/id_ed25519" ]]; then
+  ssh-add --apple-use-keychain "$HOME/.ssh/id_ed25519" >/dev/null 2>&1
+fi
+
+HISTFILE=~/.zsh_history
+HISTSIZE=50000
+SAVEHIST=50000
+setopt SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE
+
+export TEALDEER_CONFIG_DIR="$HOME/.config/tealdeer"
+export EDITOR="nvim"
+export PATH="$HOME/.local/bin:$PATH"
+
+if [ -d "/Applications/calibre.app/Contents/MacOS" ]; then
+  export PATH="/Applications/calibre.app/Contents/MacOS:$PATH"
+fi
+
+alias ls='eza --icons -a --group-directories-first'
+alias ll='eza -la --icons --git --header --group-directories-first'
+alias tree='eza --tree --icons --git-ignore'
+alias cat='bat --style=plain --paging=never'
+alias cd='z'
+alias where='fd'
+alias lookf='rg'
+alias nv='nvim'
+alias vim='nvim'
+alias vi='nvim'
+
+# macOS ships its own `open`; only alias it on Linux
+if [[ "$OSTYPE" == linux* ]] && command -v xdg-open >/dev/null 2>&1; then
+  alias open='xdg-open'
+fi
+
+# Zed's CLI is `zed` on macOS (the cask installs it) but `zeditor` on NixOS, which is the
+# name nixpkgs gives the binary; alias it back so the same word opens the editor on both
+if [[ "$OSTYPE" == linux* ]] && command -v zeditor >/dev/null 2>&1; then
+  alias zed='zeditor'
+fi
+
+# On lattice, /etc/zshrc has already set up completion, fzf, starship, zoxide, the plugins,
+# the theme's colours and the finished-command notification, and says so with
+# LATTICE_SHELL. The rest of this file is the same for macOS, in Catppuccin Mocha.
+[[ -n $LATTICE_SHELL ]] && return
+
+export FZF_DEFAULT_OPTS=" \
+--color=bg+:#313244,bg:#1e1e2e,spinner:#f5e0dc,hl:#f38ba8 \
+--color=fg:#cdd6f4,header:#f38ba8,info:#cba6f7,pointer:#f5e0dc \
+--color=marker:#b4befe,fg+:#cdd6f4,prompt:#cba6f7,hl+:#f38ba8 \
+--color=selected-bg:#45475a \
+--color=border:#6c7086,label:#cdd6f4"
+
+if command -v brew >/dev/null 2>&1; then
+  FPATH="$(brew --prefix)/share/zsh/site-functions:${FPATH}"
+fi
+autoload -Uz compinit && compinit
+
+eval "$(fzf --zsh)"
+eval "$(starship init zsh)"
+eval "$(zoxide init zsh)"
+
+if command -v brew >/dev/null 2>&1; then
+  _share="$(brew --prefix)/share"
+else
+  _share=/run/current-system/sw/share
+fi
+_zsh_as="$_share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+[ -f "$_zsh_as" ] && source "$_zsh_as"
+unset _zsh_as
+
+_zsh_hl="$_share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+if [ -f "$_zsh_hl" ]; then
+  ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
+
+  typeset -gA ZSH_HIGHLIGHT_STYLES
+  ZSH_HIGHLIGHT_STYLES[default]='fg=#cdd6f4'
+  ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=#f38ba8,bold'
+  ZSH_HIGHLIGHT_STYLES[reserved-word]='fg=#cba6f7'
+  ZSH_HIGHLIGHT_STYLES[alias]='fg=#a6e3a1'
+  ZSH_HIGHLIGHT_STYLES[builtin]='fg=#a6e3a1'
+  ZSH_HIGHLIGHT_STYLES[function]='fg=#a6e3a1'
+  ZSH_HIGHLIGHT_STYLES[command]='fg=#a6e3a1'
+  ZSH_HIGHLIGHT_STYLES[precommand]='fg=#a6e3a1,italic'
+  ZSH_HIGHLIGHT_STYLES[path]='fg=#cdd6f4,underline'
+  ZSH_HIGHLIGHT_STYLES[globbing]='fg=#89b4fa'
+  ZSH_HIGHLIGHT_STYLES[single-quoted-argument]='fg=#f9e2af'
+  ZSH_HIGHLIGHT_STYLES[double-quoted-argument]='fg=#f9e2af'
+  ZSH_HIGHLIGHT_STYLES[comment]='fg=#6c7086,italic'
+  ZSH_HIGHLIGHT_STYLES[bracket-error]='fg=#f38ba8'
+
+  source "$_zsh_hl"
+fi
+unset _zsh_hl _share
