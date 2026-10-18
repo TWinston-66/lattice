@@ -139,6 +139,16 @@ in
   lattice.cli.commands.send = lib.mkIf tailnet.enable {
     exec = lib.getExe send;
     args = "[file...] [--to device]";
+    complete = [ "--to" ];
+    completeFiles = true;
+    completeAfter = {
+      "--to".from =
+        "${lib.getExe tailnet.package} file cp --targets | ${lib.getExe pkgs.gawk} '{ print $2 }'";
+      "*" = {
+        words = [ "--to" ];
+        files = true;
+      };
+    };
     summary = "Send files to a device on the tailnet with Taildrop";
     group = "session";
     launch = [
