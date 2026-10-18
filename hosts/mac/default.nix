@@ -119,30 +119,20 @@ _: {
   # Workspaces 6-10 live on the Samsung, as 1-5 live on the panel (the config's own rule), so
   # SUPER+[6-9,0] always means the desk screen.
   #
-  # Booting undocked needs nothing extra: Hyprland skips a persistent workspace whose pinned
-  # monitor is absent, so starting up with the dock unplugged leaves only 1-5. A workspace
-  # still holding windows when the monitor goes away is moved to the panel rather than
-  # destroyed, and the id returns to the Samsung on the next reconnect once it is empty.
-  #
-  # A monitor that goes away *while running* is the one case that doesn't settle on its own:
-  # by then 6-10 are live workspace objects, so they are rehomed to the panel and kept alive
-  # by their own `persistent`, leaving ten pills on a bar with room for five. Reloading re-runs
-  # the load-time pass, which drops the empty orphans, so undocking is just a reload. There is
-  # no reload dispatcher to hl.dispatch, hence hyprctl; spawning it is what makes this land
-  # after the rehoming rather than in the middle of it.
+  # Unlike 1-5 they are not persistent: one exists only while it is in use or on screen, and
+  # an empty one is closed as soon as focus leaves it. So the Samsung's bar shows only the
+  # workspaces it is actually using, and undocked, a 6-10 reached from the panel is created
+  # there and disappears once emptied rather than lingering as an extra pill. A workspace
+  # still holding windows when the monitor goes away is moved to the panel, and closes the
+  # same way once it is emptied.
   lattice.hyprland.extraConfig = ''
     for i = 6, 10 do
         hl.workspace_rule({
-            workspace  = tostring(i),
-            monitor    = "desc:Samsung Electric Company U32R59x",
-            persistent = true,
-            default    = i == 6,
+            workspace = tostring(i),
+            monitor   = "desc:Samsung Electric Company U32R59x",
+            default   = i == 6,
         })
     end
-
-    hl.on("monitor.removed", function()
-        hl.exec_cmd("hyprctl reload")
-    end)
   '';
 
   # Notification banners follow the Samsung when it is there and stay on the panel when it

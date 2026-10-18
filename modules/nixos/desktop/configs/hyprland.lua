@@ -254,8 +254,8 @@ hl.workspace_rule({ workspace = "f[1]",   gaps_out = 5, gaps_in = 0 })
 --
 -- Five per screen and not ten: each pill is ~32px and the bar only has room before the
 -- centred clock. waybar leaves all-outputs at its default false, so each bar renders only
--- the workspaces of the output it is on: five pills on the laptop, and five on an external
--- monitor that pins 6-10 to itself the same way.
+-- the workspaces of the output it is on: five pills on the laptop. An external monitor pins
+-- 6-10 to itself without persistence, so its bar shows only the ones in use.
 --
 -- Pinning with `monitor` is what makes SUPER+[1-9,0] mean a place rather than just a
 -- number. Unpinned, workspace ids are a single global pool owned by whichever monitor
