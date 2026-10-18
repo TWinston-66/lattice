@@ -368,6 +368,7 @@ in
   lattice.cli.commands.radio = {
     exec = lib.getExe radio;
     args = "[play [<channel>]|toggle|stop|menu|channels]";
+    completeAfter.play.from = "${lib.getExe radio} channels";
     summary = "SomaFM: play a channel, pause, stop";
     group = "session";
   };

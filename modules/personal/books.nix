@@ -600,6 +600,10 @@ in
     lattice.cli.commands.books = {
       exec = lib.getExe books;
       args = "<add [--force] <file>...|kindle|clean|eject|stats|library>";
+      completeAfter.add = {
+        words = [ "--force" ];
+        files = true;
+      };
       summary = "Books: add to Audiobookshelf, sync and eject the Kindle";
       details = ''
         add      put EPUBs or PDFs into Audiobookshelf; the Kindle sees them over OPDS

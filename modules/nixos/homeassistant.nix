@@ -206,6 +206,9 @@ in
         "call"
         "entities"
       ];
+      completeAfter = lib.genAttrs [ "state" "toggle" "on" "off" "activate" ] (_: {
+        from = "${lib.getExe ha} entities";
+      });
       summary = "Home Assistant: devices, scenes and services";
       details = ''
         state <entity>               on, off, or unknown if the house cannot be reached

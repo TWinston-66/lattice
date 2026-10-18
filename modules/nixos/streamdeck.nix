@@ -1443,6 +1443,7 @@ in
           "arm"
           "rebuild"
         ];
+        completeAfter.sync.words = [ "--wait" ];
         summary = "Drive the Stream Deck and repaint its keys";
         details = ''
           sync [--wait] [reading...]   repaint the live keys; everything, by default

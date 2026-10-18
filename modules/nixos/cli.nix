@@ -31,6 +31,84 @@ let
     }
   ];
 
+  # What zsh offers at one spot in a command line.
+  completer = types.submodule {
+    options = {
+      words = lib.mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+      };
+      from = lib.mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "As `completeFrom`.";
+      };
+      files = lib.mkOption {
+        type = types.bool;
+        default = false;
+      };
+    };
+  };
+
+  # The plain first word of each choice in the outermost `[a|b c|<d>]` groups of a
+  # synopsis, so `<add [--force] <file>...|kindle>` gives add and kindle. Nested groups are
+  # what follows a choice, not choices of their own, so they are skipped over by depth.
+  alternatives =
+    args:
+    let
+      open = c: c == "[" || c == "<";
+      close = c: c == "]" || c == ">";
+      step =
+        s: c:
+        if s.depth == 0 then
+          if open c then
+            s
+            // {
+              depth = 1;
+              alt = "";
+              alts = [ ];
+            }
+          else
+            s
+        else if s.depth == 1 && close c then
+          s
+          // {
+            depth = 0;
+            groups = s.groups ++ [ (s.alts ++ [ s.alt ]) ];
+          }
+        else if s.depth == 1 && c == "|" then
+          s
+          // {
+            alts = s.alts ++ [ s.alt ];
+            alt = "";
+          }
+        else
+          s
+          // {
+            depth =
+              s.depth
+              + (
+                if open c then
+                  1
+                else if close c then
+                  -1
+                else
+                  0
+              );
+            alt = s.alt + c;
+          };
+      parsed = lib.foldl' step {
+        depth = 0;
+        groups = [ ];
+      } (lib.stringToCharacters args);
+      firstWord = alt: lib.head (lib.splitString " " (lib.trim alt));
+    in
+    lib.unique (
+      lib.filter (w: builtins.match "-{0,2}[a-z0-9][a-z0-9-]*" w != null) (
+        map firstWord (lib.concatMap (g: lib.optionals (lib.length g > 1) g) parsed.groups)
+      )
+    );
+
   command = types.submodule (
     { name, config, ... }:
     {
@@ -63,17 +141,33 @@ let
         };
         complete = lib.mkOption {
           type = types.listOf types.str;
-          default = lib.unique (
-            lib.concatMap
-              (group: lib.filter (w: builtins.match "[a-z0-9-]+" w != null) (lib.splitString "|" group))
-              (
-                lib.concatMap (m: if builtins.isList m then m else [ ]) (
-                  builtins.split "[[<]([^]>]*\\|[^]>]*)[]>]" config.args
-                )
-              )
-          );
-          defaultText = lib.literalMD "every plain word in an `a|b|c` alternation in `args`";
+          default = alternatives config.args;
+          defaultText = lib.literalMD "the first word of each choice in the outermost `a|b|c` groups of `args`";
           description = "Words zsh offers after the route.";
+        };
+        completeFrom = lib.mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "ls /etc/hosts";
+          description = ''
+            A command whose output zsh offers after the route too, run at each Tab: one
+            candidate per line, optionally followed by whitespace and a description.
+          '';
+        };
+        completeFiles = lib.mkOption {
+          type = types.bool;
+          default = false;
+          description = "Offer file names after the route too.";
+        };
+        completeAfter = lib.mkOption {
+          type = types.attrsOf completer;
+          default = { };
+          example = lib.literalExpression ''{ add = { words = [ "--force" ]; files = true; }; }'';
+          description = ''
+            What zsh offers further along, keyed by an earlier word. A verb (`add`) applies
+            to every word after it; a flag (`--to`) only to the one right after it, its
+            value. `"*"` applies anywhere past the first word that nothing else claims.
+          '';
         };
         group = lib.mkOption {
           type = types.enum (map (g: g.id) groups);
@@ -311,7 +405,8 @@ let
     '';
   };
 
-  # zsh: the first word from every route head, then the head's verbs and second words.
+  # zsh: the first word from every route head, then the head's verbs and second words, then
+  # whatever each route's own arguments take.
   zq = s: lib.replaceStrings [ "'" ":" ] [ "'\\''" "\\:" ] s;
   headSummary =
     h:
@@ -319,10 +414,72 @@ let
       commands.${h}.summary
     else
       lib.concatMapStringsSep ", " (r: lib.last (words r)) (under h);
+  # One completer as zsh, empty when it offers nothing.
+  offer =
+    c:
+    lib.concatStringsSep "\n" (
+      lib.optional (c.words != [ ]) "compadd -- ${lib.escapeShellArgs c.words}"
+      ++ lib.optional (c.from != null) "_lattice_from ${lib.escapeShellArg c.from}"
+      ++ lib.optional c.files "_files"
+    );
+  firstOffer =
+    r:
+    offer {
+      words = commands.${r}.complete;
+      from = commands.${r}.completeFrom;
+      files = commands.${r}.completeFiles;
+    };
+  # A route's arguments, the first of which is word $n of the line.
+  argsOf =
+    r:
+    let
+      after = commands.${r}.completeAfter;
+      keys = lib.attrNames after;
+      flags = lib.filter (lib.hasPrefix "-") keys;
+      verbs = lib.filter (k: !(lib.hasPrefix "-" k) && k != "*") keys;
+      branches =
+        subject: ks:
+        lib.optionalString (ks != [ ]) ''
+          case "${subject}" in
+          ${lib.concatMapStrings (k: ''
+            ${lib.escapeShellArg k})
+            ${offer after.${k}}
+              return 0
+              ;;
+          '') ks}
+          esac
+        '';
+    in
+    ''
+      if (( CURRENT == n )); then
+      ${firstOffer r}
+        return 0
+      fi
+      ${branches "\${words[CURRENT-1]}" flags}
+      ${branches "\${words[n]}" verbs}
+      ${lib.optionalString (after ? "*") (offer after."*")}
+      return 0
+    '';
   completion = pkgs.writeTextDir "share/zsh/site-functions/_lattice" ''
     #compdef lattice
 
-    local -a described plain
+    local -a described
+    local n
+
+    # A command's `word  description` lines, for completeFrom. Bounded, since some of them
+    # ask another machine.
+    (( $+functions[_lattice_from] )) || _lattice_from() {
+      local line w d
+      local -a found
+      for line in "''${(@f)$(${pkgs.coreutils}/bin/timeout 5 ${pkgs.runtimeShell} -c "$1" 2>/dev/null)}"; do
+        w=''${line%%[[:space:]]*}
+        [[ -n $w ]] || continue
+        d=''${''${line#"$w"}##[[:space:]]#}
+        found+=("''${w//:/\\:}''${d:+:$d}")
+      done
+      (( $#found )) && _describe -t values value found
+    }
+
     if (( CURRENT == 2 )); then
       described=(
     ${
@@ -335,19 +492,8 @@ let
       return
     fi
 
-    if (( CURRENT == 4 )); then
-      case "''${words[2]} ''${words[3]}" in
-    ${
-      lib.concatMapStrings (r: ''
-        "${r}") plain=(${lib.escapeShellArgs commands.${r}.complete}) ;;
-      '') (shown pairs)
-    }  esac
-      (( $#plain )) && compadd -a plain
-      return
-    fi
-
-    (( CURRENT == 3 )) || return
-    case "''${words[2]}" in
+    if (( CURRENT == 3 )); then
+      case "''${words[2]}" in
     ${
       lib.concatMapStrings (
         h:
@@ -359,14 +505,35 @@ let
             described=(${
               lib.concatMapStringsSep " " (r: "'${lib.last (words r)}:${zq commands.${r}.summary}'") subs
             })
-            plain=(${lib.escapeShellArgs (commands.${h}.complete or [ ])})
+          ${lib.optionalString (commands ? ${h}) (firstOffer h)}
             ;;
         ''
       ) (lib.unique (map head (shown routes)))
-    }  commands) plain=(--all --json) ;;
-    esac
-    (( $#described )) && _describe -t subcommands 'subcommand' described
-    (( $#plain )) && compadd -a plain
+    }  commands) compadd -- --all --json ;;
+      esac
+      (( $#described )) && _describe -t subcommands 'subcommand' described
+      return 0
+    fi
+
+    case "''${words[2]} ''${words[3]}" in
+    ${
+      lib.concatMapStrings (r: ''
+        "${r}")
+          n=4
+        ${argsOf r}
+          ;;
+      '') (shown pairs)
+    }esac
+
+    case "''${words[2]}" in
+    ${
+      lib.concatMapStrings (r: ''
+        ${r})
+          n=3
+        ${argsOf r}
+          ;;
+      '') (shown singles)
+    }esac
     return 0
   '';
 
@@ -407,6 +574,11 @@ let
       trial="running a trial build (lattice rebuild --test); a reboot goes back to the boot default"
     fi
   '';
+
+  # For completing the repo commands: what there is to name right now.
+  hosts = "ls ${lib.escapeShellArg "${flake}/hosts"}";
+  inputs = "${lib.getExe pkgs.jq} -r '.nodes.root.inputs | keys[]' ${lib.escapeShellArg "${flake}/flake.lock"}";
+  generations = "ls -dv /nix/var/nix/profiles/system-*-link";
 in
 {
   options.lattice.cli.commands = lib.mkOption {
@@ -451,6 +623,14 @@ in
           --build  build only, and list what a switch would change; no sudo, nothing activated
           --test   switch until the next reboot, which goes back to the boot default
         '';
+        completeFrom = hosts;
+        completeAfter."*" = {
+          words = [
+            "--build"
+            "--test"
+          ];
+          from = hosts;
+        };
         group = "system";
         launch = [
           {
@@ -463,12 +643,16 @@ in
       cache = {
         exec = "${flake}/scripts/cache.sh";
         args = "[old-system new-system]";
+        completeFrom = generations;
+        completeAfter."*".from = generations;
         summary = "Where the last switch's new store paths came from: which cache, or built here";
         group = "system";
       };
       update = {
         exec = "${flake}/scripts/update.sh";
         args = "[input...]";
+        completeFrom = inputs;
+        completeAfter."*".from = inputs;
         summary = "Move flake.lock forward, then offer a rebuild";
         group = "system";
         launch = [
@@ -501,6 +685,7 @@ in
       "secrets password" = {
         exec = "${flake}/scripts/set-password.sh";
         args = "[user]";
+        complete = lib.attrNames (lib.filterAttrs (_: u: u.isNormalUser) config.users.users);
         summary = "Set a login password in the secrets";
         group = "system";
       };

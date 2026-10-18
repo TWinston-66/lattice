@@ -14,13 +14,13 @@
   "sections": [
    {"id": "hypr-mouse", "title": "Mouse and trackpad", "blurb": "The MX Master's buttons (Solaar rules) and trackpad gestures.", "from": ["mouse"], "match": ""},
    {"id": "hypr-session", "title": "Screen and session", "blurb": "Lock, capture and power.", "match": "lock|screenshot|power"},
-   {"id": "hypr-apps", "title": "Apps and menus", "blurb": "Launchers and the pickers on top of them.", "match": "terminal|browser|file manager|launcher|calculator|clipboard|cheatsheet"},
+   {"id": "hypr-apps", "title": "Apps and menus", "blurb": "Launchers and the pickers on top of them.", "match": "terminal|browser|file manager|mail|calendar|tasks|launcher|calculator|clipboard|cheatsheet"},
    {"id": "hypr-notify", "title": "Notifications", "blurb": "mako, the notification pills at the top right.", "match": "notification|disturb"},
    {"id": "hypr-media", "title": "Sound, light and media", "blurb": "The function-row keys. Shift moves them from the speakers to the microphone.", "match": "volume|mute|bright|backlight|track|play"},
    {"id": "hypr-workspaces", "title": "Workspaces and monitors", "blurb": "Numbered desktops, the scratchpad and moving between screens.", "match": "workspace|scratchpad|monitor"},
    {"id": "hypr-windows", "title": "Windows", "blurb": "Windows tile on their own. These move, float, resize and close them.", "match": "window|focus|float|tile|split|fullscreen|resize"},
    {"id": "hypr-other", "title": "Everything else", "blurb": "", "match": ""}
   ],
-  "ess": ["SUPER + T", "ALT + Space", "SUPER + C", "SUPER + Arrows", "SUPER + SHIFT + Arrows", "SUPER + 0-9", "SUPER + SHIFT + 0-9", "SUPER + F", "SUPER + V", "SUPER + R", "SUPER + L", "SUPER + /", "SUPER + S", "Print", "3-finger swipe"]
+  "ess": ["SUPER + T", "ALT + Space", "SUPER + C", "SUPER + Arrows", "SUPER + SHIFT + Arrows", "SUPER + 0-9", "SUPER + SHIFT + 0-9", "SUPER + F", "SUPER + V", "SUPER + SHIFT + R", "SUPER + L", "SUPER + /", "SUPER + S", "Print", "3-finger swipe"]
  }
 }

@@ -256,8 +256,8 @@ hl.workspace_rule({ workspace = "f[1]",   gaps_out = 5, gaps_in = 0 })
 --
 -- Five per screen and not ten: each pill is ~32px and the bar only has room before the
 -- centred clock. waybar leaves all-outputs at its default false, so each bar renders only
--- the workspaces of the output it is on: five pills on the laptop, and five on an external
--- monitor that pins 6-10 to itself the same way.
+-- the workspaces of the output it is on: five pills on the laptop. An external monitor pins
+-- 6-10 to itself without persistence, so its bar shows only the ones in use.
 --
 -- Pinning with `monitor` is what makes SUPER+[1-9,0] mean a place rather than just a
 -- number. Unpinned, workspace ids are a single global pool owned by whichever monitor
@@ -397,6 +397,11 @@ hl.bind("ALT + SPACE", hl.dsp.exec_cmd(menu), { description = "App launcher" })
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo(), { description = "Pseudotile window" })
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"), { description = "Toggle split direction" })    -- dwindle only
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd(browser), { description = "Browser" })
+-- Thunderbird, straight onto a space: lattice-thunderbird in modules/nixos/desktop/mozilla.nix,
+-- which starts it in its own scope the way `app` does when it isn't running yet.
+hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("lattice-thunderbird mail"),     { description = "Mail" })
+hl.bind(mainMod .. " + K", hl.dsp.exec_cmd("lattice-thunderbird calendar"), { description = "Calendar" })
+hl.bind(mainMod .. " + R", hl.dsp.exec_cmd("lattice-thunderbird tasks"),    { description = "Tasks" })
 hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("cliphist list | rofi -dmenu -p clipboard -display-columns 2 | cliphist decode | wl-copy"), { description = "Clipboard history" })
 
 -- Every described bind in one picker: these binds' descriptions, the tmux notes, nvim's
@@ -504,7 +509,7 @@ hl.bind("mouse:274", hl.dsp.no_op())
 -- Fullscreen the focused window
 hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen({ action = "toggle" }), { description = "Toggle fullscreen" })
 
--- Keyboard resize: hold mainMod+R to enter, arrows to resize in steps, Escape/Enter to exit
+-- Keyboard resize: mainMod+SHIFT+R to enter, arrows to resize in steps, Escape/Enter to exit
 -- ("" is the root/default submap - there is no submap literally named "default")
 -- Note: -1 does NOT mean "persistent" for notify's duration (unlike its icon arg) -
 -- it underflows and the notification vanishes almost instantly. Use a long explicit
@@ -522,8 +527,8 @@ hl.define_submap("resize", function()
     hl.bind("return", hl.dsp.exec_cmd("hyprctl dismissnotify"), { description = "Leave resize mode" })
     hl.bind("return", hl.dsp.submap(""), { description = "Leave resize mode" })
 end)
-hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(resizeModeNotify), { description = "Resize mode" })
-hl.bind(mainMod .. " + R", hl.dsp.submap("resize"), { description = "Resize mode" })
+hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd(resizeModeNotify), { description = "Resize mode" })
+hl.bind(mainMod .. " + SHIFT + R", hl.dsp.submap("resize"), { description = "Resize mode" })
 
 -- Laptop multimedia keys for volume and LCD brightness, shown with swayosd
 --
