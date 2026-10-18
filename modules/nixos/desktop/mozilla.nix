@@ -57,6 +57,67 @@ let
     }
   '';
 
+  # Thunderbird on a given space, for the SUPER + M / K / R binds in hyprland.lua. Mail and
+  # calendar have command-line flags, which a running Thunderbird takes over its remote
+  # rather than starting a second copy -- but the remote only switches the tab and leaves
+  # focus where it was, hence the focus at the end. Tasks has no flag, so it goes through
+  # the space's own shortcut, Ctrl+4 on Linux (space-tasks in ShortcutsManager.sys.mjs),
+  # sent straight to the window by Hyprland so it lands without focus. On a cold start the
+  # window shows before the shortcut handler is listening, so it is resent until the title
+  # says Tasks -- a repeat on the Tasks space is a no-op.
+  thunderbirdSpace = pkgs.writeShellApplication {
+    name = "lattice-thunderbird";
+    runtimeInputs = [
+      config.programs.thunderbird.package
+      config.programs.uwsm.package
+      pkgs.hyprland
+      pkgs.jq
+      pkgs.coreutils
+    ];
+    text = ''
+      space=''${1:-mail}
+      case $space in
+        mail | calendar) flag=-$space ;;
+        # Any space's flag gets the window up; Ctrl+4 below does the rest.
+        tasks) flag=-calendar ;;
+        *)
+          echo "usage: lattice-thunderbird [mail|calendar|tasks]" >&2
+          exit 2
+          ;;
+      esac
+
+      # The main window, as "<address> <title>". Not just the first thunderbird client: at
+      # startup the default-client check opens a floating "System Integration" dialog under
+      # the same class, and a shortcut or focus sent there goes nowhere useful.
+      main() {
+        hyprctl clients -j | jq -r 'first(.[] | select(.class == "thunderbird" and (.floating | not)
+          and (.title | endswith(" - Mozilla Thunderbird"))) | "\(.address) \(.title)") // empty'
+      }
+
+      # Backgrounded: on a cold start this is Thunderbird itself and does not return. Tasks
+      # skips it when the window is already up, or the -calendar could land after Ctrl+4.
+      if [[ $space != tasks || -z $(main) ]]; then
+        uwsm app -- thunderbird "$flag" &
+      fi
+
+      win=
+      for _ in $(seq 40); do
+        read -r win title <<<"$(main)" || true
+        if [[ -n $win && ( $space != tasks || $title == Tasks* ) ]]; then
+          break
+        fi
+        if [[ -n $win ]]; then
+          hyprctl dispatch "hl.dsp.send_shortcut({ mods = \"CTRL\", key = \"4\", window = \"address:$win\" })" >/dev/null
+        fi
+        sleep 0.5
+      done
+
+      if [[ -n $win ]]; then
+        hyprctl dispatch "hl.dsp.focus({ window = \"address:$win\" })" >/dev/null
+      fi
+    '';
+  };
+
   # Profile directory names are random per profile, so rather than naming one, every
   # profile in each app's profiles.ini gets the stylesheet. A userChrome.css of the user's
   # own -- anything but a link into the store -- is left alone.
@@ -138,6 +199,8 @@ in
       pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
     '';
   };
+
+  environment.systemPackages = [ thunderbirdSpace ];
 
   # At every login, so a rebuild's new stylesheet lands, and whenever either app writes its
   # profiles.ini, which is how a first launch or a new profile shows up. The apps read

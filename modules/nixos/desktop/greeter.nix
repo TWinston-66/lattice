@@ -139,10 +139,13 @@ let
     # panel. `yes` ignores the scale and reads the output's millimetres, which appledrm does
     # report for both outputs even though it publishes no EDID for either.
     #
-    # 7pt is the undocked size, i.e. the panel's. greeterSession overrides it when the greeter
+    # 2026-10-15: 7pt read too small on the panel in practice, so the panel is 9pt now -- the
+    # parity figure above is the floor, not the target.
+    #
+    # 9pt is the undocked size, i.e. the panel's. greeterSession overrides it when the greeter
     # is going to land on an external screen instead, because equal inches is the wrong target
     # across a desk -- see there.
-    font=${theme.fonts.monospace}:size=7
+    font=${theme.fonts.monospace}:size=9
     dpi-aware=yes
 
     # cage maximises its one client and asks it not to draw decorations, so padding is all
@@ -189,7 +192,7 @@ let
       pkgs.tuigreet
     ];
     text = ''
-      size=7
+      size=9
       for status in /sys/class/drm/card*-*/status; do
         case "$status" in *-eDP-*) continue ;; esac
         if [ "$(cat "$status")" = connected ]; then

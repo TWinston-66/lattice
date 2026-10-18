@@ -111,6 +111,10 @@ let
   #
   #   systemctl --user stop streamdeck && streamdeck
   #
+  # Whether any Elgato device is on the USB bus right now; an ExecCondition for the units that
+  # have nothing to do without one.
+  deckPresent = "${pkgs.bash}/bin/bash -c '${pkgs.gnugrep}/bin/grep -qx 0fd9 /sys/bus/usb/devices/*/idVendor'";
+
   streamdeckUi = pkgs.streamdeck-ui.overrideAttrs (old: {
     postPatch = (old.postPatch or "") + ''
       substituteInPlace streamdeck_ui/gui.py \
@@ -1439,6 +1443,7 @@ in
           "arm"
           "rebuild"
         ];
+        completeAfter.sync.words = [ "--wait" ];
         summary = "Drive the Stream Deck and repaint its keys";
         details = ''
           sync [--wait] [reading...]   repaint the live keys; everything, by default
@@ -1464,6 +1469,24 @@ in
       # same trap the other way round.
       services.udev.packages = [ streamdeckUi ];
 
+      # The daemon runs only while a deck is plugged in. With none attached it still wakes
+      # twice a second for its signal timer and re-enumerates every HID device in a loop, all
+      # day on a laptop that only sees the deck at the desk. Plugging one in starts it and
+      # unplugging stops it, through the user manager's own bus (the --machine bridge in
+      # desktop/notifications.nix). PRODUCT rather than idVendor because a remove event no
+      # longer has the sysfs attributes to match on. A deck reset by a suspend comes back as a
+      # remove and an add, which is the same restart after_sleep_cmd asks for anyway.
+      services.udev.extraRules =
+        let
+          systemctl =
+            verb:
+            "${pkgs.systemd}/bin/systemctl --no-block --user --machine=${config.lattice.user.name}@.host ${verb} streamdeck.service";
+        in
+        ''
+          SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{PRODUCT}=="fd9/*", ACTION=="add", RUN+="${systemctl "start"}"
+          SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{PRODUCT}=="fd9/*", ACTION=="remove", RUN+="${systemctl "stop"}"
+        '';
+
       systemd.user.services = {
         streamdeck = {
           description = "Elgato Stream Deck";
@@ -1471,6 +1494,8 @@ in
           partOf = [ "graphical-session.target" ];
           after = [ "graphical-session.target" ];
           wantedBy = [ "graphical-session.target" ];
+          # A plug-in before login, or after logout, has no session to start into.
+          requisite = [ "graphical-session.target" ];
           onFailure = [ "lattice-notify-failure@%n.service" ];
 
           path = sessionPath;
@@ -1484,6 +1509,10 @@ in
           serviceConfig = {
             Type = "simple";
             StateDirectory = "lattice";
+            # No deck, no daemon: skipped rather than failed, so neither a login away from the
+            # desk nor after_sleep_cmd's restart raises anything. The udev rules above start
+            # it when one arrives.
+            ExecCondition = deckPresent;
             ExecStartPre = lib.getExe seed;
             # -n: no window. With the tray icon patched out above there is no way to raise one
             # either, which is the intended state -- see the note on streamdeckUi.
@@ -1512,6 +1541,9 @@ in
 
           serviceConfig = {
             Type = "oneshot";
+            # The timer below keeps firing with the deck unplugged, and --wait would sit out
+            # its 20s for a daemon that is not coming.
+            ExecCondition = deckPresent;
             ExecStart = "${lib.getExe deck} sync --wait";
           };
         };

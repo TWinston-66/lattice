@@ -66,6 +66,9 @@ _: {
     position = "0x0";
   };
 
+  # Blur, shadows and animations off on battery, alongside the 60Hz above.
+  lattice.display.effectsOnBattery = false;
+
   # The Samsung on the desk. Its scale is set by eye, and the first attempt at setting it by
   # arithmetic is worth recording as a dead end. Matching the panel above on *logical dpi* -- 3840x2160 across 700x390mm is
   # 139 dpi native, so scale 1.25 lands 3072x1728 at 111 dpi against the panel's 113 -- is
@@ -116,27 +119,32 @@ _: {
   # Workspaces 6-10 live on the Samsung, as 1-5 live on the panel (the config's own rule), so
   # SUPER+[6-9,0] always means the desk screen.
   #
-  # Booting undocked needs nothing extra: Hyprland skips a persistent workspace whose pinned
-  # monitor is absent, so starting up with the dock unplugged leaves only 1-5. A workspace
-  # still holding windows when the monitor goes away is moved to the panel rather than
-  # destroyed, and the id returns to the Samsung on the next reconnect once it is empty.
+  # Persistent only while the Samsung is plugged in: docked, its bar always shows 6-10 like
+  # the panel's 1-5; undocked, the panel's bar stops at 5, and a 6-10 reached from the panel
+  # is created there and closes once it is empty and focus leaves it. A workspace still
+  # holding windows when the monitor goes away is moved to the panel and closes the same way.
   #
-  # A monitor that goes away *while running* is the one case that doesn't settle on its own:
-  # by then 6-10 are live workspace objects, so they are rehomed to the panel and kept alive
-  # by their own `persistent`, leaving ten pills on a bar with room for five. Reloading re-runs
-  # the load-time pass, which drops the empty orphans, so undocking is just a reload. There is
-  # no reload dispatcher to hl.dispatch, hence hyprctl; spawning it is what makes this land
-  # after the rehoming rather than in the middle of it.
+  # `persistent` is read when the config loads, so the check has to be re-run whenever the
+  # set of monitors changes: a reload on every add and remove. That covers login too, where
+  # the config loads before any output exists and the Samsung's arrival is what flips it on.
+  # There is no reload dispatcher to hl.dispatch, hence hyprctl; spawning it is what makes it
+  # land after Hyprland has finished adding or rehoming rather than in the middle of it.
   lattice.hyprland.extraConfig = ''
+    local samsung = "desc:Samsung Electric Company U32R59x"
+    local docked = hl.get_monitor(samsung) ~= nil
+
     for i = 6, 10 do
         hl.workspace_rule({
             workspace  = tostring(i),
-            monitor    = "desc:Samsung Electric Company U32R59x",
-            persistent = true,
+            monitor    = samsung,
+            persistent = docked,
             default    = i == 6,
         })
     end
 
+    hl.on("monitor.added", function()
+        hl.exec_cmd("hyprctl reload")
+    end)
     hl.on("monitor.removed", function()
         hl.exec_cmd("hyprctl reload")
     end)

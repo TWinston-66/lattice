@@ -36,6 +36,10 @@ let
   rulesFor = outputs: lib.concatMapStrings (output: rule output cfg.monitors.${output}) outputs;
   hasBatteryModes = partitioned.wrong != [ ];
 
+  # Anything that has to be re-evaluated when the charger comes or goes: a battery mode, or
+  # effects that switch off on battery.
+  batteryAware = hasBatteryModes || !cfg.effectsOnBattery;
+
   # On battery means at least one Mains supply exists and none of them is online, so a
   # machine with no Mains supply at all (a desktop) never counts as on battery. Read through
   # a shell because Lua has no directory listing; it runs once per evaluation, not per frame.
@@ -54,7 +58,21 @@ let
         p:close()
         return states:find("0") ~= nil and states:find("1") == nil
     end
-    ${rulesFor partitioned.wrong}'';
+    ${rulesFor partitioned.wrong}''
+  + lib.optionalString (!cfg.effectsOnBattery) ''
+
+    -- Blur, shadows and animations off on battery (lattice.display.effectsOnBattery). Set
+    -- back to on at the charger, so a local.lua that turns one of them off for good loses
+    -- that on the next plug-in until it is reloaded.
+    local latticeEffects = not latticeOnBattery()
+    hl.config({
+        decoration = {
+            blur   = { enabled = latticeEffects },
+            shadow = { enabled = latticeEffects },
+        },
+        animations = { enabled = latticeEffects },
+    })
+  '';
 
   # Re-applies the battery-aware rules when the charger state changes. upower --monitor is
   # the event source because it subscribes to signals the ordinary way; busctl and
@@ -281,6 +299,18 @@ in
     '';
   };
 
+  options.lattice.display.effectsOnBattery = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    example = false;
+    description = ''
+      Whether Hyprland keeps its blur, shadows and animations on battery. false turns all
+      three off while unplugged and back on at the charger, through the same
+      lattice-battery-modes service that switches monitor modes. Blur is the costly one: it
+      is recomputed every time anything under a blurred surface changes.
+    '';
+  };
+
   options.lattice.display.barScale = lib.mkOption {
     type = lib.types.numbers.between 0.5 1.5;
     default = 1.0;
@@ -317,21 +347,21 @@ in
 
     # Into /etc/xdg/hypr/lattice.lua (desktop/hyprland.nix), ahead of the host's other Lua,
     # so a workspace rule there can name a monitor these have already set up.
-    (lib.mkIf (cfg.monitors != { }) {
+    (lib.mkIf (cfg.monitors != { } || batteryAware) {
       lattice.hyprland.extraConfig = lib.mkBefore (
         rulesFor partitioned.right
-        + lib.optionalString hasBatteryModes ''
+        + lib.optionalString batteryAware ''
 
           dofile("/etc/xdg/hypr/lattice-battery.lua")
         ''
       );
     })
 
-    (lib.mkIf hasBatteryModes {
+    (lib.mkIf batteryAware {
       environment.etc."xdg/hypr/lattice-battery.lua".text = batteryRules;
 
       systemd.user.services.lattice-battery-modes = {
-        description = "Switch battery-aware monitor modes on charger changes";
+        description = "Switch battery-aware monitor modes and effects on charger changes";
         partOf = [ "graphical-session.target" ];
         after = [ "graphical-session.target" ];
         wantedBy = [ "graphical-session.target" ];

@@ -427,6 +427,20 @@ let
           org.freedesktop.login1.Manager LidClosed 2>/dev/null)" = "b true" ]
       }
 
+      # The same test as the Hyprland battery rules (modules/nixos/display.nix): at least
+      # one Mains supply, and none of them online.
+      onBattery() {
+        local d type online seen=0
+        for d in /sys/class/power_supply/*; do
+          read -r type < "$d/type" 2>/dev/null || continue
+          [ "$type" = Mains ] || continue
+          seen=1
+          read -r online < "$d/online" 2>/dev/null || continue
+          [ "$online" = 1 ] && return 1
+        done
+        [ "$seen" = 1 ]
+      }
+
       percentFor() {
         local lux=$1 prevLux="" prevPct="" point l p
         for point in $curve; do
@@ -510,6 +524,11 @@ let
   # Nothing is written with the lid shut or the built-in panel powered off by DPMS: the
   # sensor reads near 0 under a closed lid, and there is no reason to poke a panel that is
   # off.
+  #
+  # On battery the whole curve is scaled down by `batteryScale`. The backlight is the biggest
+  # single draw on an idle laptop, and scaling rather than subtracting keeps the dark end of
+  # the curve usable. The charger is checked on every poll, so an unplug moves the panel
+  # within one, the same way a change in the room would.
   screenBacklightAuto = pkgs.writeShellApplication {
     name = "lattice-screen-backlight-auto";
     runtimeInputs = [
@@ -522,6 +541,7 @@ let
       # lux:percent, ascending. Below the first point the first level holds, above the last
       # the last.
       curve="0:15 10:25 30:35 100:55 300:75 1000:100"
+      batteryScale=85
       step=5
       poll=5
 
@@ -552,6 +572,20 @@ let
       panelOff() {
         hyprctl -j monitors 2>/dev/null \
           | jq -e 'any(.[]; (.name | startswith("eDP")) and (.dpmsStatus | not))' >/dev/null
+      }
+
+      # The same test as the Hyprland battery rules (modules/nixos/display.nix): at least
+      # one Mains supply, and none of them online.
+      onBattery() {
+        local d type online seen=0
+        for d in /sys/class/power_supply/*; do
+          read -r type < "$d/type" 2>/dev/null || continue
+          [ "$type" = Mains ] || continue
+          seen=1
+          read -r online < "$d/online" 2>/dev/null || continue
+          [ "$online" = 1 ] && return 1
+        done
+        [ "$seen" = 1 ]
       }
 
       percentFor() {
@@ -608,6 +642,9 @@ let
 
         if [ "$paused" = 0 ]; then
           percent=$(percentFor "$lux")
+          if onBattery; then
+            percent=$(( percent * batteryScale / 100 ))
+          fi
           have=$(( current * 100 / max ))
           diff=$(( percent > have ? percent - have : have - percent ))
           if [ "$diff" -ge "$step" ] && ! lidClosed && ! panelOff; then
@@ -620,6 +657,41 @@ let
       done
     '';
   };
+  # Radios to switch off for the length of a suspend, as an experiment in what keeps the
+  # Mac's s2idle at ~2.75 W. Read at every sleep from a file the user can write, so a night
+  # with Bluetooth off and a night with Wi-Fi off need no rebuild in between; `lattice
+  # sleep-radios` sets it, and lattice-sleep-drain tags each figure with what was off.
+  #
+  # Wi-Fi rather than `tailscale down`: with an exit node, taking tailscale down leaves every
+  # app that wakes before it is back up talking straight to the network. With the radio off
+  # nothing gets out at all, and tailscale's routes are still there when it reconnects.
+  sleepRadiosFile = "/var/lib/lattice/sleep-radios";
+  sleepRadiosState = "/run/lattice-sleep-radios";
+
+  sleepRadios = pkgs.writeShellApplication {
+    name = "lattice-sleep-radios";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.util-linux
+    ];
+    text = ''
+      file=${sleepRadiosFile}
+      case "''${1-}" in
+        "")
+          read -r radios < "$file" 2>/dev/null || radios=""
+          echo "Off while asleep: ''${radios:-nothing}"
+          ;;
+        none) : > "$file" ;;
+        bluetooth | wlan) echo "$1" > "$file" ;;
+        both) echo "bluetooth wlan" > "$file" ;;
+        *)
+          echo "usage: lattice sleep-radios [none|bluetooth|wlan|both]" >&2
+          exit 2
+          ;;
+      esac
+    '';
+  };
+
   # What each suspend actually cost, as a number in the journal rather than a feeling.
   #
   # Recovering this after the fact meant reading upower's history as root and diffing it
@@ -670,12 +742,13 @@ let
 
       case "''${1-}" in
         record)
-          printf '%s %s %s\n' "$(date +%s)" "$(cat "$bat/energy_now")" "$ac" > "$state"
+          read -r radios < ${sleepRadiosFile} 2>/dev/null || radios=""
+          printf '%s %s %s %s\n' "$(date +%s)" "$(cat "$bat/energy_now")" "$ac" "$radios" > "$state"
           ;;
 
         report)
           [ -r "$state" ] || exit 0
-          read -r t0 e0 ac0 < "$state"
+          read -r t0 e0 ac0 radios < "$state"
           rm -f "$state"
 
           if [ "$ac0" != "0" ] || [ "$ac" != "0" ]; then
@@ -686,7 +759,8 @@ let
           awk -v t0="$t0" -v e0="$e0" \
               -v t1="$(date +%s)" \
               -v e1="$(cat "$bat/energy_now")" \
-              -v ef="$(cat "$bat/energy_full")" '
+              -v ef="$(cat "$bat/energy_full")" \
+              -v radios="$radios" '
             BEGIN {
               secs = t1 - t0
 
@@ -709,9 +783,10 @@ let
 
               watts = used / hours
 
-              printf "slept %.2fh: %.2f Wh of %.1f Wh (%.2f W, %.2f %%/hr, %.0fh from full to empty)%s\n",
+              printf "slept %.2fh: %.2f Wh of %.1f Wh (%.2f W, %.2f %%/hr, %.0fh from full to empty)%s%s\n",
                      hours, used, full, watts, used / full * 100 / hours, full / watts,
-                     hours < 1 ? "; under an hour, rough to +/-0.4 Wh" : ""
+                     hours < 1 ? "; under an hour, rough to +/-0.4 Wh" : "",
+                     radios != "" ? "; off: " radios : ""
             }'
           ;;
 
@@ -854,6 +929,45 @@ in
     };
   };
 
+  # The user writes the file through `lattice sleep-radios`; `f` creates it empty and never
+  # touches it again.
+  systemd.tmpfiles.rules = [
+    "d /var/lib/lattice 0755 root root -"
+    "f ${sleepRadiosFile} 0644 ${user} users -"
+  ];
+
+  # sleep-actions.service, both halves of it, so the radios go off before the freeze and come
+  # back first thing on resume -- ahead of the Mac's Bluetooth check in apple-silicon.nix,
+  # which has to see the controller unblocked and powered to test it. Only a radio this hook
+  # blocked is unblocked, so one switched off by hand stays off.
+  powerManagement.powerDownCommands = ''
+    read -r radios < ${sleepRadiosFile} 2>/dev/null || radios=""
+    : > ${sleepRadiosState}
+    for radio in $radios; do
+      if ${pkgs.util-linux}/bin/rfkill list "$radio" -no SOFT | ${pkgs.gnugrep}/bin/grep -q unblocked; then
+        ${pkgs.util-linux}/bin/rfkill block "$radio"
+        echo "$radio" >> ${sleepRadiosState}
+      fi
+    done
+  '';
+  powerManagement.resumeCommands = lib.mkBefore ''
+    if [ -s ${sleepRadiosState} ]; then
+      while read -r radio; do
+        ${pkgs.util-linux}/bin/rfkill unblock "$radio"
+        # bluetoothd powers the adapter back up on its own once it is unblocked; wait for
+        # that, or the health check after this reads a controller that is still coming up as
+        # a wedged one and reloads the module for nothing.
+        if [ "$radio" = bluetooth ]; then
+          for _ in $(${pkgs.coreutils}/bin/seq 20); do
+            ${pkgs.bluez}/bin/hciconfig hci0 2>/dev/null | ${pkgs.gnugrep}/bin/grep -q 'UP RUNNING' && break
+            ${pkgs.coreutils}/bin/sleep 0.25
+          done
+        fi
+      done < ${sleepRadiosState}
+    fi
+    rm -f ${sleepRadiosState}
+  '';
+
   # On resume, everything waking at once resolves hostnames before the network is back,
   # and each of those lookups holds an nsncd worker until resolved gives up on the
   # unreachable Tailscale DNS. With the default 8 workers that starves the passwd lookups
@@ -948,6 +1062,12 @@ in
           terminal = true;
         }
       ];
+    };
+    sleep-radios = {
+      exec = lib.getExe sleepRadios;
+      args = "[none|bluetooth|wlan|both]";
+      summary = "Radios switched off while asleep";
+      group = "devices";
     };
     portal = {
       exec = lib.getExe portalSignIn;

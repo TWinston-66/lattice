@@ -417,6 +417,7 @@ in
     notifications = {
       exec = lib.getExe notifyHistory;
       args = "[browse|read|unread|click ID|dismiss [ID|--all]]";
+      completeAfter.dismiss.words = [ "--all" ];
       summary = "Browse the notification history";
       group = "session";
       launch = [
