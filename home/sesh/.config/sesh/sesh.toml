@@ -1,0 +1,6 @@
+[default_session]
+preview_command = "eza --all --git --icons --color=always --long --no-user --no-permissions {}"
+
+[[session]]
+name = "lattice"
+path = "~/Documents/Projects/lattice"

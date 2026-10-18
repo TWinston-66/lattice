@@ -636,7 +636,7 @@ let
           ) t.ansi
         );
 
-      # nvim, for an nvim config to read and watch (the author's dotfiles have a theme.lua): the upstream colorscheme, with
+      # nvim, for an nvim config to read and watch (the author's, in home/nvim, has a theme.lua): the upstream colorscheme, with
       # whatever vim.g settings it takes. Every flavour gets its own theme's plugin rather
       # than its palette poured into Catppuccin's highlight groups.
       "theme-nvim.lua" =

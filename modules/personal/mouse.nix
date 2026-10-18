@@ -1,5 +1,5 @@
-# The Logitech MX Master 3. Its buttons are Solaar rules (~/.config/solaar, in the dotfiles
-# repo), and the Solaar service that serves them is the distro's (desktop/apps.nix).
+# The Logitech MX Master 3. Its buttons are Solaar rules (~/.config/solaar, from home/solaar
+# in this flake), and the Solaar service that serves them is the distro's (desktop/apps.nix).
 _: {
   # DPI is the only speed knob for this mouse; these two exist to get out of its way.
   #

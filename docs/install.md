@@ -79,8 +79,8 @@ flake; `scripts/rebuild.sh` then refuses to switch until the host's age key is a
 `secrets/common.yaml`, since otherwise it would boot with every account locked.
 
 Answering yes to the personal setup does that at install time: the account, its password and
-the time zone come from `modules/personal` instead of being asked for, and so do the
-dotfiles (`lattice.user.dotfiles`). The installer looks
+the time zone come from `modules/personal` instead of being asked for, and the configs in
+`home/` are linked into the new home with `home/link.sh`. The installer looks
 for the admin age key, `sops-age-keys.txt`, at the top of any USB drive and checks that it
 opens the secrets, makes the new host's SSH key, adds it to `.sops.yaml` and re-encrypts
 `secrets/common.yaml`. The admin key stays in RAM and is never written to the new disk;
