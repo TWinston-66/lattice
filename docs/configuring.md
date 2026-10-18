@@ -76,7 +76,7 @@ when a command that took 5 seconds or more finishes. Your `~/.zshrc` runs after 
 aliases and the like, and can test `$LATTICE_SHELL` if it is shared with another OS. A
 `~/.config/starship.toml` of your own replaces the prompt's layout and keeps the theme's
 colours. Neovim, git and the other tools are installed but not configured. The author's
-own configs live in [a separate dotfiles repo](https://github.com/TWinston-66/.dotfiles). `lattice doctor`
+own configs live in `home/` at the top of the flake, linked by `home/link.sh`. `lattice doctor`
 expects anything that runs at login (shell rc files, `~/.config/hypr/local.lua`) to be a
 symlink into a git repo, so a change you didn't make shows up as uncommitted there.
 

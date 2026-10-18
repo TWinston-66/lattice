@@ -102,7 +102,6 @@ if [[ -n "$personal" ]]; then
     user="$(nix_string name "$personal_nix")"
     tz="$(nix_string time.timeZone "$personal_nix")"
     flake_dir="$(nix_string programs.nh.flake "$personal_nix")"
-    dotfiles="$(nix_string dotfiles "$personal_nix")"
     [[ -n "$user" && -n "$tz" && -n "$flake_dir" ]] ||
         die "modules/personal/default.nix changed shape; can't read the user, time zone and flake path from it"
     echo "The account ($user), its password and the time zone ($tz) come from modules/personal."
@@ -258,7 +257,7 @@ cat <<EOF
   user       $user
   time zone  $tz
   personal   $([[ -n "$personal" ]] && echo "yes, the host added to the secrets" || echo no)
-  dotfiles   ${dotfiles:-none}
+  dotfiles   $([[ -n "$personal" ]] && echo "home/ in the flake" || echo "${dotfiles:-none}")
   disk       $disk
   into       ${labels[$((choice - 1))]}
   boot       $esp (the Asahi ESP, kept as it is)
@@ -477,6 +476,14 @@ if [[ -n "${dotfiles:-}" ]]; then
     else
         echo "couldn't clone $dotfiles; clone it to ~/.dotfiles after logging in"
     fi
+fi
+# Personal's own configs ship in the flake itself, under home/, and link from there.
+if [[ -n "$personal" && -x "$repo/home/link.sh" ]]; then
+    say "Linking the configs in home/"
+    home="/mnt/home/$user"
+    mkdir -p "$home"
+    HOME="$home" "$repo/home/link.sh" ||
+        echo "home/link.sh failed; run it from the flake after logging in"
 fi
 # Everything in the new home is the installer's doing, the flake's parent folders included.
 nixos-enter --root /mnt -c "chown -R $user: /home/$user"

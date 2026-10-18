@@ -14,8 +14,9 @@
   lattice.user = {
     name = "winston";
     hashedPasswordFile = config.sops.secrets.winston-password.path;
-    dotfiles = "https://github.com/TWinston-66/.dotfiles";
   };
+  # The account's own configs (zsh, Neovim, git and the rest) are in home/ at the top of the
+  # flake, linked by home/link.sh, which lattice-install runs for this setup.
   programs.nh.flake = "/home/winston/Documents/Projects/lattice";
 
   ### SECRETS ###

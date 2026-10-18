@@ -6,7 +6,7 @@
   <a href="https://nixos.org"><img src=".github/assets/badges/nixos.svg" alt="NixOS unstable"></a>
   <a href="https://hyprland.org"><img src=".github/assets/badges/hyprland.svg" alt="Hyprland"></a>
   <a href="https://asahilinux.org"><img src=".github/assets/badges/apple-silicon.svg" alt="Apple Silicon"></a>
-  <a href="https://github.com/TWinston-66/.dotfiles"><img src=".github/assets/badges/dotfiles.svg" alt="The dotfiles"></a>
+  <a href="home"><img src=".github/assets/badges/dotfiles.svg" alt="The dotfiles"></a>
   <a href="LICENSE"><img src=".github/assets/badges/license.svg" alt="MIT license"></a>
 </p>
 
@@ -172,9 +172,10 @@ when lattice isn't running yet.
 ## Dotfiles
 
 lattice is the system and the desktop. The author's own configs (zsh, Neovim, git and the
-rest) live in [TWinston-66/.dotfiles](https://github.com/TWinston-66/.dotfiles), which
-also sets up macOS. They are kept apart, so lattice runs without them, and a user's own
-dotfiles go where they do; see [Configuring lattice](docs/configuring.md).
+rest) live in [`home/`](home), one GNU Stow package per folder, linked into `$HOME` by
+`home/link.sh`; the personal install runs it. Nothing outside `home/` reads them, so lattice
+runs without them, and a user's own dotfiles go where they do; see
+[Configuring lattice](docs/configuring.md).
 
 ## License
 
